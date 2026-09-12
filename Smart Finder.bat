@@ -77,6 +77,7 @@ if exist ".git" (
     pause
     exit /b 1
   )
+  echo [OK] Update GitHub selesai.
 )
 
 if not exist "package.json" (
@@ -108,5 +109,14 @@ if not exist "node_modules\playwright\.local-chromium" (
 echo [INFO] Menjalankan Smart Finder...
 >> "%LOG_FILE%" echo [%date% %time%] Starting Node.js application.
 call node launch.js
+if errorlevel 1 (
+  >> "%LOG_FILE%" echo [%date% %time%] ERROR: Node.js application stopped.
+  echo.
+  echo [ERROR] Smart Finder berhenti sebelum browser terbuka.
+  echo [INFO] Periksa pesan error di atas atau launcher.log.
+)
 
+echo.
+echo [INFO] Smart Finder berhenti. Tekan tombol apa saja untuk menutup CMD.
+pause >nul
 endlocal
