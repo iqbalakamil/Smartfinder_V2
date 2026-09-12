@@ -62,9 +62,10 @@ if not exist "%REPO_DIR%.git" (
 )
 
 cd /d "%REPO_DIR%"
+set "SAFE_REPO_DIR=%REPO_DIR:~0,-1%"
 if exist ".git" (
   echo [INFO] Mengecek update dari GitHub...
-  git -c safe.directory="%REPO_DIR%" pull --ff-only
+  git -c "safe.directory=%SAFE_REPO_DIR%" pull --ff-only
   if errorlevel 1 (
     echo [ERROR] Update gagal. Periksa koneksi atau autentikasi GitHub.
     pause
