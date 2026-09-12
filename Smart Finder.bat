@@ -54,7 +54,7 @@ if not exist "%REPO_DIR%.git" (
     if errorlevel 1 (
       echo.
       echo [ERROR] Clone gagal. Untuk repository private, login GitHub diperlukan.
-      echo Jalankan "git credential manager" atau gunakan GitHub Desktop/SSH.
+      call :githubAuthHelp
       pause
       exit /b 1
     )
@@ -74,6 +74,7 @@ if exist ".git" (
   if errorlevel 1 (
     >> "%LOG_FILE%" echo [%date% %time%] ERROR: GitHub update failed.
     echo [ERROR] Update gagal. Periksa koneksi atau autentikasi GitHub.
+    call :githubAuthHelp
     pause
     exit /b 1
   )
@@ -127,3 +128,19 @@ echo.
 echo [INFO] Smart Finder berhenti. Tekan tombol apa saja untuk menutup CMD.
 pause >nul
 endlocal
+exit /b 0
+
+:githubAuthHelp
+echo.
+echo [AKSI] Repository Smart Finder bersifat PRIVATE dan memerlukan akun GitHub.
+echo [AKSI] Pilih akun Anda:
+choice /C SN /N /M "Sudah punya akun GitHub? [S] Login / [N] Sign up: "
+if errorlevel 2 (
+  echo [INFO] Membuka halaman pendaftaran GitHub...
+  start "" "https://github.com/signup"
+) else (
+  echo [INFO] Membuka halaman login GitHub...
+  start "" "https://github.com/login"
+)
+echo [INFO] Setelah selesai, jalankan Smart Finder.bat kembali.
+exit /b 0
