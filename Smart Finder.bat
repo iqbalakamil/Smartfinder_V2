@@ -106,6 +106,13 @@ if not exist "node_modules\playwright\.local-chromium" (
   )
 )
 
+set "APP_PORT="
+for /f "delims=" %%P in ('powershell -NoProfile -Command "$port=3000; while (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue) { $port++ }; Write-Output $port"') do set "APP_PORT=%%P"
+if not defined APP_PORT set "APP_PORT=3000"
+set "PORT=%APP_PORT%"
+echo [INFO] Port aplikasi: %PORT%
+>> "%LOG_FILE%" echo [%date% %time%] Selected application port %PORT%.
+
 echo [INFO] Menjalankan Smart Finder...
 >> "%LOG_FILE%" echo [%date% %time%] Starting Node.js application.
 call node launch.js
