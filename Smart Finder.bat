@@ -1,4 +1,9 @@
 @echo off
+if /i not "%~1"=="--hidden" if exist "%~dp0Smart Finder.vbs" (
+  wscript.exe //nologo "%~dp0Smart Finder.vbs"
+  exit /b 0
+)
+if /i "%~1"=="--hidden" shift
 setlocal EnableExtensions EnableDelayedExpansion
 title SMART FINDER - GitHub Launcher
 
