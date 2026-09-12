@@ -1,0 +1,54 @@
+// Helper: build marketSizeShare text
+function _buildMarketSizeShare(areaName, population, earlyChildhood, hasDemography, hasMarket) {
+  if (hasDemography || hasMarket) {
+    const popText = population
+      ? "Dari populasi " + Number(population).toLocaleString("id-ID") + " jiwa"
+      : "Dengan data populasi yang perlu divalidasi";
+    const ecText = earlyChildhood
+      ? ", estimasi " + Number(earlyChildhood).toLocaleString("id-ID") + " anak usia 2-7 tahun"
+      : "";
+    const potentialStudents = earlyChildhood ? Math.round(Number(earlyChildhood) * 0.1) : "X";
+    const targetStudents = earlyChildhood ? Math.round(Number(earlyChildhood) * 0.1 * 0.05) : "X";
+    const revenue = earlyChildhood ? Math.round(Number(earlyChildhood) * 0.1 * 0.05) * 600000 : "Rp X";
+
+    return "Estimasi market size area " + areaName + ": " + popText + ecText +
+      ". Menggunakan asumsi 10% dari anak usia 2-7 tahun sebagai target pasar aktif: " +
+      potentialStudents + " siswa potensial. Dengan SPP Rp600.000/bulan rata-rata, target 5% market share = " +
+      targetStudents + " siswa aktif. Proyeksi pendapatan bulanan = Rp " + Number(revenue).toLocaleString("id-ID") +
+      ". Estimasi ini menggunakan asumsi konservatif dan wajib divalidasi dengan data demografi aktual kecamatan " +
+      areaName + ".";
+  }
+  return "Estimasi market size belum tersedia karena data demografi spesifik area " + areaName +
+    " belum dikumpulkan. Rumus estimasi: Market Size = Total Anak usia 0-7 tahun x 10% x Rp600.000. " +
+    "Untuk mendapatkan angka yang akurat, diperlukan data BPS tentang jumlah anak usia 0-4 tahun dan 5-9 tahun " +
+    "di kecamatan " + areaName + ". Tanpa data ini, estimasi market size menggunakan data provinsi/nasional dengan disclaimer sebagai inferensi.";
+}
+
+// Helper: build implication text
+function _buildImplication(areaName, cityName, hasDemography, hasIncome) {
+  const dataFoundation = hasDemography && hasIncome
+    ? "memiliki fondasi data yang cukup untuk keputusan pra-survey"
+    : "memerlukan survei lapangan lebih lanjut sebelum keputusan final";
+  const demoNote = hasDemography
+    ? "Data demografi tersedia dan bisa menjadi dasar estimasi target pasar."
+    : "Data demografi spesifik area belum tersedia, sehingga estimasi target pasar masih berdasarkan asumsi.";
+  const incomeNote = hasIncome
+    ? "Data daya beli dari sumber pemerintah memberikan dasar yang cukup kuat."
+    : "Data daya beli perlu dikumpulkan dari BPS atau survei langsung.";
+
+  return "Berdasarkan riset yang tersedia, area " + areaName + ", " + cityName + " " + dataFoundation +
+    ". " + demoNote + " " + incomeNote +
+    " Rekomendasi: lakukan kunjungan lapangan untuk validasi aksesibilitas, survei demografi mandiri, dan benchmarking kompetitor lokal sebelum keputusan eksekusi.";
+}
+
+// Helper: build digital footprint text
+function _buildDigitalFootprint(areaName, hasDigital) {
+  if (hasDigital) {
+    return "Digital footprint area " + areaName + " menunjukkan adanya aktivitas digital terkait kegiatan anak dan keluarga. " +
+      "Aktivitas di media sosial, event anak, dan komunitas parenting memberikan sinyal adanya target pasar yang aktif secara digital. " +
+      "Pantau Instagram, TikTok, dan Facebook untuk identifikasi komunitas dan event lokal yang relevan.";
+  }
+  return "Digital footprint area " + areaName + " belum terpetakan. Riset digital perlu dilakukan untuk menemukan: " +
+    "komunitas parenting online di sekitar, event anak yang pernah/sedang berlangsung, aktivitas sekolah dan PAUD yang sudah ada, " +
+    "serta jejak digital keluarga di media sosial lokal.";
+}

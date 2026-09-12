@@ -1,0 +1,98 @@
+"""Temporary check for the Indonesia traffic simulation (deleted after use)."""
+import json
+import time
+
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+
+opts = Options()
+opts.add_argument("--headless=new")
+opts.add_argument("--window-size=1400,900")
+opts.add_argument("--disable-gpu")
+opts.add_argument("--no-sandbox")
+opts.set_capability("goog:loggingPrefs", {"browser": "ALL"})
+
+try:
+    from selenium.webdriver.chrome.service import Service
+    from webdriver_manager.chrome import ChromeDriverManager
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
+except Exception:
+    driver = webdriver.Chrome(options=opts)
+
+errors = []
+
+
+def grab_errors(tag):
+    for entry in driver.get_log("browser"):
+        if entry.get("level") in ("SEVERE", "ERROR") and "favicon" not in entry.get("message", ""):
+            errors.append((tag, entry.get("message", "")[:300]))
+
+
+def vehicles_state():
+    return driver.execute_script("""
+        const sim = trafficSim;
+        if (!sim || !sim.vehicles.length) return null;
+        const out = { count: sim.vehicles.length };
+        out.samples = sim.vehicles.slice(0, 3).map((v) => {
+            const p = v.entity.position.getValue(Cesium.JulianDate.now());
+            const c = Cesium.Cartographic.fromCartesian(p);
+            return [c.latitude * 180 / Math.PI, c.longitude * 180 / Math.PI];
+        });
+        out.renderMode = globeViewer.scene.requestRenderMode;
+        return out;
+    """)
+
+
+try:
+    driver.get("http://127.0.0.1:5000/")
+    time.sleep(3)
+    driver.find_element(By.ID, "view3dBtn").click()
+    for _ in range(40):
+        time.sleep(1)
+        if driver.execute_script("return !!globeViewer;"):
+            break
+    grab_errors("globe-init")
+    print("globe ready:", driver.execute_script("return !!globeViewer;"))
+
+    # Enable traffic sim around Jakarta
+    driver.execute_script("currentCenter = { lat: -6.2088, lng: 106.8456 };")
+    driver.find_element(By.ID, "layerToggletraffic").click()
+    badge = ""
+    for _ in range(60):
+        time.sleep(1)
+        badge = driver.find_element(By.ID, "layerCounttraffic").text
+        if badge:
+            break
+    grab_errors("traffic-on")
+    print("traffic badge (vehicles):", badge)
+
+    s1 = vehicles_state()
+    print("state t0:", s1 and {"count": s1["count"], "renderMode": s1["renderMode"]})
+    time.sleep(3)
+    s2 = vehicles_state()
+    moved = False
+    if s1 and s2 and s1["samples"] and s2["samples"]:
+        moved = any(abs(a[0] - b[0]) > 1e-6 or abs(a[1] - b[1]) > 1e-6 for a, b in zip(s1["samples"], s2["samples"]))
+    print("vehicles moved after 3s:", moved)
+
+    # Toggle off -> everything cleaned up, render mode restored
+    driver.execute_script("toggleGlobeLayer('traffic');")
+    time.sleep(1)
+    grab_errors("traffic-off")
+    print("after off: entities =", driver.execute_script("return globeLayers.traffic.entities.length;"),
+          "| sim =", driver.execute_script("return trafficSim;"),
+          "| renderMode =", driver.execute_script("return globeViewer.scene.requestRenderMode;"))
+
+    # Outside Indonesia -> must refuse with toast and stay OFF
+    driver.execute_script("currentCenter = { lat: 51.5074, lng: -0.1278 };")
+    driver.find_element(By.ID, "layerToggletraffic").click()
+    time.sleep(3)
+    grab_errors("traffic-london")
+    print("London: enabled =", driver.execute_script("return globeLayers.traffic.enabled;"),
+          "| badge =", driver.find_element(By.ID, "layerCounttraffic").text,
+          "| toast =", driver.execute_script("return document.getElementById('toast').textContent;"))
+
+    print("=== CONSOLE ERRORS:", json.dumps(errors, indent=1) if errors else "NONE")
+finally:
+    driver.quit()

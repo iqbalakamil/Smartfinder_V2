@@ -1,0 +1,339 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bimbasmartkidz.local/schemas/geo-market-research-result.schema.json",
+  "title": "Geo Market Research Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "location",
+    "radius_km",
+    "poi_summary",
+    "competitor_map",
+    "district_analysis",
+    "market_estimation",
+    "unit_economics",
+    "decision",
+    "data_quality"
+  ],
+  "properties": {
+    "location": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["latitude", "longitude", "reverse_geocode", "analysis_anchor"],
+      "properties": {
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "analysis_anchor": { "type": "string", "const": "radius_3km" },
+        "reverse_geocode": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["display_name"],
+          "properties": {
+            "display_name": { "type": ["string", "null"] }
+          }
+        }
+      }
+    },
+    "radius_km": { "type": "number", "const": 3 },
+    "poi_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total_pois", "categories", "source", "data_quality"],
+      "properties": {
+        "total_pois": { "type": ["integer", "null"] },
+        "categories": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["bimba", "paud", "tk", "daycare", "les_anak", "fasilitas_keluarga"],
+          "properties": {
+            "bimba": { "type": ["integer", "null"] },
+            "paud": { "type": ["integer", "null"] },
+            "tk": { "type": ["integer", "null"] },
+            "daycare": { "type": ["integer", "null"] },
+            "les_anak": { "type": ["integer", "null"] },
+            "fasilitas_keluarga": { "type": ["integer", "null"] }
+          }
+        },
+        "source": { "type": ["string", "null"] },
+        "data_quality": { "type": "string", "enum": ["high", "medium", "low"] }
+      }
+    },
+    "competitor_map": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": [
+        "radius_km",
+        "count_estimate",
+        "capacity_per_unit",
+        "total_capacity",
+        "density_level",
+        "nearest_distance_km",
+        "type_distribution",
+        "estimated",
+        "reasoning",
+        "assumption_source"
+      ],
+      "properties": {
+        "radius_km": { "type": ["number", "null"] },
+        "count_estimate": { "type": ["integer", "null"] },
+        "capacity_per_unit": { "type": ["integer", "null"] },
+        "total_capacity": { "type": ["integer", "null"] },
+        "density_level": { "type": ["string", "null"], "enum": ["low", "medium", "high", null] },
+        "nearest_distance_km": { "type": ["number", "null"] },
+        "type_distribution": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["bimba", "paud", "tk", "les", "daycare"],
+          "properties": {
+            "bimba": { "type": ["integer", "null"] },
+            "paud": { "type": ["integer", "null"] },
+            "tk": { "type": ["integer", "null"] },
+            "les": { "type": ["integer", "null"] },
+            "daycare": { "type": ["integer", "null"] }
+          }
+        },
+        "estimated": { "type": "boolean" },
+        "reasoning": { "type": ["string", "null"] },
+        "assumption_source": { "type": ["string", "null"] }
+      }
+    },
+    "district_analysis": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "district_name",
+          "distance_km",
+          "accessibility",
+          "demography",
+          "economy",
+          "market_needs",
+          "facilities",
+          "digital_footprint",
+          "promotion",
+          "score"
+        ],
+        "properties": {
+          "district_name": { "type": ["string", "null"] },
+          "distance_km": { "type": ["number", "null"] },
+          "accessibility": { "type": ["object", "null"], "additionalProperties": true },
+          "demography": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "population",
+              "age_0_14",
+              "early_childhood_population",
+              "estimated",
+              "reasoning",
+              "assumption_source"
+            ],
+            "properties": {
+              "population": { "type": ["integer", "null"] },
+              "age_0_14": { "type": ["integer", "null"] },
+              "early_childhood_population": { "type": ["integer", "null"] },
+              "estimated": { "type": "boolean" },
+              "reasoning": { "type": ["string", "null"] },
+              "assumption_source": { "type": ["string", "null"] }
+            }
+          },
+          "economy": { "type": ["object", "null"], "additionalProperties": true },
+          "market_needs": { "type": ["object", "null"], "additionalProperties": true },
+          "facilities": { "type": ["object", "null"], "additionalProperties": true },
+          "digital_footprint": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["website", "instagram", "facebook", "maps"],
+            "properties": {
+              "website": { "type": "array", "items": { "type": "string" } },
+              "instagram": { "type": "array", "items": { "type": "string" } },
+              "facebook": { "type": "array", "items": { "type": "string" } },
+              "maps": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "promotion": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["child_events", "family_events", "community_links"],
+            "properties": {
+              "child_events": { "type": "array", "items": { "type": "string" } },
+              "family_events": { "type": "array", "items": { "type": "string" } },
+              "community_links": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "score": { "type": ["number", "null"] }
+        }
+      }
+    },
+    "market_estimation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "radius_km",
+        "tam",
+        "sam",
+        "som",
+        "supply_based",
+        "market_size",
+        "market_share",
+        "potential_revenue",
+        "market_gap",
+        "estimated",
+        "reasoning",
+        "assumption_source"
+      ],
+      "properties": {
+        "radius_km": { "type": "number", "const": 3 },
+        "tam": { "type": ["integer", "null"] },
+        "sam": { "type": ["integer", "null"] },
+        "som": { "type": ["integer", "null"] },
+        "supply_based": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["total_capacity", "utilization_rate", "active_market"],
+          "properties": {
+            "total_capacity": { "type": ["integer", "null"] },
+            "utilization_rate": { "type": ["number", "null"] },
+            "active_market": { "type": ["integer", "null"] }
+          }
+        },
+        "market_size_scenarios": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["low", "mid", "high"],
+          "properties": {
+            "low": {
+              "type": ["object", "null"],
+              "additionalProperties": false,
+              "required": ["penetration_rate", "students", "annual_revenue"],
+              "properties": {
+                "penetration_rate": { "type": ["number", "null"] },
+                "students": { "type": ["integer", "null"] },
+                "annual_revenue": { "type": ["number", "null"] }
+              }
+            },
+            "mid": {
+              "type": ["object", "null"],
+              "additionalProperties": false,
+              "required": ["penetration_rate", "students", "annual_revenue"],
+              "properties": {
+                "penetration_rate": { "type": ["number", "null"] },
+                "students": { "type": ["integer", "null"] },
+                "annual_revenue": { "type": ["number", "null"] }
+              }
+            },
+            "high": {
+              "type": ["object", "null"],
+              "additionalProperties": false,
+              "required": ["penetration_rate", "students", "annual_revenue"],
+              "properties": {
+                "penetration_rate": { "type": ["number", "null"] },
+                "students": { "type": ["integer", "null"] },
+                "annual_revenue": { "type": ["number", "null"] }
+              }
+            }
+          }
+        },
+        "market_size": { "type": ["number", "null"] },
+        "market_share": { "type": ["number", "null"] },
+        "potential_revenue": { "type": ["number", "null"] },
+        "market_gap": { "type": ["integer", "null"] },
+        "estimated": { "type": "boolean" },
+        "reasoning": { "type": ["string", "null"] },
+        "assumption_source": { "type": ["string", "null"] }
+      }
+    },
+    "unit_economics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "estimated_cost_monthly",
+        "break_even_students",
+        "target_students",
+        "margin_estimate",
+        "payback_period_months"
+      ],
+      "properties": {
+        "estimated_cost_monthly": { "type": ["number", "null"] },
+        "break_even_students": { "type": ["integer", "null"] },
+        "target_students": { "type": ["integer", "null"] },
+        "margin_estimate": { "type": ["number", "null"] },
+        "payback_period_months": { "type": ["number", "null"] },
+        "branch_capacity_band": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["ideal_min", "max"],
+          "properties": {
+            "ideal_min": { "type": ["integer", "null"] },
+            "max": { "type": ["integer", "null"] }
+          }
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["score", "recommendation", "reason"],
+      "properties": {
+        "score": { "type": ["number", "null"] },
+        "recommendation": { "type": ["string", "null"], "enum": ["OPEN", "CONSIDER", "AVOID", null] },
+        "reason": { "type": ["string", "null"] }
+      }
+    },
+    "data_quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "population_data",
+        "competitor_data",
+        "digital_footprint_data",
+        "overall_confidence"
+      ],
+      "properties": {
+        "population_data": { "type": "string", "enum": ["high", "medium", "low"] },
+        "competitor_data": { "type": "string", "enum": ["high", "medium", "low"] },
+        "digital_footprint_data": { "type": "string", "enum": ["high", "medium", "low"] },
+        "overall_confidence": { "type": "string", "enum": ["high", "medium", "low"] }
+      }
+    },
+    "executive_summary": { "type": ["string", "null"] },
+    "opportunity_signals": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "risk_signals": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "recommendation_summary": { "type": ["string", "null"] }
+    ,
+    "web_evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["topic", "query", "results"],
+        "properties": {
+          "topic": { "type": ["string", "null"] },
+          "query": { "type": ["string", "null"] },
+          "engine_used": { "type": ["string", "null"] },
+          "google_search_url": { "type": ["string", "null"] },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["title", "url", "snippet"],
+              "properties": {
+                "title": { "type": ["string", "null"] },
+                "url": { "type": ["string", "null"] },
+                "snippet": { "type": ["string", "null"] }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

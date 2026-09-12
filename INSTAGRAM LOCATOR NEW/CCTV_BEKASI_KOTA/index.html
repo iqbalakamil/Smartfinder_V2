@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live CCTV Map Kota Bekasi - Antigravity Smart City Monitor</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eff6ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            900: '#1e3a8a',
+                        },
+                        darkbg: '#0f172a',
+                        darkcard: '#1e293b'
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"/>
+    
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- HLS.js for Streaming -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+    <style>
+        /* Custom scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.05);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(100, 116, 139, 0.5);
+            border-radius: 4px;
+        }
+
+        /* Marker Pulse Animation */
+        .cctv-marker-pin {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: #2563eb;
+            border: 3px solid #ffffff;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            position: relative;
+            cursor: pointer;
+            transition: transform 0.2s ease, background-color 0.2s ease;
+        }
+        .cctv-marker-pin:hover {
+            transform: scale(1.15);
+            background: #1d4ed8;
+            z-index: 1000 !important;
+        }
+        .cctv-marker-pin.active {
+            background: #ef4444;
+            box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.4);
+            animation: pulse-ring 1.5s infinite;
+        }
+        
+        @keyframes pulse-ring {
+            0% {
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 12px rgba(239, 68, 68, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+            }
+        }
+
+        /* Leaflet popup styling */
+        .leaflet-popup-content-wrapper {
+            padding: 0;
+            overflow: hidden;
+            border-radius: 12px;
+            background: #1e293b;
+            color: #f8fafc;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+        .leaflet-popup-content {
+            margin: 0;
+            width: 320px !important;
+        }
+        .leaflet-container a.leaflet-popup-close-button {
+            color: #ffffff;
+            padding: 8px;
+            z-index: 10;
+        }
+
+        /* Full Height Map */
+        #map {
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans h-screen flex flex-col overflow-hidden">
+
+    <!-- HEADER BAR -->
+    <header class="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between z-20 shadow-md">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-blue-500/30">
+                <i class="fa-solid fa-video"></i>
+            </div>
+            <div>
+                <h1 class="text-base sm:text-lg font-bold text-white tracking-wide flex items-center gap-2">
+                    CCTV Locator Kota Bekasi
+                    <span class="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full font-medium border border-blue-500/30">LIVE</span>
+                </h1>
+                <p class="text-xs text-gray-400">Pemantauan Lalu Lintas & Wilayah Realtime</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <!-- Grid View Toggle -->
+            <button id="btnToggleGrid" onclick="toggleGridView()" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs sm:text-sm font-medium rounded-lg flex items-center gap-2 border border-gray-700 transition">
+                <i class="fa-solid fa-grid-2"></i>
+                <span class="hidden sm:inline">Mode Grid</span>
+            </button>
+
+            <!-- Map View Switcher -->
+            <select id="mapTileSelect" onchange="changeMapTile(this.value)" class="bg-gray-800 text-gray-200 text-xs sm:text-sm border border-gray-700 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="dark">Dark Map</option>
+                <option value="osm">Standard Map</option>
+                <option value="satellite">Satelit Esri</option>
+            </select>
+
+            <!-- Mobile Sidebar Toggle -->
+            <button onclick="toggleSidebar()" class="md:hidden p-2 bg-gray-800 text-gray-300 rounded-lg">
+                <i class="fa-solid fa-bars text-lg"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <div class="flex-1 flex relative overflow-hidden">
+        
+        <!-- SIDEBAR CAMERA LIST -->
+        <aside id="sidebar" class="absolute md:relative inset-y-0 left-0 w-80 sm:w-96 bg-gray-900 border-r border-gray-800 z-30 transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out flex flex-col">
+            
+            <!-- Sidebar Header & Search -->
+            <div class="p-4 border-b border-gray-800 space-y-3 bg-gray-900/90 backdrop-blur">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-gray-400">Daftar Kamera</span>
+                    <span id="cctvCount" class="text-xs bg-blue-600/30 text-blue-400 font-bold px-2 py-0.5 rounded-full border border-blue-500/30">0 Kamera</span>
+                </div>
+
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                    <input type="text" id="searchInput" onkeyup="filterCCTV()" placeholder="Cari nama jalan / lokasi..." class="w-full bg-gray-800 text-gray-200 text-sm pl-9 pr-4 py-2 rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500">
+                </div>
+            </div>
+
+            <!-- CCTV Items List -->
+            <div id="cctvList" class="flex-1 overflow-y-auto p-3 space-y-2">
+                <!-- Dynamically populated -->
+            </div>
+
+            <!-- Sidebar Footer -->
+            <div class="p-3 border-t border-gray-800 text-center text-xs text-gray-500 bg-gray-900/90">
+                Data resmi dari Diskominfostandi Pemkot Bekasi
+            </div>
+        </aside>
+
+        <!-- MAP CONTAINER -->
+        <main class="flex-1 relative h-full">
+            <div id="map"></div>
+
+            <!-- Active Video Floating Player Drawer (Desktop & Mobile) -->
+            <div id="videoDrawer" class="hidden absolute bottom-4 right-4 z-20 w-full max-w-md bg-gray-900/95 border border-gray-700/80 rounded-xl shadow-2xl overflow-hidden backdrop-blur">
+                <div class="p-3 bg-gray-800 flex items-center justify-between border-b border-gray-700">
+                    <div class="flex items-center space-x-2 truncate">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <h3 id="drawerTitle" class="text-sm font-bold text-white truncate">Nama CCTV</h3>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="reloadDrawerVideo()" title="Refresh Stream" class="text-gray-400 hover:text-white p-1">
+                            <i class="fa-solid fa-rotate-right text-xs"></i>
+                        </button>
+                        <button onclick="closeVideoDrawer()" title="Tutup" class="text-gray-400 hover:text-white p-1">
+                            <i class="fa-solid fa-xmark text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="relative bg-black aspect-video flex items-center justify-center group">
+                    <video id="drawerVideo" class="w-full h-full object-contain" autoplay controls playsinline></video>
+                    
+                    <!-- Loading / Error Overlay -->
+                    <div id="drawerOverlay" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center p-4 text-center space-y-2 hidden">
+                        <i class="fa-solid fa-circle-notch fa-spin text-3xl text-blue-500"></i>
+                        <p id="drawerOverlayText" class="text-xs text-gray-300">Menghubungkan stream...</p>
+                    </div>
+                </div>
+
+                <div class="p-2.5 bg-gray-900 flex items-center justify-between text-xs text-gray-400 border-t border-gray-800">
+                    <span id="drawerDistrict" class="flex items-center gap-1"><i class="fa-solid fa-location-dot text-blue-400"></i> Bekasi</span>
+                    <button onclick="openExternalStream()" class="text-blue-400 hover:underline flex items-center gap-1">
+                        Open Stream <i class="fa-solid fa-up-right-from-square text-[10px]"></i>
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- GRID VIEW MODAL -->
+    <div id="gridModal" class="hidden fixed inset-0 z-50 bg-gray-950/90 backdrop-blur flex flex-col p-4">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                <i class="fa-solid fa-grid-2 text-blue-500"></i> Multi-Camera Monitoring Grid
+            </h2>
+            <button onclick="toggleGridView()" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-xs font-semibold rounded-lg">
+                <i class="fa-solid fa-xmark mr-1"></i> Tutup
+            </button>
+        </div>
+        <div id="gridContainer" class="flex-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 overflow-y-auto pr-2">
+            <!-- Grid cards populated dynamically -->
+        </div>
+    </div>
+
+    <!-- JS APP LOGIC -->
+    <script>
+        // Global State
+        let map;
+        let cctvData = [];
+        let markers = {};
+        let activeCCTV = null;
+        let hlsInstance = null;
+        let drawerHls = null;
+        let mapTiles = {};
+
+        // Default Center Kota Bekasi
+        const BEKASI_CENTER = [-6.244, 106.995];
+        const DEFAULT_ZOOM = 13;
+
+        // Initialize Map on Load
+        document.addEventListener("DOMContentLoaded", function () {
+            initMap();
+            loadCCTVData();
+        });
+
+        function initMap() {
+            map = L.map('map', {
+                center: BEKASI_CENTER,
+                zoom: DEFAULT_ZOOM,
+                zoomControl: false
+            });
+
+            // Tile Providers
+            mapTiles = {
+                dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                    maxZoom: 19,
+                    attribution: '&copy; OpenStreetMap &copy; CARTO'
+                }),
+                osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '&copy; OpenStreetMap contributors'
+                }),
+                satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                    maxZoom: 19,
+                    attribution: 'Tiles &copy; Esri'
+                })
+            };
+
+            // Set default tile
+            mapTiles.dark.addTo(map);
+
+            // Add Zoom Control to Bottom Left
+            L.control.zoom({ position: 'bottomleft' }).addTo(map);
+        }
+
+        function changeMapTile(tileKey) {
+            Object.values(mapTiles).forEach(tile => map.removeLayer(tile));
+            if (mapTiles[tileKey]) {
+                mapTiles[tileKey].addTo(map);
+            }
+        }
+
+        // Fetch Data from Server or Fallback Local Data
+        async function loadCCTVData() {
+            try {
+                // Try fetching live list.json via local proxy
+                const res = await fetch("/backupcctv/m3/list.json");
+                const apiData = await res.json();
+                
+                // Fetch cached local coordinate dataset
+                const localRes = await fetch("cctv_data.json");
+                const localData = await localRes.json();
+                const coordMap = {};
+                localData.forEach(item => {
+                    coordMap[item.path] = item;
+                });
+
+                // Merge API items with coordinates
+                cctvData = apiData.map((item, idx) => {
+                    const matched = coordMap[item.path] || {};
+                    const rawPic = item.pic || matched.pic || `https://pemkotbekasi.github.io/cctv_pic/${item.path.replace('.m3u8', '.jpg')}`;
+                    return {
+                        id: item.path.replace('.m3u8', ''),
+                        name: item.name ? item.name.replace(/_/g, ' ') : `CCTV ${idx + 1}`,
+                        path: item.path,
+                        pic: rawPic.replace('https://i0.wp.com/', 'https://'),
+                        lat: matched.lat || (BEKASI_CENTER[0] + (Math.random() - 0.5) * 0.05),
+                        lng: matched.lng || (BEKASI_CENTER[1] + (Math.random() - 0.5) * 0.05),
+                        district: matched.district || "Kota Bekasi"
+                    };
+                });
+            } catch (err) {
+                console.warn("API fetch failed, fallback to cctv_data.json:", err);
+                const localRes = await fetch("cctv_data.json");
+                cctvData = await localRes.json();
+            }
+
+            renderSidebarList(cctvData);
+            renderMapMarkers(cctvData);
+            document.getElementById("cctvCount").textContent = `${cctvData.length} Kamera`;
+        }
+
+        function renderSidebarList(data) {
+            const container = document.getElementById("cctvList");
+            container.innerHTML = "";
+
+            if (data.length === 0) {
+                container.innerHTML = `<div class="text-center py-8 text-gray-500 text-sm">Tidak ada CCTV ditemukan</div>`;
+                return;
+            }
+
+            data.forEach(item => {
+                const card = document.createElement("div");
+                card.className = "bg-gray-800 hover:bg-gray-750 p-2.5 rounded-xl border border-gray-700/60 transition cursor-pointer flex gap-3 items-center group";
+                card.id = `item-${item.id}`;
+                card.onclick = () => selectCCTV(item.id);
+
+                card.innerHTML = `
+                    <div class="relative w-16 h-12 rounded-lg bg-gray-900 overflow-hidden flex-shrink-0 border border-gray-700">
+                        <img src="${item.pic}" class="w-full h-full object-cover group-hover:scale-105 transition" onerror="this.onerror=null; this.src='https://via.placeholder.com/100x75?text=CCTV';" />
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
+                        <span class="absolute bottom-1 right-1 w-2 h-2 rounded-full bg-emerald-500"></span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h4 class="text-xs font-bold text-gray-200 group-hover:text-blue-400 transition truncate">${item.name}</h4>
+                        <p class="text-[11px] text-gray-400 truncate mt-0.5"><i class="fa-solid fa-location-dot text-blue-500/80 mr-1"></i>${item.district}</p>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function renderMapMarkers(data) {
+            // Clear existing markers
+            Object.values(markers).forEach(m => map.removeLayer(m));
+            markers = {};
+
+            data.forEach(item => {
+                const customIcon = L.divIcon({
+                    className: 'custom-cctv-icon',
+                    html: `<div id="marker-${item.id}" class="cctv-marker-pin" title="${item.name}"><i class="fa-solid fa-camera text-sm"></i></div>`,
+                    iconSize: [38, 38],
+                    iconAnchor: [19, 19]
+                });
+
+                const marker = L.marker([item.lat, item.lng], { icon: customIcon }).addTo(map);
+
+                marker.on('click', () => {
+                    selectCCTV(item.id);
+                });
+
+                markers[item.id] = marker;
+            });
+        }
+
+        function selectCCTV(id) {
+            const item = cctvData.find(c => c.id === id);
+            if (!item) return;
+
+            // Highlight active marker
+            document.querySelectorAll('.cctv-marker-pin').forEach(el => el.classList.remove('active'));
+            const activePin = document.getElementById(`marker-${id}`);
+            if (activePin) activePin.classList.add('active');
+
+            // Highlight sidebar item
+            document.querySelectorAll('#cctvList > div').forEach(el => el.classList.remove('border-blue-500', 'bg-gray-750'));
+            const activeSidebar = document.getElementById(`item-${id}`);
+            if (activeSidebar) {
+                activeSidebar.classList.add('border-blue-500', 'bg-gray-750');
+                activeSidebar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+
+            // Pan and Zoom Map
+            map.flyTo([item.lat, item.lng], 16, { duration: 1.2 });
+
+            // Open Video Drawer Stream
+            openVideoDrawer(item);
+            activeCCTV = item;
+        }
+
+        function openVideoDrawer(item) {
+            const drawer = document.getElementById("videoDrawer");
+            const drawerTitle = document.getElementById("drawerTitle");
+            const drawerDistrict = document.getElementById("drawerDistrict");
+            const video = document.getElementById("drawerVideo");
+            const overlay = document.getElementById("drawerOverlay");
+
+            drawerTitle.textContent = item.name;
+            drawerDistrict.innerHTML = `<i class="fa-solid fa-location-dot text-blue-400 mr-1"></i> ${item.district}`;
+            drawer.classList.remove("hidden");
+
+            const streamUrl = `/backupcctv/m3/${encodeURIComponent(item.path)}`;
+
+            // Destroy previous HLS instance if any
+            if (drawerHls) {
+                drawerHls.destroy();
+                drawerHls = null;
+            }
+
+            overlay.classList.remove("hidden");
+            document.getElementById("drawerOverlayText").textContent = "Menghubungkan stream live...";
+
+            if (Hls.isSupported()) {
+                drawerHls = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: true
+                });
+                drawerHls.loadSource(streamUrl);
+                drawerHls.attachMedia(video);
+                drawerHls.on(Hls.Events.MANIFEST_PARSED, function () {
+                    overlay.classList.add("hidden");
+                    video.play().catch(e => console.log("Autoplay blocked:", e));
+                });
+                drawerHls.on(Hls.Events.ERROR, function (event, data) {
+                    if (data.fatal) {
+                        overlay.classList.remove("hidden");
+                        document.getElementById("drawerOverlayText").textContent = "Sinyal CCTV tidak merespon (Offline)";
+                    }
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = streamUrl;
+                video.addEventListener('loadedmetadata', function () {
+                    overlay.classList.add("hidden");
+                    video.play();
+                });
+            } else {
+                overlay.classList.remove("hidden");
+                document.getElementById("drawerOverlayText").textContent = "Browser tidak mendukung HLS video player.";
+            }
+        }
+
+        function reloadDrawerVideo() {
+            if (activeCCTV) {
+                openVideoDrawer(activeCCTV);
+            }
+        }
+
+        function closeVideoDrawer() {
+            const drawer = document.getElementById("videoDrawer");
+            const video = document.getElementById("drawerVideo");
+            drawer.classList.add("hidden");
+            video.pause();
+            if (drawerHls) {
+                drawerHls.destroy();
+                drawerHls = null;
+            }
+        }
+
+        function openExternalStream() {
+            if (activeCCTV) {
+                window.open(`https://eofficev2.bekasikota.go.id/backupcctv/m3/${encodeURIComponent(activeCCTV.path)}`, '_blank');
+            }
+        }
+
+        function filterCCTV() {
+            const query = document.getElementById("searchInput").value.toLowerCase();
+            const filtered = cctvData.filter(item => 
+                item.name.toLowerCase().includes(query) || 
+                item.district.toLowerCase().includes(query)
+            );
+            renderSidebarList(filtered);
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById("sidebar");
+            sidebar.classList.toggle("-translate-x-full");
+        }
+
+        // Multi Grid View Modal
+        function toggleGridView() {
+            const modal = document.getElementById("gridModal");
+            const container = document.getElementById("gridContainer");
+            
+            if (modal.classList.contains("hidden")) {
+                modal.classList.remove("hidden");
+                // Render top 6 CCTV streams in grid
+                const sampleList = cctvData.slice(0, 6);
+                container.innerHTML = "";
+
+                sampleList.forEach(item => {
+                    const card = document.createElement("div");
+                    card.className = "bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex flex-col";
+                    const streamUrl = `https://eofficev2.bekasikota.go.id/backupcctv/m3/${encodeURIComponent(item.path)}`;
+
+                    card.innerHTML = `
+                        <div class="p-2.5 bg-gray-800 text-xs font-bold text-white truncate flex items-center justify-between">
+                            <span class="truncate">${item.name}</span>
+                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        </div>
+                        <div class="relative bg-black aspect-video">
+                            <video id="grid-vid-${item.id}" class="w-full h-full object-contain" autoplay muted controls playsinline></video>
+                        </div>
+                    `;
+                    container.appendChild(card);
+
+                    setTimeout(() => {
+                        const vid = document.getElementById(`grid-vid-${item.id}`);
+                        if (Hls.isSupported() && vid) {
+                            const hls = new Hls();
+                            hls.loadSource(streamUrl);
+                            hls.attachMedia(vid);
+                            hls.on(Hls.Events.MANIFEST_PARSED, () => vid.play().catch(()=>{}));
+                        } else if (vid && vid.canPlayType('application/vnd.apple.mpegurl')) {
+                            vid.src = streamUrl;
+                        }
+                    }, 200);
+                });
+            } else {
+                modal.classList.add("hidden");
+            }
+        }
+    </script>
+</body>
+</html>

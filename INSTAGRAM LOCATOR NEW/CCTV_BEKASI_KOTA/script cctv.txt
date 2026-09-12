@@ -1,0 +1,990 @@
+
+<!DOCTYPE html>
+<html>
+    <head>
+        <!-- Basic -->
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <title>Situs Resmi Pemerintah Kota Bekasi</title>
+        <meta name="keywords" content="pemkot, kota bekasi, walikota,">
+        <meta name="description" content="Website Resmi Pemerintah Kota Bekasi">
+        <meta name="author" content="Diskominfostandi E-Gov Team">
+        <!-- Favicon -->
+        <link rel="shortcut icon" href="https://bekasikota.go.id:443/fav.ico" type="image/x-icon">
+        <link rel="apple-touch-icon" href="https://bekasikota.go.id:443/fav.ico">
+        <!-- Mobile Metas -->
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.15.0/dist/cdn.min.js"></script>
+        <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+        <!-- Tailwind CSS -->
+        <script>
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        colors: {
+                            oren: '#f97316',
+                            ijo: '#059669',
+                            primary: '#1D4ED8',
+                            // misalnya biru khas instansi
+                            'primary-light': '#93C5FD',
+                            // versi lebih terang
+                        },
+                        animation: {
+                            'fade-in': 'fadeIn 1s ease-out forwards',
+                            'blink': 'blink 1s step-end infinite',
+                            'blob-slow': 'blob 20s infinite',
+                        },
+                        keyframes: {
+                            fadeIn: {
+                                '0%': {
+                                    opacity: '0',
+                                    transform: 'translateY(10px)'
+                                },
+                                '100%': {
+                                    opacity: '1',
+                                    transform: 'translateY(0)'
+                                },
+                            },
+                            blink: {
+                                '0%, 100%': {
+                                    opacity: '1'
+                                },
+                                '50%': {
+                                    opacity: '0'
+                                },
+                            },
+                            blob: {
+                                '0%': {
+                                    transform: 'translate(0px, 0px) scale(1)'
+                                },
+                                '33%': {
+                                    transform: 'translate(30px, -50px) scale(1.1)'
+                                },
+                                '66%': {
+                                    transform: 'translate(-20px, 20px) scale(0.9)'
+                                },
+                                '100%': {
+                                    transform: 'translate(0px, 0px) scale(1)'
+                                },
+                            },
+                        },
+                    }
+                }
+            }
+        </script>
+        <link rel="stylesheet" href="https://bekasikota.go.id:443/cc-content/themes/cicool/asset//css/style.css">
+        <!-- Versi 6 (rekomendasi terbaru) -->
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer"/>
+        <!-- <script>(function(w,d,s,u,o){w._cyA11yConfig={"iconId":"default","position":{"mobile":"bottom-right","desktop":"bottom-right"},"language":{"default":"id","selected":[]}};var js=d.createElement(s),fjs=d.getElementsByTagName(s)[0];js.src=u;js.async=true;fjs.parentNode.insertBefore(js,fjs);})(window,document,"script","https://cdn-cookieyes.com/widgets/accessibility.js?id=acae305a-c43d-449b-a697-b04b433e0ff8");</script> -->
+        <!-- Kominfo Widget -->
+        <script type="text/javascript" src="https://rahadiana.github.io/gpr_widget_kominfo/gpr-widget-kominfo.min.js"></script>
+    </head>
+    <body class="bg-white text-gray-800 antialiased pb-10 md:pb-0">
+        <div class="body">
+            <link rel="stylesheet" href="https://bekasikota.go.id:443/cc-content/themes/cicool/asset/css/news.css">
+            <header class="bg-white shadow sticky top-0 z-50">
+                <style>
+                    .animated-gradient-title {
+                        display: inline-block;
+                        background: linear-gradient(90deg, #0ea5e9 0%, #2563eb 20%, #8b5cf6 40%, #14b8a6 60%, #f59e0b 80%, #0ea5e9 100%);
+                        background-size: 300% 100%;
+                        -webkit-background-clip: text;
+                        background-clip: text;
+                        color: transparent;
+                        -webkit-text-fill-color: transparent;
+                        animation: gradientFlow 4s linear infinite;
+                        text-shadow: 0 0 10px rgba(59, 130, 246, 0.15);
+                    }
+
+                    @keyframes gradientFlow {
+                        0% {
+                            background-position: 0% 50%;
+                        }
+
+                        100% {
+                            background-position: 100% 50%;
+                        }
+                    }
+                </style>
+                <div class="container mx-auto px-4 py-3 flex items-center justify-between">
+                    <!-- Logo dan Judul -->
+                    <div class="flex items-center space-x-4">
+                        <a href="https://bekasikota.go.id:443/home">
+                            <img src="https://bekasikota.go.id:443//uploads/websetting/20250923175703-2025-09-23websetting175650.png" alt="Pemerintah Kota Bekasi" class="max-h-12 max-w-[160px] w-auto h-auto">
+                        </a>
+                        <div>
+                            <h1 class="animated-gradient-title text-[14px] sm:text-lg font-extrabold tracking-tight leading-tight">
+          Pemerintah Kota Bekasi        </h1>
+                            <p class="text-[10px] sm:text-sm text-gray-500">
+          Kota Bekasi yang Nyaman dan Sejahtera        </p>
+                        </div>
+                    </div>
+                    <!-- Mobile Menu Toggle Button -->
+                    <!-- Mobile Menu Toggle Button (Fixed at Bottom) -->
+                    <div class="fixed bottom-0 left-0 right-0 md:hidden z-50 bg-white border-t shadow-md">
+                        <button id="mobile-menu-toggle" class="w-full py-3 text-center text-sm font-semibold text-blue-600 hover:bg-blue-50 transition">
+    ☰ Menu
+  </button>
+                    </div>
+                    <!-- Mobile Menu -->
+                    <div id="mobile-menu" class="md:hidden hidden fixed bottom-14 left-0 right-0 z-40 bg-white px-4 py-4 shadow-lg max-h-[60vh] overflow-y-auto">
+                        <div class='px-4 py-2'>
+                            <a href="https://bekasikota.go.id:443/home" class='text-gray-700 hover:text-blue-600'>
+                                <i class=""></i>
+                                Beranda
+                            </a>
+                        </div>
+                        <details class='border rounded-md'>
+                            <summary class='cursor-pointer px-4 py-2 text-gray-700 hover:text-blue-600'>Tentang Kami</summary>
+                            <ul class='px-4 py-2 space-y-1'>
+                                <li>
+                                    <a href="https://bekasikota.go.id:443/pages/sejarah-kota-bekasi" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Sejarah Kota Bekasi
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://bekasikota.go.id:443/pages/lambang-daerah-kota-bekasi" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Lambang Daerah Kota Bekasi
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://bekasikota.go.id:443/pages/peta-administrasi-wilayah-kota-bekasi" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Peta Administrasi Wilayah Kota Bekasi
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://bekasikota.go.id:443/pages/kondisi-geografis-wilayah-kota-bekasi" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Kondisi Geografis
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://bekasikota.go.id:443/pages/wali-kota-dan-wakil-wali-kota-bekasi-dari-masa-ke-masa" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Wali Kota dan Wakil Wali Kota Bekasi dari Masa ke Masa
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://bekasikota.go.id:443/pages/bangunan-bersejarah" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Bangunan Bersejarah
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://bekasikota.go.id/pages/tugas-pokok-dan-fungsi-pemerintah-kota-bekasi" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Tugas Pokok Dan Fungsi
+                                    </a>
+                                </li>
+                            </ul>
+                        </details>
+                        <details class='border rounded-md'>
+                            <summary class='cursor-pointer px-4 py-2 text-gray-700 hover:text-blue-600'>Pemerintahan</summary>
+                            <ul class='px-4 py-2 space-y-1'>
+                                <li>
+                                    <a href="https://bekasikota.go.id:443/pages/visi-misi" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Visi & Misi Kota Bekasi
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://bekasikota.go.id:443/pages/struktur-organisasi-pemerintah-kota-bekasi" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Struktur Organisasi
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://siap.bekasikota.go.id/index.php/frontend/pejabat/" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Daftar Pejabat Struktural
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://k-cloud.bekasikota.go.id/index.php/s/SK2l7YR5zC2bVZQ" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Data Wilayah Kecamatan dan Kelurahan Kota Bekasi
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://bekasikota.go.id:443/spbe" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Sistem Pemerintahan Berbasis Elektronik (SPBE)
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://bekasikota.go.id/pages/index-kota-cerdas" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Indexs Kota Cerdas
+                                    </a>
+                                </li>
+                            </ul>
+                        </details>
+                        <details class='border rounded-md'>
+                            <summary class='cursor-pointer px-4 py-2 text-gray-700 hover:text-blue-600'>Regulasi</summary>
+                            <ul class='px-4 py-2 space-y-1'>
+                                <li>
+                                    <a href="https://jdih.bekasikota.go.id/peraturan/peraturan-daerah" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Peraturan Daerah
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://jdih.bekasikota.go.id/peraturan/peraturan-walikota" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Peraturan Wali Kota
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://jdih.bekasikota.go.id/peraturan/keputusan-walikota" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Keputusan Wali Kota
+                                    </a>
+                                </li>
+                            </ul>
+                        </details>
+                        <details class='border rounded-md'>
+                            <summary class='cursor-pointer px-4 py-2 text-gray-700 hover:text-blue-600'>Publikasi</summary>
+                            <ul class='px-4 py-2 space-y-1'>
+                                <li>
+                                    <a href="https://bekasikota.go.id:443/gallery" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Foto
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://bekasikota.go.id:443/video" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Video
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://bekasikota.go.id:443/berita" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Berita
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://bekasikota.go.id:443/gallerypsc" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Patriot Siaga 112
+                                    </a>
+                                </li>
+                            </ul>
+                        </details>
+                        <details class='border rounded-md'>
+                            <summary class='cursor-pointer px-4 py-2 text-gray-700 hover:text-blue-600'>Informasi</summary>
+                            <ul class='px-4 py-2 space-y-1'>
+                                <li>
+                                    <a href="http://simpelbang.bekasikota.go.id/" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Realisasi Keuangan dan Pembangunan
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://opendata.bekasikota.go.id/" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Open Data
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://www.bekasikota.go.id/pages/transparansi-pengelolaan-anggaran-daerah" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Transparansi Anggaran
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="http://tkdn.kemenperin.go.id/search.php" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        TKDN
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://bekasikota.go.id:443/pages/rlppd-kota-bekasi-tahun-2023" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        RLPPD Kota Bekasi
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://docs.google.com/viewerng/viewer?url=https://cdn.jsdelivr.net/gh/pemkotbekasi-cdn/jdih-cdn/LKIP%20KOTA%20BEKASI%202023%20ttd.pdf" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        LKIP KOTA BEKASI 2023
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://www.bekasikota.go.id/pages/lkpj-kota-bekasi" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        LKPJ Kota Bekasi
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://bekasikota.go.id:443/cctv" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        CCTV
+                                    </a>
+                                </li>
+                            </ul>
+                        </details>
+                        <div class='px-4 py-2'>
+                            <a href="https://elhkpn.kpk.go.id/portal/user/pengumuman_lhkpn/YW1odFRqRk9hRk4zUm1abmREUnZORkp4ZURCRE5YRmpRazF1WVhWRGRWZHhLMnhFUW1kSlpDczJkVXQ1TURReFpIaFhTMXAwVFRkRWIwRnVWWFpRU0E9PQ==" class='text-gray-700 hover:text-blue-600'>
+                                <i class=""></i>
+                                LHKPN
+                            </a>
+                        </div>
+                        <details class='border rounded-md'>
+                            <summary class='cursor-pointer px-4 py-2 text-gray-700 hover:text-blue-600'>PENGADUAN</summary>
+                            <ul class='px-4 py-2 space-y-1'>
+                                <li>
+                                    <a href="https://bekasikota.go.id/pages/jurnal-pengaduan-call-centre" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Jurnal Pengaduan Call Centre
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://bekasikota.go.id/pages/jurnal-sp4n-lapor" class='text-gray-700 hover:text-blue-600'>
+                                        <i class=""></i>
+                                        Jurnal Pengaduan SP4N LAPOR
+                                    </a>
+                                </li>
+                            </ul>
+                        </details>
+                    </div>
+                    <!-- Desktop Menu -->
+                    <nav class="hidden md:flex space-x-6 text-sm font-medium">
+                        <div>
+                            <a href="https://bekasikota.go.id:443/home" class='text-gray-700 hover:text-blue-600'>
+                                <i class=""></i>
+                                Beranda
+                            </a>
+                        </div>
+                        <div class='relative group'>
+                            <a href="https://bekasikota.go.id:443/#" class='text-gray-700 hover:text-blue-600'>Tentang Kami ▾</a>
+                            <ul class='absolute left-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 ease-out z-40'>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://bekasikota.go.id:443/pages/sejarah-kota-bekasi" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Sejarah Kota Bekasi
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://bekasikota.go.id:443/pages/lambang-daerah-kota-bekasi" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Lambang Daerah Kota Bekasi
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://bekasikota.go.id:443/pages/peta-administrasi-wilayah-kota-bekasi" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Peta Administrasi Wilayah Kota Bekasi
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://bekasikota.go.id:443/pages/kondisi-geografis-wilayah-kota-bekasi" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Kondisi Geografis
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://bekasikota.go.id:443/pages/wali-kota-dan-wakil-wali-kota-bekasi-dari-masa-ke-masa" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Wali Kota dan Wakil Wali Kota Bekasi dari Masa ke Masa
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://bekasikota.go.id:443/pages/bangunan-bersejarah" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Bangunan Bersejarah
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://bekasikota.go.id/pages/tugas-pokok-dan-fungsi-pemerintah-kota-bekasi" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Tugas Pokok Dan Fungsi
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class='relative group'>
+                            <a href="https://bekasikota.go.id:443/#" class='text-gray-700 hover:text-blue-600'>Pemerintahan ▾</a>
+                            <ul class='absolute left-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 ease-out z-40'>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://bekasikota.go.id:443/pages/visi-misi" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Visi & Misi Kota Bekasi
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://bekasikota.go.id:443/pages/struktur-organisasi-pemerintah-kota-bekasi" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Struktur Organisasi
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://siap.bekasikota.go.id/index.php/frontend/pejabat/" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Daftar Pejabat Struktural
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://k-cloud.bekasikota.go.id/index.php/s/SK2l7YR5zC2bVZQ" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Data Wilayah Kecamatan dan Kelurahan Kota Bekasi
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://bekasikota.go.id:443/spbe" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Sistem Pemerintahan Berbasis Elektronik (SPBE)
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://bekasikota.go.id/pages/index-kota-cerdas" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Indexs Kota Cerdas
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class='relative group'>
+                            <a href="https://bekasikota.go.id:443/#" class='text-gray-700 hover:text-blue-600'>Regulasi ▾</a>
+                            <ul class='absolute left-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 ease-out z-40'>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://jdih.bekasikota.go.id/peraturan/peraturan-daerah" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Peraturan Daerah
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://jdih.bekasikota.go.id/peraturan/peraturan-walikota" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Peraturan Wali Kota
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://jdih.bekasikota.go.id/peraturan/keputusan-walikota" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Keputusan Wali Kota
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class='relative group'>
+                            <a href="https://bekasikota.go.id:443/#" class='text-gray-700 hover:text-blue-600'>Publikasi ▾</a>
+                            <ul class='absolute left-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 ease-out z-40'>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://bekasikota.go.id:443/gallery" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Foto
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://bekasikota.go.id:443/video" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Video
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://bekasikota.go.id:443/berita" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Berita
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://bekasikota.go.id:443/gallerypsc" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Patriot Siaga 112
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class='relative group'>
+                            <a href="https://bekasikota.go.id:443/#" class='text-gray-700 hover:text-blue-600'>Informasi ▾</a>
+                            <ul class='absolute left-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 ease-out z-40'>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="http://simpelbang.bekasikota.go.id/" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Realisasi Keuangan dan Pembangunan
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://opendata.bekasikota.go.id/" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Open Data
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://www.bekasikota.go.id/pages/transparansi-pengelolaan-anggaran-daerah" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Transparansi Anggaran
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="http://tkdn.kemenperin.go.id/search.php" class='text-gray-700'>
+                                        <i class=""></i>
+                                        TKDN
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://bekasikota.go.id:443/pages/rlppd-kota-bekasi-tahun-2023" class='text-gray-700'>
+                                        <i class=""></i>
+                                        RLPPD Kota Bekasi
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://docs.google.com/viewerng/viewer?url=https://cdn.jsdelivr.net/gh/pemkotbekasi-cdn/jdih-cdn/LKIP%20KOTA%20BEKASI%202023%20ttd.pdf" class='text-gray-700'>
+                                        <i class=""></i>
+                                        LKIP KOTA BEKASI 2023
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://www.bekasikota.go.id/pages/lkpj-kota-bekasi" class='text-gray-700'>
+                                        <i class=""></i>
+                                        LKPJ Kota Bekasi
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://bekasikota.go.id:443/cctv" class='text-gray-700'>
+                                        <i class=""></i>
+                                        CCTV
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        <div>
+                            <a href="https://elhkpn.kpk.go.id/portal/user/pengumuman_lhkpn/YW1odFRqRk9hRk4zUm1abmREUnZORkp4ZURCRE5YRmpRazF1WVhWRGRWZHhLMnhFUW1kSlpDczJkVXQ1TURReFpIaFhTMXAwVFRkRWIwRnVWWFpRU0E9PQ==" class='text-gray-700 hover:text-blue-600'>
+                                <i class=""></i>
+                                LHKPN
+                            </a>
+                        </div>
+                        <div class='relative group'>
+                            <a href="https://bekasikota.go.id:443/#" class='text-gray-700 hover:text-blue-600'>PENGADUAN ▾</a>
+                            <ul class='absolute left-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 ease-out z-40'>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://bekasikota.go.id/pages/jurnal-pengaduan-call-centre" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Jurnal Pengaduan Call Centre
+                                    </a>
+                                </li>
+                                <li class='px-4 py-2 hover:bg-gray-100'>
+                                    <a href="https://bekasikota.go.id/pages/jurnal-sp4n-lapor" class='text-gray-700'>
+                                        <i class=""></i>
+                                        Jurnal Pengaduan SP4N LAPOR
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </nav>
+                    <!-- Toggle Script -->
+                    <script>
+                        document.getElementById('mobile-menu-toggle').addEventListener('click', function() {
+                            const menu = document.getElementById('mobile-menu');
+                            menu.classList.toggle('hidden');
+                        });
+                    </script>
+                    <div class="flex items-center gap-3 text-gray-800 px-4 py-2 text-sm">
+                        <img src="https://bekasikota.go.id:443//uploads/websetting/sun.gif" alt="Cuaca" class="w-6 h-6">
+                        <div>
+                            <p class="text-xs sm:text-sm text-gray-800">N/A</p>
+                            <p class="flex items-center justify-center gap-2 text-sm text-gray-800">
+                                <img src="https://bekasikota.go.id:443//uploads/websetting/carbon.png" alt="Kualitas Udara" class="w-4 h-4">
+                                <span onclick="toggleAQITooltip()" class="relative cursor-pointer hover:text-blue-600">
+                                    Tidak tersedia  		  <span id="aqi-tooltip" class="absolute left-1/2 -translate-x-1/2 mt-4 px-2 py-1 bg-white-800 text-xs rounded shadow-lg hidden z-10 whitespace-nowrap"></span>
+                                </span>
+                                <script>
+                                    function toggleAQITooltip() {
+                                        const tooltip = document.getElementById('aqi-tooltip');
+                                        tooltip.classList.toggle('hidden');
+                                    }
+                                </script>
+                        </div>
+                    </div>
+                </div>
+            </header>
+            <div class="max-w-7xl mx-auto px-4 py-12">
+                <form id="cctvForm" class="flex flex-col sm:flex-row gap-4 mb-8">
+                    <select id="cctvSelect" name="cctv" required class="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-700">
+                        <option value="">Pilih</option>
+                    </select>
+                    <button type="submit" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition">
+      Lihat
+    </button>
+                </form>
+                <div id="video" class="w-full rounded-xl overflow-hidden shadow-lg bg-black aspect-video"></div>
+            </div>
+            <script src="//cdn.jsdelivr.net/npm/cdnbye@latest/dist/hlsjs-p2p-engine.min.js"></script>
+            <script src="//cdn.jsdelivr.net/npm/hls.js@0.14.0"></script>
+            <script src="//cdn.jsdelivr.net/npm/cbplayer2@latest"></script>
+            <script>
+                document.addEventListener("DOMContentLoaded", function() {
+                    const cctvSelect = document.getElementById("cctvSelect");
+                    const cctvForm = document.getElementById("cctvForm");
+                    const videoContainer = document.getElementById("video");
+                    let player;
+
+                    // Fetch daftar CCTV dari server secara langsung
+                    fetch("https://eofficev2.bekasikota.go.id/backupcctv/m3/list.json").then(response => response.json()).then(data => {
+                        let no = 1;
+                        data.forEach(item => {
+                            let option = document.createElement("option");
+                            option.value = item.path;
+                            option.textContent = `${no}. ${item.name.replace(/_/g, ' ')}`;
+                            cctvSelect.appendChild(option);
+                            no++;
+                        }
+                        );
+                    }
+                    ).catch(error => console.error("Gagal memuat data CCTV:", error));
+
+                    // Handle submit form
+                    cctvForm.addEventListener("submit", function(event) {
+                        event.preventDefault();
+                        const selectedCCTV = cctvSelect.value;
+
+                        if (!selectedCCTV)
+                            return;
+
+                        const url = `https://eofficev2.bekasikota.go.id/backupcctv/m3/${encodeURIComponent(selectedCCTV)}`;
+
+                        // Hapus player lama jika ada
+                        if (player) {
+                            player.destroy();
+                            videoContainer.innerHTML = "";
+                        }
+
+                        // Buat player baru
+                        player = new CBPlayer({
+                            container: videoContainer,
+                            autoplay: true,
+                            hotkey: true,
+                            video: {
+                                url
+                            }
+                        });
+
+                        player.on("fullscreen", function() {
+                            if (/Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+                                screen.orientation.lock("landscape");
+                            }
+                        });
+                    });
+                });
+            </script>
+            <footer class="bg-blue-800 text-white">
+                <div class="container mx-auto px-4 py-12">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                        <!-- Section 1: Logo and Contact Info -->
+                        <div class="space-y-4">
+                            <div class="flex items-center space-x-3 mb-6">
+                                <img src="https://bekasikota.go.id:443//uploads/websetting/20250923175703-2025-09-23websetting175650.png" alt="Logo pemerintah" class="h-12 w-12 object-contain">
+                                <div>
+                                    <h3 class="text-xl font-bold">Pemerintah Kota Bekasi</h3>
+                                    <p class="text-sm text-white/80">Portal Resmi</p>
+                                </div>
+                            </div>
+                            <div class="space-y-3 text-sm">
+                                <div class="flex items-start space-x-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin h-4 w-4 mt-0.5">
+                                        <path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"></path>
+                                        <circle cx="12" cy="10" r="3"></circle>
+                                    </svg>
+                                    <span class="text-primary-foreground/90">Jl. Jendral Ahmad Yani No. 1 Gd.Perkantoran</span>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-phone h-4 w-4">
+                                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                                    </svg>
+                                    <span class="text-primary-foreground/90">(021) 88961767</span>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-mail h-4 w-4">
+                                        <rect width="20" height="16" x="2" y="4" rx="2"></rect>
+                                        <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
+                                    </svg>
+                                    <span class="text-primary-foreground/90">info@bekasikota.go.id</span>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Section 2: Profil & Informasi -->
+                        <div>
+                            <h4 class="text-lg font-semibold mb-6">Profil & Informasi</h4>
+                            <ul class="space-y-3">
+                                <li>
+                                    <a href="https://bekasikota.go.id/pages/sejarah-kota-bekasi" class="text-primary-foreground/80 hover:text-accent transition-colors duration-200 text-sm">Profil Pemerintah Kota Bekasi</a>
+                                </li>
+                                <li>
+                                    <a href="https://bekasikota.go.id/pages/visi-misi" class="text-primary-foreground/80 hover:text-accent transition-colors duration-200 text-sm">Visi & Misi</a>
+                                </li>
+                                <li>
+                                    <a href="https://bekasikota.go.id/pages/struktur-organisasi-pemerintah-kota-bekasi" class="text-primary-foreground/80 hover:text-accent transition-colors duration-200 text-sm">Struktur Organisasi</a>
+                                </li>
+                                <li>
+                                    <a href="https://bekasikota.go.id/pages/tugas-pokok-dan-fungsi-pemerintah-kota-bekasi" class="text-primary-foreground/80 hover:text-accent transition-colors duration-200 text-sm">Tugas Pokok dan Fungsi</a>
+                                </li>
+                                <li>
+                                    <a href="https://simpelbang.bekasikota.go.id" class="text-primary-foreground/80 hover:text-accent transition-colors duration-200 text-sm">Realisasi Keuangan</a>
+                                </li>
+                                <li>
+                                    <a href="https://bekasikota.go.id/cctv" class="text-primary-foreground/80 hover:text-accent transition-colors duration-200 text-sm">Pantau Kota</a>
+                                </li>
+                            </ul>
+                        </div>
+                        <!-- Section 3: Layanan Publik -->
+                        <div>
+                            <h4 class="text-lg font-semibold mb-6">Layanan Publik</h4>
+                            <ul class="space-y-3">
+                                <li>
+                                    <a href="https://dpppa.bekasikota.go.id/uptd-ppa" class="text-primary-foreground/80 hover:text-accent transition-colors duration-200 text-sm flex items-center space-x-1">
+                                        <span>UPTD Perlindungan Perempuan dan Anak</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-external-link h-3 w-3">
+                                            <path d="M15 3h6v6"></path>
+                                            <path d="M10 14 21 3"></path>
+                                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                        </svg>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://e-open.id" class="text-primary-foreground/80 hover:text-accent transition-colors duration-200 text-sm flex items-center space-x-1">
+                                        <span>E-Open2.0</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-external-link h-3 w-3">
+                                            <path d="M15 3h6v6"></path>
+                                            <path d="M10 14 21 3"></path>
+                                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                        </svg>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://bludpald.bekasikota.go.id" class="text-primary-foreground/80 hover:text-accent transition-colors duration-200 text-sm flex items-center space-x-1">
+                                        <span>BLUD UPTD PALD</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-external-link h-3 w-3">
+                                            <path d="M15 3h6v6"></path>
+                                            <path d="M10 14 21 3"></path>
+                                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                        </svg>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://silat.bekasikota.go.id" class="text-primary-foreground/80 hover:text-accent transition-colors duration-200 text-sm flex items-center space-x-1">
+                                        <span>SILAT</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-external-link h-3 w-3">
+                                            <path d="M15 3h6v6"></path>
+                                            <path d="M10 14 21 3"></path>
+                                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                        </svg>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://mpp.bekasikota.go.id" class="text-primary-foreground/80 hover:text-accent transition-colors duration-200 text-sm flex items-center space-x-1">
+                                        <span>Mall Pelayanan Publik</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-external-link h-3 w-3">
+                                            <path d="M15 3h6v6"></path>
+                                            <path d="M10 14 21 3"></path>
+                                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                        </svg>
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="https://esppt.bekasikota.go.id" class="text-primary-foreground/80 hover:text-accent transition-colors duration-200 text-sm flex items-center space-x-1">
+                                        <span>E-SPPT</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-external-link h-3 w-3">
+                                            <path d="M15 3h6v6"></path>
+                                            <path d="M10 14 21 3"></path>
+                                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                        </svg>
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        <!-- Section 4: Newsletter & Social -->
+                        <div>
+                            <h4 class="text-lg font-semibold mb-3">Tetap Terhubung</h4>
+                            <div class="mb-6">
+                                <p class="text-sm text-white mb-3">
+                Berlangganan newsletter untuk mendapat info terbaru
+            </p>
+                                <div class="space-y-2">
+                                    <input type="email" class="flex h-10 w-full rounded-md border border-gray-300 px-3 py-2 text-base text-gray-800 placeholder-gray-500 bg-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" placeholder="Email Anda">
+                                    <button class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium h-10 rounded-md px-4 w-full bg-orange-500 hover:bg-orange-600 text-white transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50">
+                Berlangganan
+                </button>
+                                </div>
+                            </div>
+                            <div>
+                                <p class="text-sm text-white-50 mb-3">Ikuti Kami</p>
+                                <div class="flex space-x-3">
+                                    <a href="https://www.facebook.com/pemkotbekasi/" class="p-2 rounded-full bg-primary-foreground/10 text-primary-foreground/80 hover:text-blue-600 transition-colors duration-200" aria-label="Facebook">
+                                        <!-- Facebook Icon -->
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="lucide lucide-facebook h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+                                        </svg>
+                                    </a>
+                                    <a href="https://x.com/pemkotbekasi" class="p-2 rounded-full bg-primary-foreground/10 text-primary-foreground/80 hover:text-blue-400 transition-colors duration-200" aria-label="x">
+                                        <!-- Twitter Icon -->
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="lucide lucide-twitter h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"/>
+                                        </svg>
+                                    </a>
+                                    <a href="https://www.instagram.com/pemkot_bekasi/" class="p-2 rounded-full bg-primary-foreground/10 text-primary-foreground/80 hover:text-pink-600 transition-colors duration-200" aria-label="Instagram">
+                                        <!-- Instagram Icon -->
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="lucide lucide-instagram h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <rect width="20" height="20" x="2" y="2" rx="5" ry="5"/>
+                                            <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+                                            <line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/>
+                                        </svg>
+                                    </a>
+                                    <a href="https://www.youtube.com/@pemerintahkotabekasi" class="p-2 rounded-full bg-primary-foreground/10 text-primary-foreground/80 hover:text-red-600 transition-colors duration-200" aria-label="YouTube">
+                                        <!-- YouTube Icon -->
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="lucide lucide-youtube h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.56 49.56 0 0 1-16.2 0A2 2 0 0 1 2.5 17z"/>
+                                            <polygon points="10 15 15 12 10 9 10 15"/>
+                                        </svg>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Footer Bottom -->
+                <div class="bg-primary/90 text-center text-sm text-primary-foreground/60 py-4 border-t border-primary-foreground/20">
+    &copy; 2025 Pemerintah Kota Bekasi. Hak cipta dilindungi undang-undang.
+  </div>
+            </footer>
+            <!-- JavaScript Files -->
+            <!-- <script src="https://bekasikota.go.id:443/cc-content/themes/cicool/asset/porto/vendor/jquery/jquery.min.js"></script>
+    <script src="https://bekasikota.go.id:443/cc-content/themes/cicool/asset/porto/vendor/jquery.appear/jquery.appear.min.js"></script>
+    <script src="https://bekasikota.go.id:443/cc-content/themes/cicool/asset/porto/vendor/jquery.easing/jquery.easing.min.js"></script>
+    <script src="https://bekasikota.go.id:443/cc-content/themes/cicool/asset/porto/vendor/jquery-cookie/jquery-cookie.min.js"></script>
+    <script src="https://bekasikota.go.id:443/cc-content/themes/cicool/asset/porto/vendor/bootstrap/js/bootstrap.min.js"></script>
+    <script src="https://bekasikota.go.id:443/cc-content/themes/cicool/asset/porto/vendor/common/common.min.js"></script>
+    <script src="https://bekasikota.go.id:443/cc-content/themes/cicool/asset/porto/vendor/jquery.validation/jquery.validation.min.js"></script>
+    <script src="https://bekasikota.go.id:443/cc-content/themes/cicool/asset/porto/vendor/jquery.easy-pie-chart/jquery.easy-pie-chart.min.js"></script>
+    <script src="https://bekasikota.go.id:443/cc-content/themes/cicool/asset/porto/vendor/jquery.gmap/jquery.gmap.min.js"></script>
+    <script src="https://bekasikota.go.id:443/cc-content/themes/cicool/asset/porto/vendor/jquery.lazyload/jquery.lazyload.min.js"></script>
+    <script src="https://bekasikota.go.id:443/cc-content/themes/cicool/asset/porto/vendor/isotope/jquery.isotope.min.js"></script>
+    <script src="https://bekasikota.go.id:443/cc-content/themes/cicool/asset/porto/vendor/owl.carousel/owl.carousel.min.js"></script>
+    <script src="https://bekasikota.go.id:443/cc-content/themes/cicool/asset/porto/vendor/magnific-popup/jquery.magnific-popup.min.js"></script>
+    <script src="https://bekasikota.go.id:443/cc-content/themes/cicool/asset/porto/vendor/vide/vide.min.js"></script>
+    <script src="https://bekasikota.go.id:443/cc-content/themes/cicool/asset/porto/js/theme.js"></script>
+    <script src="https://bekasikota.go.id:443/cc-content/themes/cicool/asset/porto/vendor/rs-plugin/js/jquery.themepunch.tools.min.js"></script>
+    <script src="https://bekasikota.go.id:443/cc-content/themes/cicool/asset/porto/vendor/rs-plugin/js/jquery.themepunch.revolution.min.js"></script>
+    <script src="https://bekasikota.go.id:443/cc-content/themes/cicool/asset/porto/js/views/view.contact.js"></script>
+    <script src="https://bekasikota.go.id:443/cc-content/themes/cicool/asset/porto/js/demos/demo-medical.js"></script>
+    <script src="https://bekasikota.go.id:443/cc-content/themes/cicool/asset/porto/js/custom.js"></script>
+    <script src="https://bekasikota.go.id:443/cc-content/themes/cicool/asset/porto/js/theme.init.js"></script> -->
+            <!-- Slider Script -->
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    const slider = document.getElementById('programSlider');
+                    const prevBtn = document.getElementById('prevBtn');
+                    const nextBtn = document.getElementById('nextBtn');
+                    let currentIndex = 0;
+                    let autoSlideInterval;
+
+                    // Fungsi update posisi slider
+                    function updateSlider() {
+                        const cardWidth = slider.children[0].getBoundingClientRect().width + 20;
+                        // 20 = gap antar card
+                        const visibleCards = getVisibleCards();
+                        // responsif
+                        const maxIndex = Math.ceil(slider.children.length / visibleCards) - 1;
+
+                        // Loop agar auto slider balik ke awal
+                        if (currentIndex > maxIndex)
+                            currentIndex = 0;
+
+                        const offset = -(cardWidth * visibleCards * currentIndex);
+                        slider.style.transform = `translateX(${offset}px)`;
+                    }
+
+                    // Fungsi untuk menentukan berapa card tampil (responsif)
+                    function getVisibleCards() {
+                        if (window.innerWidth < 640)
+                            return 1;
+                        // mobile
+                        if (window.innerWidth < 1024)
+                            return 2;
+                        // tablet
+                        return 3;
+                        // desktop
+                    }
+
+                    // Tombol Next dan Prev
+                    nextBtn.addEventListener('click', () => {
+                        const visibleCards = getVisibleCards();
+                        const maxIndex = Math.ceil(slider.children.length / visibleCards) - 1;
+                        if (currentIndex < maxIndex) {
+                            currentIndex++;
+                        } else {
+                            currentIndex = 0;
+                        }
+                        updateSlider();
+                        resetAutoSlide();
+                    }
+                    );
+
+                    prevBtn.addEventListener('click', () => {
+                        const visibleCards = getVisibleCards();
+                        const maxIndex = Math.ceil(slider.children.length / visibleCards) - 1;
+                        if (currentIndex > 0) {
+                            currentIndex--;
+                        } else {
+                            currentIndex = maxIndex;
+                        }
+                        updateSlider();
+                        resetAutoSlide();
+                    }
+                    );
+
+                    // Auto Slide setiap 4 detik
+                    function startAutoSlide() {
+                        autoSlideInterval = setInterval( () => {
+                            currentIndex++;
+                            updateSlider();
+                        }
+                        , 4000);
+                    }
+
+                    function resetAutoSlide() {
+                        clearInterval(autoSlideInterval);
+                        startAutoSlide();
+                    }
+
+                    window.addEventListener('resize', updateSlider);
+
+                    // Inisialisasi
+                    updateSlider();
+                    startAutoSlide();
+                });
+            </script>
+            <!-- Custom JavaScript for Modern Interactions -->
+            <script>
+                document.addEventListener("DOMContentLoaded", () => {
+                    const counters = document.querySelectorAll(".counter-number");
+                    counters.forEach(counter => {
+                        const target = +counter.getAttribute("data-target");
+                        let count = 0;
+                        const increment = target / 100;
+
+                        const updateCount = () => {
+                            count += increment;
+                            if (count < target) {
+                                counter.innerText = Math.floor(count);
+                                requestAnimationFrame(updateCount);
+                            } else {
+                                counter.innerText = target;
+                            }
+                        }
+                        ;
+
+                        updateCount();
+                    }
+                    );
+                }
+                );
+            </script>
+            <script src="https://bekasikota.go.id:443/cc-content/themes/cicool/asset/datatables/datatables.min.js"></script>
+        </div>
+        <script src="https://cdn.jsdelivr.net/npm/sienna-accessibility/dist/sienna-accessibility.umd.js" async></script>
+    </body>
+</html>

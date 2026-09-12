@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATCS CCTV Kabupaten Bogor - Live Traffic Monitor</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            900: '#312e81',
+                        },
+                        darkbg: '#0f172a',
+                        darkcard: '#1e293b',
+                        darkborder: '#334155'
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-darkbg text-slate-100 font-['Inter'] antialiased min-h-screen flex flex-col overflow-x-hidden">
+
+    <!-- Header -->
+    <header class="bg-darkcard/80 backdrop-blur-md border-b border-darkborder sticky top-0 z-40 px-4 lg:px-6 py-3">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+            <!-- Title & Logo -->
+            <div class="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                        <i class="fa-solid fa-video text-white text-lg"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h1 class="font-bold text-lg text-white leading-tight">ATCS CCTV Kab. Bogor</h1>
+                            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Live Realtime
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-400">Pemantauan Arus Lalu Lintas Kabupaten Bogor</p>
+                    </div>
+                </div>
+                <!-- Mobile Toggle Menu button -->
+                <button id="btnMobileToggle" class="sm:hidden text-slate-300 hover:text-white p-2 rounded-lg bg-slate-800/80 border border-slate-700">
+                    <i class="fa-solid fa-bars text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Stats & Controls -->
+            <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
+                <div class="flex items-center gap-4 bg-slate-900/60 border border-slate-800 rounded-xl px-4 py-1.5 text-xs">
+                    <div class="text-center sm:text-left">
+                        <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Titik Lokasi</span>
+                        <span id="statLocations" class="font-bold text-slate-100 text-sm">0</span>
+                    </div>
+                    <div class="h-6 w-px bg-slate-800"></div>
+                    <div class="text-center sm:text-left">
+                        <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Kamera CCTV</span>
+                        <span id="statCameras" class="font-bold text-indigo-400 text-sm">0</span>
+                    </div>
+                </div>
+
+                <!-- Refresh Button -->
+                <button id="btnRefresh" title="Refresh Data CCTV" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-3 py-2 rounded-xl text-xs font-medium transition-all">
+                    <i class="fa-solid fa-rotate text-xs" id="iconRefresh"></i>
+                    <span class="hidden md:inline">Sync Data</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <div class="flex-1 flex flex-col lg:flex-row relative overflow-hidden">
+
+        <!-- Sidebar / Location Drawer -->
+        <aside id="sidebarDrawer" class="w-full lg:w-96 bg-darkcard/90 border-r border-darkborder flex flex-col z-30 transition-all duration-300 shrink-0">
+            
+            <!-- Search & Filters -->
+            <div class="p-4 border-b border-darkborder space-y-3">
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                    <input type="text" id="searchInput" placeholder="Cari titik lokasi atau kamera..." 
+                           class="w-full pl-10 pr-9 py-2.5 bg-slate-900/80 border border-slate-700/80 rounded-xl text-sm text-slate-200 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all">
+                    <button id="btnClearSearch" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200">
+                        <i class="fa-solid fa-xmark text-xs"></i>
+                    </button>
+                </div>
+
+                <!-- View Switcher -->
+                <div class="flex bg-slate-900/90 p-1 rounded-xl border border-slate-800">
+                    <button id="viewTabList" class="flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white shadow-sm transition-all">
+                        <i class="fa-solid fa-list text-xs"></i> Daftar Lokasi
+                    </button>
+                    <button id="viewTabGrid" class="flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-medium rounded-lg text-slate-400 hover:text-slate-200 transition-all">
+                        <i class="fa-solid fa-border-all text-xs"></i> Grid Stream
+                    </button>
+                </div>
+            </div>
+
+            <!-- Location List Container -->
+            <div id="listContainer" class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                <!-- Location Cards loaded dynamically -->
+                <div class="text-center py-10 text-slate-500 flex flex-col items-center gap-2">
+                    <i class="fa-solid fa-circle-notch fa-spin text-2xl text-indigo-400"></i>
+                    <p class="text-xs">Memuat daftar CCTV Kabupaten Bogor...</p>
+                </div>
+            </div>
+
+            <!-- Grid Stream Container (hidden by default) -->
+            <div id="gridContainer" class="hidden flex-1 overflow-y-auto p-3 grid grid-cols-1 sm:grid-cols-2 gap-3 custom-scrollbar">
+                <!-- Grid CCTV loaded dynamically -->
+            </div>
+
+        </aside>
+
+        <!-- Main Map Area -->
+        <main class="flex-1 relative flex flex-col h-[calc(100vh-65px)] lg:h-auto">
+
+            <!-- Floating View Toggle Controls on Map -->
+            <div class="absolute top-4 right-4 z-[20] flex items-center gap-2">
+                <button id="btnRecenterMap" class="bg-darkcard/90 hover:bg-slate-700 text-slate-200 border border-darkborder px-3 py-2 rounded-xl text-xs font-medium shadow-xl backdrop-blur-md flex items-center gap-2 transition-all">
+                    <i class="fa-solid fa-crosshairs text-indigo-400"></i>
+                    <span>Reset Peta</span>
+                </button>
+                <button id="btnToggleAllStream" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-xl text-xs font-medium shadow-xl shadow-indigo-600/20 backdrop-blur-md flex items-center gap-2 transition-all">
+                    <i class="fa-solid fa-table-cells"></i>
+                    <span>Mode Grid Stream</span>
+                </button>
+            </div>
+
+            <!-- Leaflet Map Container -->
+            <div id="map" class="w-full h-full z-[10] bg-slate-950"></div>
+
+        </main>
+    </div>
+
+    <!-- CCTV Stream Modal Player -->
+    <div id="cctvModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 transition-all duration-300">
+        <div class="bg-darkcard border border-darkborder rounded-2xl w-full max-w-4xl max-h-[95vh] flex flex-col shadow-2xl overflow-hidden animate-scale-up">
+            
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between px-5 py-4 border-b border-darkborder bg-slate-900/60">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+                        <i class="fa-solid fa-video text-sm"></i>
+                    </div>
+                    <div>
+                        <h3 id="modalTitle" class="font-bold text-base text-white">Simpang Sentul</h3>
+                        <p id="modalSub" class="text-xs text-slate-400 flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <span id="modalCoord">Lat: -6.518, Lng: 106.836</span>
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="btnModalFullscreen" title="Fullscreen" class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all">
+                        <i class="fa-solid fa-expand text-sm"></i>
+                    </button>
+                    <button id="btnModalClose" title="Tutup" class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all">
+                        <i class="fa-solid fa-xmark text-base"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Multi-Camera Selector Tabs (If location has >1 camera) -->
+            <div id="modalCameraTabs" class="flex overflow-x-auto gap-2 px-5 py-2.5 bg-slate-900 border-b border-darkborder custom-scrollbar">
+                <!-- Camera tabs injected dynamically -->
+            </div>
+
+            <!-- Video Player Frame Container -->
+            <div class="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden">
+                <div id="playerLoading" class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-950 text-slate-400 z-10">
+                    <i class="fa-solid fa-circle-notch fa-spin text-3xl text-indigo-500"></i>
+                    <p class="text-xs font-medium">Connecting to CCTV Live Feed...</p>
+                </div>
+                
+                <iframe id="cctvIframe" class="w-full h-full border-0 z-0" allow="autoplay; fullscreen" allowfullscreen></iframe>
+            </div>
+
+            <!-- Modal Footer Info -->
+            <div class="px-5 py-3 bg-slate-900/80 border-t border-darkborder flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-400">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-circle-info text-indigo-400"></i>
+                    <span id="modalCameraDesc">Kamera Fix Simpang Sentul</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="flex items-center gap-1.5"><i class="fa-solid fa-shield-halved text-emerald-400 text-[10px]"></i> Dishub Kab. Bogor</span>
+                    <span>•</span>
+                    <a id="modalDirectLink" href="#" target="_blank" class="text-indigo-400 hover:underline flex items-center gap-1">
+                        Open Direct Stream <i class="fa-solid fa-up-right-from-square text-[10px]"></i>
+                    </a>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

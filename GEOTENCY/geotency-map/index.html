@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Peta Rekomendasi Area — Geotency</title>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.3.0/dist/maplibre-gl.css" />
+<style>
+  :root {
+    --panel-bg: rgba(255, 255, 255, 0.96);
+    --border: #dcdcdc;
+    --accent: #1473e6;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: "Segoe UI", Arial, sans-serif; }
+  #map { position: absolute; inset: 0; }
+
+  /* Panel sisi kiri */
+  #panel {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    width: 320px;
+    max-height: calc(100% - 24px);
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 10;
+  }
+  #panel header {
+    padding: 10px 14px;
+    background: #f5f6f8;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    font-size: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  #panel header button {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  #panelBody { overflow-y: auto; padding: 10px 14px; }
+  #panelBody.collapsed { display: none; }
+
+  .section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #666;
+    margin: 12px 0 6px;
+    font-weight: 700;
+  }
+  .section-title:first-child { margin-top: 0; }
+
+  .layer-group {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    background: #fff;
+  }
+  .layer-group > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .layer-group > summary::-webkit-details-marker { display: none; }
+  .layer-group > summary::after {
+    content: "▾";
+    margin-left: auto;
+    color: #999;
+    font-size: 11px;
+  }
+  .layer-group[open] > summary::after { content: "▴"; }
+  .layer-group .legend-items { padding: 0 10px 8px; }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #333;
+    padding: 2px 0;
+  }
+  .legend-item img { width: 20px; height: 20px; image-rendering: pixelated; }
+  .legend-item .swatch {
+    width: 20px; height: 20px;
+    border: 1px solid rgba(0,0,0,0.2);
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .no-data { color: #999; font-size: 11px; padding: 0 10px 8px; }
+
+  #dataList { margin-bottom: 8px; }
+  .data-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    padding: 3px 0;
+  }
+  .data-row select {
+    font-size: 11px;
+    max-width: 130px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+  .data-row .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .data-row .fname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .hint {
+    font-size: 11px;
+    color: #777;
+    line-height: 1.5;
+    background: #fbfbfb;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-top: 10px;
+  }
+  .hint code { background: #eee; padding: 0 3px; border-radius: 3px; font-size: 10px; }
+  #fileBtn {
+    width: 100%;
+    padding: 7px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--accent);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-top: 8px;
+  }
+  #fileBtn:hover { background: #0f5fc2; }
+
+  /* Popup */
+  .maplibregl-popup-content {
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+    max-width: 280px;
+  }
+  .popup-title {
+    font-weight: 700;
+    font-size: 13px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+  }
+  .popup-table { border-collapse: collapse; width: 100%; }
+  .popup-table td { padding: 2px 0; vertical-align: top; }
+  .popup-table td:first-child { color: #666; padding-right: 10px; white-space: nowrap; }
+  .popup-table td:last-child { text-align: right; font-weight: 500; word-break: break-word; }
+
+  #status {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.75);
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    z-index: 10;
+    display: none;
+    max-width: 80%;
+    text-align: center;
+  }
+  #dragOverlay {
+    position: absolute; inset: 0;
+    background: rgba(21, 101, 192, 0.2);
+    border: 3px dashed #1565c0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 700;
+    color: #0d47a1;
+    z-index: 20;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="panel">
+  <header>
+    <span>🗺️ Peta Rekomendasi Area</span>
+    <button id="collapseBtn" title="Ciutkan/buka panel">—</button>
+  </header>
+  <div id="panelBody">
+    <div class="section-title">Layer &amp; Legenda</div>
+    <div id="layerList"><span style="font-size:12px;color:#888;">Memuat data layer…</span></div>
+
+    <div class="section-title">Dataset Terpasang</div>
+    <div id="dataList"><span style="font-size:12px;color:#888;">Belum ada dataset.</span></div>
+    <button id="fileBtn">📂 Pilih file GeoJSON…</button>
+    <input type="file" id="fileInput" accept=".geojson,.json" multiple style="display:none;" />
+
+    <div class="hint">
+      <b>Cara pakai:</b> taruh file export GeoJSON dari Geotency di folder
+      <code>data/</code> (mis. <code>hexagon.geojson</code>), lalu muat ulang halaman.
+      Bisa juga klik tombol di atas atau <b>drag &amp; drop</b> file ke peta.
+      Data harus ber-koordinat WGS84 (EPSG:4326).
+    </div>
+  </div>
+</div>
+
+<div id="status"></div>
+<div id="dragOverlay">Lepaskan file GeoJSON di sini</div>
+
+<script src="https://unpkg.com/maplibre-gl@5.3.0/dist/maplibre-gl.js"></script>
+<script>
+// ================== KONFIGURASI ==================
+const MAPTILER_KEY = '6mDvVmws6MAP2ihtR5FS'; // dari info penting.txt
+const STYLE_URL = 'https://api.maptiler.com/maps/streets-v2/style.json?key=' + MAPTILER_KEY;
+const LEGEND_URL = 'assets/' + encodeURIComponent('json 1.json');
+const META_URL = 'assets/' + encodeURIComponent('json 2.json');
+const DATA_DIR = 'data/';
+// Nama file default yang dicoba dimuat otomatis dari folder data/
+const DEFAULT_FILES = [
+  'demo-hexagon.geojson', 'hexagon.geojson', 'hexagons.geojson',
+  'recommended_area.geojson', 'area_rekomendasi.geojson', 'data.geojson', 'export.geojson',
+];
+
+const PALETTE = ['#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe'];
+
+// ================== STATE ==================
+let legendLayers = [];      // dari json 1.json
+let meta = null;            // dari json 2.json (metadata layer hexagon)
+let datasets = [];          // {id, name, assigned, color, geojson, props}
+let nextDatasetId = 1;
+
+const map = new maplibregl.Map({
+  container: 'map',
+  style: STYLE_URL,
+  center: [106.818, -6.352],
+  zoom: 10,
+  attributionControl: { compact: true },
+});
+
+map.addControl(new maplibregl.NavigationControl(), 'top-right');
+map.addControl(new maplibregl.ScaleControl({ maxWidth: 120 }), 'bottom-right');
+
+// ================== UTIL ==================
+function sanitizeId(s) { return s.replace(/[^a-zA-Z0-9_]/g, '_'); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+function showStatus(msg, ms = 4000) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.style.display = 'block';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.display = 'none'; }, ms);
+}
+
+function normalizeGeoJSON(data) {
+  if (Array.isArray(data)) return { type: 'FeatureCollection', features: data };
+  if (data.type === 'Feature') return { type: 'FeatureCollection', features: [data] };
+  return data; // FeatureCollection
+}
+
+function uniqueValues(geojson, field) {
+  const seen = new Set();
+  for (const f of geojson.features || []) {
+    const v = f.properties ? f.properties[field] : undefined;
+    if (v != null) seen.add(String(v));
+    if (seen.size > 8) return null;
+  }
+  return seen.size >= 2 && seen.size <= 8 ? [...seen] : null;
+}
+
+// ================== PANEL LEGENDA ==================
+function buildLegendPanel() {
+  const wrap = document.getElementById('layerList');
+  wrap.innerHTML = '';
+  for (const layer of legendLayers) {
+    const det = document.createElement('details');
+    det.className = 'layer-group';
+    det.open = true;
+
+    const sum = document.createElement('summary');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = true;
+    cb.dataset.legendId = String(layer.id);
+    cb.addEventListener('change', () => updateLayerVisibility(layer, cb.checked));
+    const label = document.createElement('span');
+    label.textContent = layer.name;
+    sum.appendChild(cb);
+    sum.appendChild(label);
+    det.appendChild(sum);
+
+    const items = document.createElement('div');
+    items.className = 'legend-items';
+    if (layer.legend && layer.legend.length) {
+      for (const it of layer.legend) {
+        const row = document.createElement('div');
+        row.className = 'legend-item';
+        if (it.imageData) {
+          const img = document.createElement('img');
+          img.src = 'data:' + (it.contentType || 'image/png') + ';base64,' + it.imageData;
+          img.alt = it.label || '';
+          row.appendChild(img);
+        }
+        const span = document.createElement('span');
+        span.textContent = it.label || '';
+        row.appendChild(span);
+        items.appendChild(row);
+      }
+    } else {
+      items.innerHTML = '<div class="no-data">(tanpa legenda)</div>';
+    }
+    det.appendChild(items);
+    wrap.appendChild(det);
+  }
+}
+
+// Visibilitas: dataset yang ter-assign ke layer ini ikut tampil/sembunyi
+function updateLayerVisibility(layer, visible) {
+  for (const ds of datasets) {
+    if (ds.assigned === String(layer.id)) {
+      const mapLayer = map.getLayer('ds_' + ds.id);
+      if (mapLayer) map.setLayoutProperty('ds_' + ds.id, 'visibility', visible ? 'visible' : 'none');
+    }
+  }
+}
+
+// ================== STYLING ==================
+// Warna hexagon dari class breaks json 2.json (field manual_score)
+function buildHexagonPaint(meta) {
+  const renderer = meta.drawingInfo && meta.drawingInfo.renderer;
+  const infos = (renderer && renderer.classBreakInfos) || [];
+  const field = (renderer && renderer.field) || 'manual_score';
+  if (!infos.length) {
+    return { fillColor: 'rgba(21,101,192,0.55)', outlineColor: 'rgba(110,110,110,0.5)' };
+  }
+  const color = (sym) => {
+    const c = sym && sym.color;
+    return c ? `rgba(${c[0]},${c[1]},${c[2]},${(c[3] ?? 255) / 255})` : 'rgba(128,128,128,0.5)';
+  };
+  const expr = ['step', ['coalesce', ['to-number', ['get', field]], 1], color(infos[0].symbol)];
+  // step: input < cmv0 -> warna0; < cmv1 -> warna1; ...; >= cmv(n-2) -> warna(n-1)
+  for (let i = 0; i < infos.length - 1; i++) {
+    expr.push(infos[i].classMaxValue, color(infos[i + 1].symbol));
+  }
+  const outline = color({ color: [110, 110, 110, 127] });
+  return { fillColor: expr, outlineColor: outline, field };
+}
+
+// Style generik untuk dataset non-hexagon
+function genericStyle(geojson) {
+  let geomType = 'polygon';
+  for (const f of geojson.features || []) {
+    if (f.geometry && f.geometry.type) {
+      geomType = f.geometry.type;
+      break;
+    }
+  }
+  if (geomType === 'Point' || geomType === 'MultiPoint') {
+    return { kind: 'circle', color: PALETTE[datasets.length % PALETTE.length] };
+  }
+  if (geomType === 'LineString' || geomType === 'MultiLineString') {
+    return { kind: 'line', color: PALETTE[datasets.length % PALETTE.length] };
+  }
+  return { kind: 'fill', color: PALETTE[datasets.length % PALETTE.length] };
+}
+
+// MapLibre belum bisa menerima layer sebelum style selesai dimuat
+function mapReady() {
+  return map.loaded() ? Promise.resolve() : new Promise(res => map.once('load', res));
+}
+
+function isHexagonDataset(geojson) {
+  const f = (geojson.features || [])[0];
+  if (!f || !f.properties) return false;
+  const p = f.properties;
+  const rendererField = meta && meta.drawingInfo && meta.drawingInfo.renderer && meta.drawingInfo.renderer.field;
+  return p[rendererField || 'manual_score'] != null;
+}
+
+// ================== DATASET / LAYER PETA ==================
+function guessLegendLayer(name, geojson) {
+  if (isHexagonDataset(geojson)) {
+    const h = legendLayers.find(l => /hexagon/i.test(l.name));
+    if (h) return String(h.id);
+  }
+  const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const fn = norm(name);
+  for (const l of legendLayers) {
+    const ln = norm(l.name);
+    if (fn.includes(ln) || ln.includes(fn)) return String(l.id);
+  }
+  return String(legendLayers[0] ? legendLayers[0].id : '0');
+}
+
+async function addDataset(name, geojson) {
+  geojson = normalizeGeoJSON(geojson);
+  const id = nextDatasetId++;
+  const assigned = guessLegendLayer(name, geojson);
+  const isHex = isHexagonDataset(geojson);
+
+  const style = isHex ? buildHexagonPaint(meta) : genericStyle(geojson);
+  const layerId = 'ds_' + id;
+
+  await mapReady(); // tunggu style selesai dimuat sebelum addSource/addLayer
+
+  // cari kolom kategori untuk point (bad/good/unknown dsb.)
+  let categoryField = null;
+  if (style.kind === 'circle' && geojson.features && geojson.features.length) {
+    const sampleProps = geojson.features[0].properties || {};
+    for (const key of Object.keys(sampleProps)) {
+      if (uniqueValues(geojson, key)) { categoryField = key; break; }
+    }
+  }
+
+  map.addSource(layerId, { type: 'geojson', data: geojson });
+
+  if (isHex) {
+    map.addLayer({
+      id: layerId,
+      type: 'fill',
+      source: layerId,
+      paint: {
+        'fill-color': style.fillColor,
+        'fill-outline-color': style.outlineColor,
+        'fill-opacity': 0.7,
+      },
+    });
+    // garis tebal untuk outline hexagon agar jelas
+    map.addLayer({
+      id: layerId + '_outline',
+      type: 'line',
+      source: layerId,
+      paint: { 'line-color': 'rgba(80,80,80,0.55)', 'line-width': 1 },
+    });
+  } else if (style.kind === 'circle') {
+    const values = categoryField ? uniqueValues(geojson, categoryField) : null;
+    map.addLayer({
+      id: layerId,
+      type: 'circle',
+      source: layerId,
+      paint: {
+        'circle-radius': 7,
+        'circle-stroke-width': 1.5,
+        'circle-stroke-color': '#ffffff',
+        'circle-color': values
+          ? ['match', ['to-string', ['get', categoryField]], ...values.flatMap((v, i) => [v, PALETTE[i % PALETTE.length]]), '#999999']
+          : style.color,
+        'circle-opacity': 0.85,
+      },
+    });
+  } else if (style.kind === 'line') {
+    map.addLayer({
+      id: layerId,
+      type: 'line',
+      source: layerId,
+      paint: { 'line-color': style.color, 'line-width': 2.5, 'line-opacity': 0.85 },
+    });
+  } else {
+    map.addLayer({
+      id: layerId,
+      type: 'fill',
+      source: layerId,
+      paint: { 'fill-color': style.color, 'fill-opacity': 0.45, 'fill-outline-color': 'rgba(60,60,60,0.6)' },
+    });
+  }
+
+  datasets.push({ id, name, assigned, isHex, geojson, categoryField });
+  renderDataList();
+  showStatus('Dataset "' + name + '" dimuat (' + (geojson.features || []).length + ' fitur).');
+}
+
+function renderDataList() {
+  const wrap = document.getElementById('dataList');
+  if (!datasets.length) {
+    wrap.innerHTML = '<span style="font-size:12px;color:#888;">Belum ada dataset.</span>';
+    return;
+  }
+  wrap.innerHTML = '';
+  for (const ds of datasets) {
+    const row = document.createElement('div');
+    row.className = 'data-row';
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dot.style.background = ds.isHex ? '#1473e6' : PALETTE[(ds.id - 1) % PALETTE.length];
+    const fname = document.createElement('span');
+    fname.className = 'fname';
+    fname.textContent = ds.name;
+    fname.title = ds.name;
+    const sel = document.createElement('select');
+    sel.innerHTML = legendLayers.map(l => `<option value="${l.id}">${esc(l.name)}</option>`).join('');
+    sel.value = ds.assigned;
+    sel.addEventListener('change', () => { ds.assigned = sel.value; });
+    row.appendChild(dot);
+    row.appendChild(fname);
+    row.appendChild(sel);
+    wrap.appendChild(row);
+  }
+}
+
+// ================== POPUP ==================
+function buildAliasMap() {
+  const m = {};
+  if (meta && Array.isArray(meta.fields)) {
+    for (const f of meta.fields) m[f.name] = f.alias || f.name;
+  }
+  return m;
+}
+
+map.on('click', (e) => {
+  const layers = datasets.map(d => 'ds_' + d.id);
+  const feats = map.queryRenderedFeatures(e.point, { layers });
+  if (!feats.length) return;
+
+  const f = feats[0];
+  const ds = datasets.find(d => 'ds_' + d.id === f.layer.id);
+  const props = f.properties || {};
+  const aliases = buildAliasMap();
+
+  const skip = new Set(['shape', 'shape_Length', 'shape_Area', 'objectid', 'objectid_1', 'FID']);
+  const rows = Object.keys(props)
+    .filter(k => !skip.has(k))
+    .slice(0, 14)
+    .map(k => {
+      const label = aliases[k] || k;
+      let v = props[k];
+      if (typeof v === 'number') v = Number.isInteger(v) ? v.toLocaleString('id-ID') : v.toFixed(3);
+      return `<tr><td>${esc(label)}</td><td>${esc(v)}</td></tr>`;
+    })
+    .join('');
+
+  new maplibregl.Popup({ closeButton: true, offset: 12 })
+    .setLngLat(e.lngLat)
+    .setHTML(`<div class="popup-title">${esc(ds ? ds.name : 'Fitur')}</div>
+              <table class="popup-table">${rows || '<tr><td>—</td><td>tanpa atribut</td></tr>'}</table>`)
+    .addTo(map);
+});
+
+map.on('mousemove', (e) => {
+  const layers = datasets.map(d => 'ds_' + d.id);
+  const feats = map.queryRenderedFeatures(e.point, { layers });
+  map.getCanvas().style.cursor = feats.length ? 'pointer' : '';
+});
+
+// ================== MEMUAT FILE ==================
+async function tryLoadFile(url, name) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return false;
+    const json = await res.json();
+    const fc = normalizeGeoJSON(json);
+    if (fc.type !== 'FeatureCollection') return false;
+    await addDataset(name, fc);
+    return true;
+  } catch (err) {
+    console.error('Gagal memuat', name, err);
+    return false;
+  }
+}
+
+async function loadDefaultFiles() {
+  let loaded = 0;
+  // manifest opsional: data/manifest.json { "Nama Layer": "file.geojson", ... }
+  try {
+    const mres = await fetch(DATA_DIR + 'manifest.json');
+    if (mres.ok) {
+      const manifest = await mres.json();
+      for (const [name, file] of Object.entries(manifest)) {
+        if (await tryLoadFile(DATA_DIR + file, file)) loaded++;
+      }
+    }
+  } catch {}
+  for (const f of DEFAULT_FILES) {
+    if (await tryLoadFile(DATA_DIR + f, f)) loaded++;
+  }
+  if (!loaded) {
+    showStatus('Tidak ada GeoJSON di folder data/ — gunakan tombol "Pilih file" atau drag & drop.', 8000);
+  } else if (loaded > 1) {
+    const extra = document.getElementById('dataList');
+  }
+}
+
+// ================== FILE PICKER & DRAG-DROP ==================
+document.getElementById('fileBtn').addEventListener('click', () => document.getElementById('fileInput').click());
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  for (const file of e.target.files) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      addDataset(file.name, JSON.parse(reader.result)).catch(() =>
+        showStatus('Gagal membaca ' + file.name + ' — pastikan file GeoJSON valid.')
+      );
+    };
+    reader.readAsText(file);
+  }
+  e.target.value = '';
+});
+
+const overlay = document.getElementById('dragOverlay');
+['dragenter', 'dragover'].forEach(ev => map.getContainer().addEventListener(ev, (e) => {
+  e.preventDefault();
+  overlay.style.display = 'flex';
+}));
+['dragleave', 'drop'].forEach(ev => map.getContainer().addEventListener(ev, (e) => {
+  e.preventDefault();
+  if (ev === 'dragleave' && e.relatedTarget) return;
+  overlay.style.display = 'none';
+}));
+map.getContainer().addEventListener('drop', (e) => {
+  for (const file of e.dataTransfer.files) {
+    if (!/\.(geojson|json)$/i.test(file.name)) continue;
+    const reader = new FileReader();
+    reader.onload = () => {
+      addDataset(file.name, JSON.parse(reader.result)).catch(() =>
+        showStatus('Gagal membaca ' + file.name)
+      );
+    };
+    reader.readAsText(file);
+  }
+});
+
+// ================== PANEL COLLAPSE ==================
+document.getElementById('collapseBtn').addEventListener('click', () => {
+  const body = document.getElementById('panelBody');
+  body.classList.toggle('collapsed');
+  document.getElementById('collapseBtn').textContent = body.classList.contains('collapsed') ? '+' : '—';
+});
+
+// ================== INISIALISASI ==================
+(async function init() {
+  try {
+    const [legendRes, metaRes] = await Promise.all([fetch(LEGEND_URL), fetch(META_URL)]);
+    if (legendRes.ok) {
+      const legend = await legendRes.json();
+      legendLayers = (legend.layers || []).map(l => ({ id: l.layerId, name: l.layerName, legend: l.legend }));
+      buildLegendPanel();
+    }
+    if (metaRes.ok) meta = await metaRes.json();
+
+    if (meta && meta.extent) {
+      const ex = meta.extent;
+      map.fitBounds([[ex.xmin, ex.ymin], [ex.xmax, ex.ymax]], { padding: 60, duration: 800 });
+    }
+  } catch (err) {
+    document.getElementById('layerList').innerHTML = '<span style="font-size:12px;color:#c00;">Gagal memuat file JSON pendukung. Jalankan via server lokal (lihat README).</span>';
+  }
+  await loadDefaultFiles();
+})();
+</script>
+</body>
+</html>

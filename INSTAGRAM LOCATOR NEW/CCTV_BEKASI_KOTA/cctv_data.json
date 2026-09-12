@@ -1,0 +1,218 @@
+[
+  {
+    "id": "Jl_Chairil_Anwar_DPRD_Kota_Bekasi",
+    "name": "Jl. Chairil Anwar - DPRD Kota Bekasi",
+    "path": "Jl_Chairil_Anwar_DPRD_Kota_Bekasi.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_Chairil_Anwar_DPRD_Kota_Bekasi.jpg",
+    "lat": -6.25795,
+    "lng": 107.01212,
+    "district": "Bekasi Timur"
+  },
+  {
+    "id": "Jl_Cut_Mutia_Perempatan_Rawa_Semut",
+    "name": "Jl. Cut Mutia - Perempatan Rawa Semut",
+    "path": "Jl_Cut_Mutia_Perempatan_Rawa_Semut.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_Cut_Mutia_Perempatan_Rawa_Semut.jpg",
+    "lat": -6.25580,
+    "lng": 107.00410,
+    "district": "Bekasi Timur"
+  },
+  {
+    "id": "Jl_Cut_Mutia_Terminal_Kota_Bekasi",
+    "name": "Jl. Cut Mutia - Terminal Kota Bekasi",
+    "path": "Jl_Cut_Mutia_Terminal_Kota_Bekasi.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_Cut_Mutia_Terminal_Kota_Bekasi.jpg",
+    "lat": -6.24997,
+    "lng": 107.01322,
+    "district": "Bekasi Timur"
+  },
+  {
+    "id": "Jl_HM_Joyo_Martono_RS_Primaya_Bekasi_Timur",
+    "name": "Jl. HM Joyo Martono - RS Primaya Bekasi Timur",
+    "path": "Jl_HM_Joyo_Martono_RS_Primaya_Bekasi_Timur.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_HM_Joyo_Martono_RS_Primaya_Bekasi_Timur.jpg",
+    "lat": -6.25230,
+    "lng": 107.01630,
+    "district": "Bekasi Timur"
+  },
+  {
+    "id": "Jl_Ir_H_Juanda_FTL_Fitness_Gym",
+    "name": "Jl. Ir. H. Juanda - FTL Fitness Gym",
+    "path": "Jl_Ir_H_Juanda_FTL_Fitness_Gym.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_Ir_H_Juanda_FTL_Fitness_Gym.jpg",
+    "lat": -6.23950,
+    "lng": 107.00120,
+    "district": "Bekasi Selatan"
+  },
+  {
+    "id": "Jl_Ir_H_Juanda_KFC_Taman_Cut_Mutia",
+    "name": "Jl. Ir. H. Juanda - KFC Taman Cut Mutia",
+    "path": "Jl_Ir_H_Juanda_KFC_Taman_Cut_Mutia.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_Ir_H_Juanda_KFC_Taman_Cut_Mutia.jpg",
+    "lat": -6.24850,
+    "lng": 107.00680,
+    "district": "Bekasi Timur"
+  },
+  {
+    "id": "Jl_Ir_H_Juanda_SMP_Strada_Budi_Luhur",
+    "name": "Jl. Ir. H. Juanda - SMP Strada Budi Luhur",
+    "path": "Jl_Ir_H_Juanda_SMP_Strada_Budi_Luhur.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_Ir_H_Juanda_SMP_Strada_Budi_Luhur.jpg",
+    "lat": -6.24150,
+    "lng": 107.00350,
+    "district": "Bekasi Timur"
+  },
+  {
+    "id": "Jl_Ir_H_Juanda_Stasiun_Kota_Bekasi",
+    "name": "Jl. Ir. H. Juanda - Stasiun Kota Bekasi",
+    "path": "Jl_Ir_H_Juanda_Stasiun_Kota_Bekasi.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_Ir_H_Juanda_Stasiun_Kota_Bekasi.jpg",
+    "lat": -6.23621,
+    "lng": 106.99874,
+    "district": "Bekasi Utara"
+  },
+  {
+    "id": "Jl_Jend_A_Yani_MPP_Kota_Bekasi",
+    "name": "Jl. Jend. A. Yani - MPP Kota Bekasi",
+    "path": "Jl_Jend_A_Yani_MPP_Kota_Bekasi.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_Jend_A_Yani_MPP_Kota_Bekasi.jpg",
+    "lat": -6.24050,
+    "lng": 106.99480,
+    "district": "Bekasi Selatan"
+  },
+  {
+    "id": "Jl_Jend_A_Yani_Pintu_Samping_Pemkot_Bekasi",
+    "name": "Jl. Jend. A. Yani - Pintu Samping Pemkot Bekasi",
+    "path": "Jl_Jend_A_Yani_Pintu_Samping_Pemkot_Bekasi.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_Jend_A_Yani_Pintu_Samping_Pemkot_Bekasi.jpg",
+    "lat": -6.23631,
+    "lng": 106.99418,
+    "district": "Bekasi Selatan"
+  },
+  {
+    "id": "Jl_Jend_A_Yani_RS_Mitra_Keluarga_Kota_Bekasi",
+    "name": "Jl. Jend. A. Yani - RS Mitra Keluarga Kota Bekasi",
+    "path": "Jl_Jend_A_Yani_RS_Mitra_Keluarga_Kota_Bekasi.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_Jend_A_Yani_RS_Mitra_Keluarga_Kota_Bekasi.jpg",
+    "lat": -6.23890,
+    "lng": 106.99440,
+    "district": "Bekasi Barat"
+  },
+  {
+    "id": "Jl_Jend_Soedirman_Pertigaan_Cevest",
+    "name": "Jl. Jend. Soedirman - Pertigaan Cevest",
+    "path": "Jl_Jend_Soedirman_Pertigaan_Cevest.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_Jend_Soedirman_Pertigaan_Cevest.jpg",
+    "lat": -6.23485,
+    "lng": 106.98991,
+    "district": "Bekasi Barat"
+  },
+  {
+    "id": "Jl_KH_Noer_Ali_Putaran_Depan_Kawasaki",
+    "name": "Jl. KH Noer Ali - Putaran Depan Kawasaki",
+    "path": "Jl_KH_Noer_Ali_Putaran_Depan_Kawasaki.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_KH_Noer_Ali_Putaran_Depan_Kawasaki.jpg",
+    "lat": -6.24680,
+    "lng": 106.96980,
+    "district": "Bekasi Barat"
+  },
+  {
+    "id": "Jl_KH_Noer_Ali_Taman_Depan_Kelurahan_Jakasampurna",
+    "name": "Jl. KH Noer Ali - Taman Depan Kelurahan Jakasampurna",
+    "path": "Jl_KH_Noer_Ali_Taman_Depan_Kelurahan_Jakasampurna.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_KH_Noer_Ali_Taman_Depan_Kelurahan_Jakasampurna.jpg",
+    "lat": -6.24889,
+    "lng": 106.96289,
+    "district": "Bekasi Barat"
+  },
+  {
+    "id": "Jl_M_Hasibuan_Bendungan_Prisdo",
+    "name": "Jl. M. Hasibuan - Bendungan Prisdo",
+    "path": "Jl_M_Hasibuan_Bendungan_Prisdo.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_M_Hasibuan_Bendungan_Prisdo.jpg",
+    "lat": -6.24500,
+    "lng": 106.99720,
+    "district": "Bekasi Selatan"
+  },
+  {
+    "id": "Jl_M_Hasibuan_Depan_Univ_Bani_Saleh",
+    "name": "Jl. M. Hasibuan - Depan Univ. Bani Saleh",
+    "path": "Jl_M_Hasibuan_Depan_Univ_Bani_Saleh.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_M_Hasibuan_Depan_Univ_Bani_Saleh.jpg",
+    "lat": -6.25251,
+    "lng": 107.00282,
+    "district": "Bekasi Timur"
+  },
+  {
+    "id": "Jl_Mayor_Oking_Proyek_Kota_Bekasi",
+    "name": "Jl. Mayor Oking - Proyek Kota Bekasi",
+    "path": "Jl_Mayor_Oking_Proyek_Kota_Bekasi.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_Mayor_Oking_Proyek_Kota_Bekasi.jpg",
+    "lat": -6.24220,
+    "lng": 107.00050,
+    "district": "Bekasi Timur"
+  },
+  {
+    "id": "Jl_RA_Kartini_Depan_Ngopibah",
+    "name": "Jl. RA Kartini - Depan Ngopibah",
+    "path": "Jl_RA_Kartini_Depan_Ngopibah.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_RA_Kartini_Depan_Ngopibah.jpg",
+    "lat": -6.24750,
+    "lng": 107.00480,
+    "district": "Bekasi Timur"
+  },
+  {
+    "id": "Jl_Rawa_Tembaga_Simpang_Telkom",
+    "name": "Jl. Rawa Tembaga - Simpang Telkom",
+    "path": "Jl_Rawa_Tembaga_Simpang_Telkom.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_Rawa_Tembaga_Simpang_Telkom.jpg",
+    "lat": -6.23680,
+    "lng": 106.99350,
+    "district": "Bekasi Selatan"
+  },
+  {
+    "id": "Jl_Raya_Kalimalang_Perempatan_Caman",
+    "name": "Jl. Raya Kalimalang - Perempatan Caman",
+    "path": "Jl_Raya_Kalimalang_Perempatan_Caman.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_Raya_Kalimalang_Perempatan_Caman.jpg",
+    "lat": -6.25230,
+    "lng": 106.95350,
+    "district": "Pondok Gede"
+  },
+  {
+    "id": "Jl_Siliwangi_Depan_Anugrah_Motor",
+    "name": "Jl. Siliwangi - Depan Anugrah Motor",
+    "path": "Jl_Siliwangi_Depan_Anugrah_Motor.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_Siliwangi_Depan_Anugrah_Motor.jpg",
+    "lat": -6.26250,
+    "lng": 106.99850,
+    "district": "Rawalumbu"
+  },
+  {
+    "id": "Jl_Siliwangi_Depan_Pasar_Segar_Bekasi",
+    "name": "Jl. Siliwangi - Depan Pasar Segar Bekasi",
+    "path": "Jl_Siliwangi_Depan_Pasar_Segar_Bekasi.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_Siliwangi_Depan_Pasar_Segar_Bekasi.jpg",
+    "lat": -6.26980,
+    "lng": 106.99700,
+    "district": "Rawalumbu"
+  },
+  {
+    "id": "Jl_Siliwangi_Perempatan_Flyover_Cipendawa",
+    "name": "Jl. Siliwangi - Perempatan Flyover Cipendawa",
+    "path": "Jl_Siliwangi_Perempatan_Flyover_Cipendawa.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_Siliwangi_Perempatan_Flyover_Cipendawa.jpg",
+    "lat": -6.29737,
+    "lng": 106.98496,
+    "district": "Bantargebang"
+  },
+  {
+    "id": "Jl_Siliwangi_Sebrang_PT_Fajar_Mas_Murni_Gedung_D",
+    "name": "Jl. Siliwangi - Sebrang PT Fajar Mas Murni Gedung D",
+    "path": "Jl_Siliwangi_Sebrang_PT_Fajar_Mas_Murni_Gedung_D.m3u8",
+    "pic": "https://pemkotbekasi.github.io/cctv_pic/Jl_Siliwangi_Sebrang_PT_Fajar_Mas_Murni_Gedung_D.jpg",
+    "lat": -6.30500,
+    "lng": 106.98300,
+    "district": "Bantargebang"
+  }
+]

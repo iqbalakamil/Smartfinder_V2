@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartKidz — Peta Demografi Usia Dini</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #e2e8f0; }
+
+    #header {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border-bottom: 1px solid #334155;
+      padding: 14px 24px;
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+      z-index: 1000; position: relative;
+    }
+    #header h1 { font-size: 18px; font-weight: 700; color: #38bdf8; white-space: nowrap; }
+    #header .subtitle { font-size: 12px; color: #94a3b8; }
+
+    .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .controls label { font-size: 12px; color: #94a3b8; }
+    .controls select, .controls button {
+      font-size: 13px; padding: 6px 12px; border-radius: 6px; border: 1px solid #475569;
+      background: #1e293b; color: #e2e8f0; cursor: pointer; outline: none;
+    }
+    .controls select:hover, .controls button:hover { border-color: #38bdf8; }
+    .controls button { background: #2563eb; border-color: #2563eb; font-weight: 600; }
+    .controls button:hover { background: #1d4ed8; }
+    .controls button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    #map { width: 100%; height: calc(100vh - 120px); }
+
+    .legend {
+      position: absolute; bottom: 30px; right: 16px; z-index: 999;
+      background: rgba(15,23,42,0.92); border: 1px solid #334155; border-radius: 10px;
+      padding: 14px 16px; min-width: 200px; backdrop-filter: blur(8px);
+    }
+    .legend h3 { font-size: 12px; color: #38bdf8; margin-bottom: 8px; font-weight: 600; }
+    .legend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .legend-color { width: 28px; height: 14px; border-radius: 3px; border: 1px solid #475569; }
+    .legend-label { font-size: 11px; color: #cbd5e1; }
+
+    .info-panel {
+      position: absolute; top: 80px; left: 16px; z-index: 999;
+      background: rgba(15,23,42,0.95); border: 1px solid #334155; border-radius: 10px;
+      padding: 16px 18px; min-width: 280px; max-width: 340px;
+      backdrop-filter: blur(8px); display: none;
+    }
+    .info-panel h3 { font-size: 15px; color: #38bdf8; margin-bottom: 4px; }
+    .info-panel .sub { font-size: 11px; color: #64748b; margin-bottom: 10px; }
+    .info-panel table { width: 100%; border-collapse: collapse; }
+    .info-panel td { padding: 4px 0; font-size: 12px; border-bottom: 1px solid #1e293b; }
+    .info-panel td:first-child { color: #94a3b8; width: 55%; }
+    .info-panel td:last-child { color: #e2e8f0; text-align: right; font-weight: 600; }
+    .info-panel .highlight { color: #fbbf24; font-size: 18px; font-weight: 700; }
+    .info-panel .close-btn {
+      position: absolute; top: 8px; right: 10px; background: none; border: none;
+      color: #64748b; font-size: 18px; cursor: pointer;
+    }
+    .info-panel .close-btn:hover { color: #e2e8f0; }
+
+    .stats-bar {
+      display: flex; gap: 20px; align-items: center;
+    }
+    .stat-item { text-align: center; }
+    .stat-value { font-size: 16px; font-weight: 700; color: #38bdf8; }
+    .stat-label { font-size: 10px; color: #64748b; text-transform: uppercase; }
+
+    .loading-overlay {
+      position: fixed; inset: 0; z-index: 2000; background: rgba(15,23,42,0.85);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    .loading-overlay.hidden { display: none; }
+    .spinner { width: 48px; height: 48px; border: 4px solid #334155; border-top-color: #38bdf8; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { margin-top: 14px; font-size: 14px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <div>
+    <h1>🗺️ Peta Demografi Usia Dini</h1>
+    <div class="subtitle">Data Dukcapil ArcGIS — Estimasi Anak Usia 2–7 Tahun</div>
+  </div>
+  <div class="controls">
+    <label>Provinsi:</label>
+    <select id="provinceSelect" onchange="loadPolygons()">
+      <option value="DKI JAKARTA">DKI Jakarta</option>
+      <option value="JAWA BARAT">Jawa Barat</option>
+      <option value="JAWA TENGAH">Jawa Tengah</option>
+      <option value="JAWA TIMUR">Jawa Timur</option>
+      <option value="BANTEN">Banten</option>
+      <option value="YOGYAKARTA">DI Yogyakarta</option>
+      <option value="SUMATERA UTARA">Sumatera Utara</option>
+      <option value="SUMATERA BARAT">Sumatera Barat</option>
+      <option value="SUMATERA SELATAN">Sumatera Selatan</option>
+      <option value="KALIMANTAN SELATAN">Kalimantan Selatan</option>
+      <option value="KALIMANTAN TIMUR">Kalimantan Timur</option>
+      <option value="SULAWESI SELATAN">Sulawesi Selatan</option>
+      <option value="BALI">Bali</option>
+    </select>
+    <button id="loadBtn" onclick="loadPolygons()">📂 Muat Data</button>
+  </div>
+  <div class="stats-bar" id="statsBar">
+    <div class="stat-item"><div class="stat-value" id="statTotal">—</div><div class="stat-label">Kecamatan</div></div>
+    <div class="stat-item"><div class="stat-value" id="statPop">—</div><div class="stat-label">Total Populasi</div></div>
+    <div class="stat-item"><div class="stat-value" id="statKids">—</div><div class="stat-label">Anak 2–7 th</div></div>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<div class="info-panel" id="infoPanel">
+  <button class="close-btn" onclick="closeInfoPanel()">✕</button>
+  <h3 id="infoTitle">—</h3>
+  <div class="sub" id="infoSub">—</div>
+  <table>
+    <tr><td>Jumlah Penduduk</td><td id="infoPop">—</td></tr>
+    <tr><td>Kepala Keluarga</td><td id="infoKK">—</td></tr>
+    <tr><td>Laki-laki</td><td id="infoPria">—</td></tr>
+    <tr><td>Perempuan</td><td id="infoWanita">—</td></tr>
+    <tr><td colspan="2" style="padding-top:8px;border-bottom:none"><strong style="color:#38bdf8">👶 Usia Dini</strong></td></tr>
+    <tr><td>Usia 0–4 tahun (u0)</td><td id="infoU0">—</td></tr>
+    <tr><td>Usia 5–9 tahun (u5)</td><td id="infoU5">—</td></tr>
+    <tr><td>Usia 10–14 tahun (u10)</td><td id="infoU10">—</td></tr>
+    <tr><td>Usia 0–14 tahun</td><td id="infoAge014">—</td></tr>
+    <tr><td>Lahir 2021</td><td id="infoLhr2021">—</td></tr>
+    <tr><td>Lahir 2022</td><td id="infoLhr2022">—</td></tr>
+    <tr><td>Lahir 2023</td><td id="infoLhr2023">—</td></tr>
+    <tr><td>Lahir 2024</td><td id="infoLhr2024">—</td></tr>
+    <tr><td>Total Anak (usia 0–9 + lahir 2021–24)</td><td id="infoEarlyChild" class="highlight">—</td></tr>
+  </table>
+</div>
+
+<div class="legend" id="legend">
+  <h3>Warna = Jumlah Anak Usia 0–4 Tahun</h3>
+  <div id="legendContent"></div>
+</div>
+
+<div class="loading-overlay hidden" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loadingText">Memuat data demografi dari Dukcapil...</div>
+</div>
+
+<script>
+  const map = L.map('map', { zoomControl: true }).setView([-6.2, 106.8], 11);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap &copy; CARTO',
+    maxZoom: 19,
+  }).addTo(map);
+
+  let polygonLayer = null;
+  let currentFeatures = [];
+  let activeAbortController = null;
+  let loadSequence = 0;
+
+  const PROVINCE_VIEW = {
+    'DKI JAKARTA':       [-6.2, 106.8, 11],
+    'JAWA BARAT':        [-6.9, 107.6, 10],
+    'JAWA TENGAH':       [-7.2, 110.4, 10],
+    'JAWA TIMUR':        [-7.5, 112.7, 10],
+    'BANTEN':            [-6.4, 106.1, 10],
+    'YOGYAKARTA':        [-7.8, 110.4, 11],
+    'SUMATERA UTARA':    [2.5, 99.0, 9],
+    'SUMATERA BARAT':    [-0.7, 100.5, 9],
+    'SUMATERA SELATAN':  [-3.3, 104.0, 9],
+    'KALIMANTAN SELATAN':[-3.3, 115.5, 9],
+    'KALIMANTAN TIMUR':  [1.5, 116.0, 9],
+    'SULAWESI SELATAN':  [-3.7, 119.9, 9],
+    'BALI':              [-8.4, 115.2, 11],
+  };
+
+  function getColor(u0) {
+    // Blue: <1000, Orange: 1001-2000, Red: >2000
+    if (u0 < 1000) return '#3b82f6';
+    if (u0 <= 2000) return '#f97316';
+    return '#ef4444';
+  }
+
+  function buildLegend() {
+    const el = document.getElementById('legendContent');
+    el.innerHTML = '';
+    const categories = [
+      { color: '#3b82f6', label: '< 1.000' },
+      { color: '#f97316', label: '1.001 – 2.000' },
+      { color: '#ef4444', label: '> 2.000' },
+    ];
+    categories.forEach(cat => {
+      const row = document.createElement('div');
+      row.className = 'legend-row';
+      row.innerHTML = `<div class="legend-color" style="background:${cat.color}"></div><div class="legend-label">${cat.label}</div>`;
+      el.appendChild(row);
+    });
+  }
+
+  function formatNum(n) {
+    if (n == null) return '—';
+    return n.toLocaleString('id-ID');
+  }
+
+  function showInfoPanel(props) {
+    document.getElementById('infoTitle').textContent = props.nama_kel || props.nama_kec || '—';
+    document.getElementById('infoSub').textContent = `${props.nama_kec || ''}, ${props.nama_kab || ''}, ${props.nama_prop || ''}`;
+    document.getElementById('infoPop').textContent = formatNum(props.jumlah_penduduk);
+    document.getElementById('infoKK').textContent = formatNum(props.jumlah_kk);
+    document.getElementById('infoPria').textContent = formatNum(props.pria);
+    document.getElementById('infoWanita').textContent = formatNum(props.wanita);
+    document.getElementById('infoU0').textContent = formatNum(props.u0);
+    document.getElementById('infoU5').textContent = formatNum(props.u5);
+    document.getElementById('infoU10').textContent = formatNum(props.u10);
+    document.getElementById('infoAge014').textContent = formatNum(props.usia_0_14);
+    document.getElementById('infoLhr2021').textContent = formatNum(props.lhr_2021);
+    document.getElementById('infoLhr2022').textContent = formatNum(props.lhr_2022);
+    document.getElementById('infoLhr2023').textContent = formatNum(props.lhr_2023);
+    document.getElementById('infoLhr2024').textContent = formatNum(props.lhr_2024);
+    document.getElementById('infoEarlyChild').textContent = formatNum(props.total_anak);
+    document.getElementById('infoPanel').style.display = 'block';
+  }
+
+  function closeInfoPanel() {
+    document.getElementById('infoPanel').style.display = 'none';
+  }
+
+  async function loadPolygons() {
+    const province = document.getElementById('provinceSelect').value;
+    const btn = document.getElementById('loadBtn');
+    const overlay = document.getElementById('loadingOverlay');
+
+    // Cancel previous in-flight request to prevent race condition
+    if (activeAbortController) {
+      activeAbortController.abort();
+    }
+    const sequenceId = ++loadSequence;
+    const controller = new AbortController();
+    activeAbortController = controller;
+
+    btn.disabled = true;
+    overlay.classList.remove('hidden');
+    document.getElementById('loadingText').textContent = `Memuat data demografi ${province}...`;
+
+    try {
+      const response = await fetch(`/api/demography-polygons?province=${encodeURIComponent(province)}&level=kelurahan&limit=5000`, {
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+
+      if (data.error) throw new Error(data.error);
+
+      // Only render if this is still the latest request
+      if (sequenceId !== loadSequence) return;
+
+      currentFeatures = data.features || [];
+      renderPolygons(currentFeatures);
+      updateStats(currentFeatures);
+
+      const view = PROVINCE_VIEW[province] || [-2.5, 115, 6];
+      map.setView([view[0], view[1]], view[2]);
+
+    } catch (error) {
+      // Ignore abort errors (expected when a newer request cancels this one)
+      if (error.name === 'AbortError') return;
+      alert(`Gagal memuat data: ${error.message}`);
+    } finally {
+      // Only reset UI if this is still the latest request
+      if (sequenceId === loadSequence) {
+        btn.disabled = false;
+        overlay.classList.add('hidden');
+        activeAbortController = null;
+      }
+    }
+  }
+
+  function renderPolygons(features) {
+    if (polygonLayer) {
+      map.removeLayer(polygonLayer);
+    }
+
+    buildLegend();
+
+    polygonLayer = L.geoJSON(
+      { type: 'FeatureCollection', features },
+      {
+        style: (feature) => {
+          const val = feature.properties.u0 || 0;
+          return {
+            fillColor: getColor(val),
+            weight: 1.5,
+            opacity: 1,
+            color: '#475569',
+            fillOpacity: 0.55,
+          };
+        },
+        onEachFeature: (feature, layer) => {
+          const p = feature.properties;
+          layer.on('click', () => {
+            polygonLayer.eachLayer(l => l.setStyle({ weight: 1.5, color: '#475569' }));
+            layer.setStyle({ weight: 3, color: '#38bdf8' });
+            const lhr = (p.lhr_2021||0)+(p.lhr_2022||0)+(p.lhr_2023||0)+(p.lhr_2024||0);
+            var s = 'font-family:system-ui,sans-serif;font-size:11px;line-height:1.4;color:#e2e8f0;';
+            var html = '<div style="' + s + 'padding:8px 10px;min-width:150px;">'
+              + '<div style="font-weight:700;font-size:12px;color:#38bdf8;margin-bottom:2px;">' + (p.nama_kel || p.nama_kec || '-') + '</div>'
+              + '<div style="font-size:9px;color:#94a3b8;margin-bottom:5px;">' + (p.nama_kec||'') + ', ' + (p.nama_kab||'') + '</div>'
+              + '<div style="border-top:1px solid #475569;padding-top:4px;">'
+              + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">Penduduk</span><span style="font-weight:600;">' + formatNum(p.jumlah_penduduk) + '</span></div>'
+              + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">KK</span><span style="font-weight:600;">' + formatNum(p.jumlah_kk) + '</span></div>'
+              + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">L / P</span><span style="font-weight:600;">' + formatNum(p.pria) + ' / ' + formatNum(p.wanita) + '</span></div>'
+              + '</div>'
+              + '<div style="border-top:1px solid #475569;padding-top:4px;margin-top:4px;">'
+              + '<div style="font-weight:700;font-size:9px;color:#38bdf8;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:2px;">Usia Dini</div>'
+              + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">0–4 th</span><span style="font-weight:600;">' + formatNum(p.u0) + '</span></div>'
+              + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">5–9 th</span><span style="font-weight:600;">' + formatNum(p.u5) + '</span></div>'
+              + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">10–14 th</span><span style="font-weight:600;">' + formatNum(p.u10) + '</span></div>'
+              + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">Lahir 21–24</span><span style="font-weight:600;">' + formatNum(lhr) + '</span></div>'
+              + '</div>'
+              + '<div style="border-top:1px solid #475569;padding-top:4px;margin-top:4px;">'
+              + '<div style="display:flex;justify-content:space-between;"><span style="font-weight:700;font-size:12px;color:#f97316;">Total Anak</span><span style="font-weight:700;font-size:12px;color:#f97316;">' + formatNum(p.total_anak) + '</span></div>'
+              + '</div></div>';
+            layer.bindPopup(html, { maxWidth: 200, maxHeight: 240, autoPan: true, className: 'dark-popup', offset: [0, -10] });
+            layer.openPopup();
+          });
+        },
+      }
+    ).addTo(map);
+  }
+
+  function updateStats(features) {
+    let totalPop = 0, totalAnak = 0;
+    features.forEach(f => {
+      totalPop += f.properties.jumlah_penduduk || 0;
+      totalAnak += f.properties.total_anak || 0;
+    });
+    document.getElementById('statTotal').textContent = features.length;
+    document.getElementById('statPop').textContent = formatNum(totalPop);
+    document.getElementById('statKids').textContent = formatNum(totalAnak);
+  }
+
+  // Auto-load on page open
+  loadPolygons();
+</script>
+
+<style>
+  .dark-tooltip {
+    background: rgba(15,23,42,0.95) !important;
+    border: 1px solid #475569 !important;
+    color: #e2e8f0 !important;
+    border-radius: 8px !important;
+    padding: 8px 12px !important;
+    font-size: 12px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4) !important;
+  }
+  .dark-tooltip::before { border-top-color: #475569 !important; }
+  .leaflet-popup-content-wrapper {
+    background: #1e293b !important;
+    color: #e2e8f0 !important;
+    border-radius: 10px !important;
+  }
+  .leaflet-popup-tip { background: #1e293b !important; }
+  .dark-popup .leaflet-popup-content-wrapper {
+    background: rgba(15,23,42,0.95) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5) !important;
+    width: auto !important;
+    max-width: 200px !important;
+    min-width: 0 !important;
+  }
+  .dark-popup .leaflet-popup-tip { background: rgba(15,23,42,0.95) !important; }
+  .dark-popup .leaflet-popup-content { margin: 0 !important; padding: 0 !important; max-height: 240px !important; overflow-y: auto !important; overflow-x: hidden !important; width: auto !important; }
+  .dark-popup .leaflet-popup-close-button { color: #94a3b8 !important; font-size: 14px !important; top: 2px !important; right: 4px !important; padding: 4px 6px !important; }
+  .demo-popup { font-family: system-ui, sans-serif; padding: 8px 10px; font-size: 11px; line-height: 1.3; word-break: break-word; }
+  .demo-popup-title { font-weight: 700; font-size: 12px; color: #38bdf8; margin-bottom: 1px; overflow: hidden; text-overflow: ellipsis; }
+  .demo-popup-sub { font-size: 9px; color: #94a3b8; margin-bottom: 4px; }
+  .demo-popup-table { width: 100%; border-collapse: collapse; }
+  .demo-popup-table td { padding: 1px 0; font-size: 10px; }
+  .demo-popup-table td:first-child { color: #94a3b8; }
+  .demo-popup-table td:last-child { text-align: right; font-weight: 600; color: #e2e8f0; }
+  .demo-popup-sep td { padding-top: 4px !important; font-weight: 700; color: #38bdf8 !important; font-size: 9px !important; text-transform: uppercase; letter-spacing: 0.04em; border-top: 1px solid #475569; }
+  .demo-popup-total td { padding-top: 4px !important; font-weight: 700 !important; color: #f97316 !important; font-size: 12px !important; border-top: 1px solid #475569; }
+</style>
+
+</body>
+</html>

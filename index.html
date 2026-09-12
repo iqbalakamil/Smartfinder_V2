@@ -1,0 +1,1796 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Finder // Tactical Map</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="preconnect" href="https://tile.openstreetmap.org">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.7.0/dist/maplibre-gl.css">
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <link rel="stylesheet" href="./styles.css?v=20260907c">
+</head>
+<body>
+  <div class="page-shell">
+    <div class="app-container">
+      <!-- SIDEBAR MENU (SIMPLE WHITE SVG ICONS WITH HOVER TOOLTIPS) -->
+      <aside class="sidebar-icon-menu">
+        <button class="sidebar-logo-btn" id="sidebar-hamburger" title="Command Menu" aria-pressed="false" onclick="toggleDrawer('drawer-search')">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+        </button>
+
+        <div class="sidebar-item-wrap sidebar-item-wrap-toggle">
+          <button class="sidebar-item" data-drawer="drawer-search" id="sidebar-btn-search" aria-pressed="false" onclick="toggleDrawer('drawer-search')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+            <span id="poi-notification-badge" class="nav-badge-notify hidden">!</span>
+          </button>
+          <button type="button" class="sidebar-mini-toggle layer-poi" data-layer="poi" aria-pressed="false" onclick="togglePoiLayer()" title="Aktifkan POI">
+            OFF
+          </button>
+          <span class="sidebar-label">Input Lokasi</span>
+        </div>
+
+        <div class="sidebar-item-wrap">
+          <button class="sidebar-item" data-drawer="drawer-analysis" id="sidebar-btn-analysis" aria-pressed="false" onclick="toggleDrawer('drawer-analysis')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+            <span id="analysis-notification-badge" class="nav-badge-notify hidden">!</span>
+          </button>
+          <span class="sidebar-label">Hasil Analisa</span>
+        </div>
+
+        <div class="sidebar-item-wrap">
+          <button class="sidebar-item" data-drawer="drawer-news" aria-pressed="false" onclick="toggleDrawer('drawer-news')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"></path><path d="M18 14h-8"></path><path d="M15 18h-5"></path><path d="M10 6h8v4h-8z"></path></svg>
+          </button>
+          <span class="sidebar-label">News</span>
+        </div>
+
+        <div class="sidebar-item-wrap">
+          <button class="sidebar-item" data-drawer="drawer-draw" aria-pressed="false" onclick="toggleDrawer('drawer-draw')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+          </button>
+          <span class="sidebar-label">Draw</span>
+        </div>
+
+        <div class="sidebar-item-wrap">
+          <button class="sidebar-item" data-drawer="drawer-cgis" aria-pressed="false" onclick="toggleDrawer('drawer-cgis')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+          </button>
+          <span class="sidebar-label">CGIS</span>
+        </div>
+
+        <div class="sidebar-item-wrap">
+          <button class="sidebar-item" data-drawer="drawer-shortlist" aria-pressed="false" onclick="toggleDrawer('drawer-shortlist')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><path d="M9 22v-4h6v4"></path><path d="M8 6h.01"></path><path d="M16 6h.01"></path><path d="M12 6h.01"></path><path d="M12 10h.01"></path><path d="M16 10h.01"></path><path d="M16 14h.01"></path><path d="M8 10h.01"></path><path d="M8 14h.01"></path></svg>
+            <span id="shortlist-notification-badge" class="nav-badge-notify hidden">!</span>
+          </button>
+          <span class="sidebar-label">Shortlist Referensi Ruko</span>
+        </div>
+
+        <div class="sidebar-item-wrap sidebar-item-wrap-toggle">
+          <button class="sidebar-item" data-drawer="drawer-instagram" id="sidebar-btn-instagram" aria-pressed="false" onclick="toggleDrawer('drawer-instagram')" title="Instagram Locator">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
+          </button>
+          <button type="button" class="sidebar-mini-toggle layer-instagram" data-layer="instagram" aria-pressed="false" onclick="toggleInstagramLayer()" title="Aktifkan Instagram Locator">OFF</button>
+          <span class="sidebar-label">Instagram Locator</span>
+        </div>
+
+        <div class="sidebar-item-wrap sidebar-item-wrap-toggle">
+          <button class="sidebar-item" data-drawer="drawer-cctv" id="sidebar-btn-cctv" aria-pressed="false" onclick="toggleDrawer('drawer-cctv')" title="Live CCTV Indonesia">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+            <span id="cctv-notification-badge" class="nav-badge-notify hidden">!</span>
+          </button>
+          <button type="button" class="sidebar-mini-toggle layer-cctv" data-layer="cctv" aria-pressed="false" onclick="toggleCctvToggleFromSidebar()" title="Aktifkan CCTV">OFF</button>
+          <span class="sidebar-label">Live CCTV Indonesia</span>
+        </div>
+      </aside>
+
+      <!-- FLOATING SLIDING DRAWERS / MODALS -->
+
+      <!-- Drawer 1: Input Lokasi -->
+      <div class="drawer-container" id="drawer-search">
+        <div class="drawer-header">
+          <h3>📍 Input Lokasi & Parameter</h3>
+          <button class="drawer-close-btn" onclick="toggleDrawer('drawer-search')" title="Minimize drawer">&minus;</button>
+        </div>
+        <section class="panel control-panel">
+          <form id="search-form" class="search-form">
+            <label>
+              Koordinat lokasi
+              <div class="coord-input-row">
+                <input id="coordinates" name="coordinates" type="text" required value="" placeholder="-6.171, 106.683">
+                <button type="button" id="cek-coordinates" class="button button-check">Cek</button>
+              </div>
+            </label>
+
+            <div class="feasibility-inputs" id="feasibility-inputs">
+              <label>
+                Jenis Usaha
+                <select id="business-type" name="business-type" class="demo-province-select">
+                  <option value="">— Pilih jenis usaha —</option>
+                  <option value="barang">Barang</option>
+                  <option value="jasa">Jasa</option>
+                  <option value="barang_jasa">Barang & Jasa</option>
+                </select>
+              </label>
+              <label>
+                Detail Jenis Usaha
+                <input id="business-detail" name="business-detail" type="text" placeholder="Contoh: Bimba & Preschool">
+              </label>
+              <label>
+                Harga Jual (Rp)
+                <input id="selling-price" name="selling-price" type="text" placeholder="Contoh: 500000 - 700000">
+              </label>
+            </div>
+
+            <div class="button-row">
+              <button type="submit" class="button button-primary">🔍 Analisa Studi Kelayakan</button>
+              <button type="button" id="use-my-location" class="button button-secondary">📍 Lokasi Saya</button>
+            </div>
+            <div class="button-row">
+              <button type="button" id="download-pdf" class="button button-secondary" disabled>Download PDF</button>
+              <button type="button" id="cancel-process" class="button button-danger" disabled>Batalkan</button>
+            </div>
+          </form>
+
+          <div class="status-box" id="status-box" style="margin-top:14px;">Siap dipakai.</div>
+
+          <div class="activity-panel" style="margin-top:14px;">
+            <div class="activity-header">
+              <strong>Log Aktivitas</strong>
+              <span id="loading-pill" class="loading-pill hidden">Memproses</span>
+            </div>
+            <ul id="activity-log" class="activity-log">
+              <li>Menunggu analisa baru.</li>
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <!-- Drawer 2: Hasil Analisa -->
+      <div class="drawer-container" id="drawer-analysis" style="width: 580px;">
+        <div class="drawer-header">
+          <h3>📊 Hasil Analisa Studi Kelayakan</h3>
+          <button class="drawer-close-btn" onclick="toggleDrawer('drawer-analysis')" title="Minimize drawer">&minus;</button>
+        </div>
+        <div class="analysis-drawer-body">
+          <div id="feasibility-results" class="feasibility-results">
+            <div style="padding: 24px; text-align: center; color: var(--muted); background: rgba(30, 41, 59, 0.5); border-radius: 12px; border: 1px solid rgba(56, 189, 248, 0.2);">
+              <p style="font-weight: 700; color: #00f0ff; margin-bottom: 6px;">Belum ada hasil analisa.</p>
+              <p style="font-size: 0.85rem; margin: 0;">Silakan masukkan koordinat di menu <strong>Input Lokasi</strong> lalu klik <strong>Analisa Studi Kelayakan</strong>.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Drawer 2: News -->
+      <div class="drawer-container" id="drawer-news">
+        <div class="drawer-header">
+          <h3>📰 News & Intelligence Live Feed</h3>
+          <button class="drawer-close-btn" onclick="toggleDrawer('drawer-news')" title="Minimize drawer">&minus;</button>
+        </div>
+        <div class="news-feed-list">
+          <article class="news-item">
+            <span class="news-tag">DEMOGRAFI & PASAR</span>
+            <h4>Update Potensi Pasar Jawa Barat & Banten 2026</h4>
+            <p>Data Dukcapil 2026 menunjukkan peningkatan usia anak 0-9 tahun sebesar 4.2% di kawasan Tangerang & Bekasi.</p>
+            <span class="news-time">10 Menit Lalu</span>
+          </article>
+          <article class="news-item">
+            <span class="news-tag">KOMPETITOR ALERT</span>
+            <h4>Sebaran Pendidikan Anak Usia Dini</h4>
+            <p>12 titik kompetitor baru terdeteksi di sekitar radius 3km koordinat target.</p>
+            <span class="news-time">1 Jam Lalu</span>
+          </article>
+          <article class="news-item">
+            <span class="news-tag">PROPERTY INDEX</span>
+            <h4>Ruko Komersial Strategis</h4>
+            <p>Tren pencarian ruko pinggir jalan utama mengalami kenaikan daya sewa di area perkotaan.</p>
+            <span class="news-time">3 Jam Lalu</span>
+          </article>
+        </div>
+      </div>
+
+      <!-- Drawer 3: Draw Tools -->
+      <div class="drawer-container" id="drawer-draw">
+        <div class="drawer-header">
+          <h3>✏️ Draw & Tactical Map Tools</h3>
+          <button class="drawer-close-btn" onclick="toggleDrawer('drawer-draw')" title="Minimize drawer">&minus;</button>
+        </div>
+        <div class="draw-tools-list">
+          <p class="muted">Perangkat gambar & pengukuran pada peta:</p>
+          <button type="button" class="button button-secondary draw-btn" onclick="enableMapDraw('circle')">⭕ Lingkaran Radius (3 Km)</button>
+          <button type="button" class="button button-secondary draw-btn" onclick="enableMapDraw('pin')">📌 Pin Markers Khusus</button>
+          <button type="button" class="button button-secondary draw-btn" onclick="enableMapDraw('ruler')">📏 Pengukur Jarak (Ruler)</button>
+          <button type="button" class="button button-danger draw-btn" onclick="clearMapDrawings()" style="margin-top:12px;">🗑️ Hapus Gambar Peta</button>
+        </div>
+      </div>
+
+      <!-- Drawer 4: CGIS -->
+      <div class="drawer-container" id="drawer-cgis">
+        <div class="drawer-header">
+          <h3>🌐 CGIS & Demografi Layer</h3>
+          <button class="drawer-close-btn" onclick="toggleDrawer('drawer-cgis')" title="Minimize drawer">&minus;</button>
+        </div>
+        <div id="demography-controls" class="demography-inline-controls">
+          <div class="heatmap-header">
+            <h3>👶 Peta Demografi Usia Dini</h3>
+            <span class="pill pill-accent" id="demography-status">Nonaktif</span>
+          </div>
+          <label class="heatmap-toggle">
+            <input type="checkbox" id="demography-toggle">
+            <span class="heatmap-color" style="background: linear-gradient(90deg, #3b82f6, #f97316, #ef4444);"></span>
+            <span>Aktifkan Polygon</span>
+          </label>
+          <div class="demo-level-row">
+            <label class="demo-province-label">Level:</label>
+            <select id="demo-level-select" class="demo-province-select" style="flex:0 0 auto;width:auto;">
+              <option value="kelurahan">Kelurahan</option>
+              <option value="kecamatan">Kecamatan</option>
+            </select>
+          </div>
+          <div id="loaded-provinces" class="loaded-provinces"></div>
+          <div class="demo-province-row">
+            <select id="demo-province-select" class="demo-province-select">
+              <option value="">— Pilih provinsi —</option>
+              <option value="ACEH">Aceh</option>
+              <option value="SUMATERA UTARA">Sumatera Utara</option>
+              <option value="SUMATERA BARAT">Sumatera Barat</option>
+              <option value="RIAU">Riau</option>
+              <option value="JAMBI">Jambi</option>
+              <option value="SUMATERA SELATAN">Sumatera Selatan</option>
+              <option value="BENGKULU">Bengkulu</option>
+              <option value="LAMPUNG">Lampung</option>
+              <option value="KEPULAUAN BANGKA BELITUNG">Kep. Bangka Belitung</option>
+              <option value="KEPULAUAN RIAU">Kep. Riau</option>
+              <option value="DKI JAKARTA">DKI Jakarta</option>
+              <option value="JAWA BARAT">Jawa Barat</option>
+              <option value="JAWA TENGAH">Jawa Tengah</option>
+              <option value="DI YOGYAKARTA">DI Yogyakarta</option>
+              <option value="JAWA TIMUR">Jawa Timur</option>
+              <option value="BANTEN">Banten</option>
+              <option value="BALI">Bali</option>
+            </select>
+            <button type="button" id="demo-add-province" class="kec-action-btn kec-add-btn">Tambah</button>
+          </div>
+          <div id="kota-checklist-wrap" class="kecamatan-checklist-wrap">
+            <div class="kecamatan-checklist-header">
+              <span class="demo-province-label">Kota / Kabupaten:</span>
+              <div class="kecamatan-checklist-actions">
+                <button type="button" id="kota-select-all" class="kec-action-btn">Semua</button>
+                <button type="button" id="kota-deselect-all" class="kec-action-btn">Hapus</button>
+              </div>
+            </div>
+            <div class="demo-search-row">
+              <input id="demo-search-input" name="demo-search" type="text" placeholder="Filter kota/kab...">
+              <button type="button" id="demo-search-btn" class="button button-check" style="padding:6px 10px;">🔍</button>
+            </div>
+            <div id="kota-checklist" class="kecamatan-checklist">
+              <div class="kec-empty">Pilih provinsi terlebih dahulu</div>
+            </div>
+          </div>
+          <div id="kecamatan-checklist-wrap" class="kecamatan-checklist-wrap">
+            <div class="kecamatan-checklist-header">
+              <span class="demo-province-label">Kecamatan:</span>
+              <div class="kecamatan-checklist-actions">
+                <button type="button" id="kec-select-all" class="kec-action-btn">Semua</button>
+                <button type="button" id="kec-deselect-all" class="kec-action-btn">Hapus</button>
+              </div>
+            </div>
+            <div id="kecamatan-checklist" class="kecamatan-checklist">
+              <div class="kec-empty">Pilih kota terlebih dahulu</div>
+            </div>
+          </div>
+          <div id="demography-summary" class="foot-traffic-summary">
+            <div class="ft-stat"><span>Kecamatan</span><strong id="demo-count">0</strong></div>
+            <div class="ft-stat"><span>Total Anak</span><strong id="demo-kids">-</strong></div>
+            <div class="ft-stat"><span>Sumber</span><strong id="demo-source" style="font-size:10px;">Dukcapil</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Drawer 5: Shortlist Ruko -->
+      <div class="drawer-container" id="drawer-shortlist" style="width: 580px;">
+        <div class="drawer-header">
+          <h3>🏢 Shortlist Referensi Ruko</h3>
+          <button class="drawer-close-btn" onclick="toggleDrawer('drawer-shortlist')" title="Minimize drawer">&minus;</button>
+        </div>
+        <section class="panel table-panel" style="padding:0; border:none; box-shadow:none;">
+          <div id="table-loading" class="panel-loading hidden" aria-hidden="true">
+            <div class="panel-loading-card">
+              <div class="spinner"></div>
+              <strong>Shortlist sedang disusun</strong>
+              <p>Sistem sedang menyiapkan referensi area ruko per situs.</p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Kecamatan</th>
+                  <th>Kota</th>
+                  <th>Website</th>
+                </tr>
+              </thead>
+              <tbody id="results-body">
+                <tr>
+                  <td colspan="3" class="empty-row">Belum ada hasil. Isi koordinat lalu klik Analisa Lokasi.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div id="results-pagination" class="results-pagination hidden" aria-label="Pagination shortlist ruko">
+            <button type="button" id="results-prev" class="button button-secondary results-page-btn">Sebelumnya</button>
+            <div id="results-pagination-info" class="results-pagination-info">0 dari 0</div>
+            <button type="button" id="results-next" class="button button-secondary results-page-btn">Berikutnya</button>
+          </div>
+        </section>
+      </div>
+
+      <!-- Drawer 6: Instagram Locator -->
+      <div class="drawer-container" id="drawer-instagram" style="width: 480px;">
+        <div class="drawer-header">
+          <h3>📸 Instagram Locator & Social POI</h3>
+          <button class="drawer-close-btn" onclick="toggleDrawer('drawer-instagram')" title="Minimize drawer">&minus;</button>
+        </div>
+
+        <!-- TOGGLE ON / OFF SWITCH CARD -->
+        <div class="instagram-toggle-card" style="background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(214, 36, 159, 0.3); border-radius: 14px; padding: 16px; margin-bottom: 16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <strong style="display:block; color:#f8fafc; font-size:0.95rem; font-weight:800;">Layer Instagram Locator</strong>
+              <span id="ig-layer-status" class="pill pill-accent" style="font-size:10px; margin-top:4px; display:inline-block; background:rgba(148, 163, 184, 0.2); color:#94a3b8; border:1px solid rgba(255,255,255,0.2);">NONAKTIF</span>
+            </div>
+            <button type="button" class="sidebar-mini-toggle layer-instagram" onclick="toggleInstagramLayer()" title="Aktifkan Instagram Locator">OFF</button>
+          </div>
+          <p style="margin:10px 0 0; font-size:0.8rem; color:#94a3b8; line-height:1.4;">
+            Klik toggle ke <strong>ON</strong> untuk menampilkan marker lokasi Instagram terdeteksi di koordinat peta.
+          </p>
+        </div>
+
+        <form id="instagram-search-form" onsubmit="handleInstagramSearch(event)" style="display:flex; flex-direction:column; gap:14px;">
+          
+          <div style="background:rgba(15,23,42,0.72); border:1px solid rgba(56,189,248,0.22); border-radius:12px; padding:12px;">
+            <strong style="display:block; color:#00f0ff; font-size:0.85rem; margin-bottom:8px;">Langkah Instagram Locator</strong>
+            <ol style="margin:0; padding-left:18px; color:#cbd5e1; font-size:0.78rem; line-height:1.55;">
+              <li>Klik <strong>Auto-get Cookie via Browser</strong> lalu login ke Instagram di Chrome.</li>
+              <li>Koordinat IG akan mengikuti menu input lokasi utama, lalu bisa diubah atau dikosongkan jika ingin cari area lain.</li>
+              <li>Pilih mode pencarian: <strong>Normal Search</strong>, <strong>Fuzzy Search</strong>, atau <strong>Perumahan Search</strong>.</li>
+              <li>Klik <strong>Search Locations</strong> untuk mulai mencari lokasi.</li>
+            </ol>
+          </div>
+          
+          <!-- KOORDINAT TARGET OTOMATIS DARI INPUT LOKASI -->
+          <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 10px; padding: 12px;">
+            <span style="font-size:0.78rem; font-weight:700; color:#00f0ff; display:block; margin-bottom:4px;">📍 Koordinat Target Area (Sinkron dari Input Lokasi):</span>
+            <strong id="ig-current-coords-display" style="font-size:0.85rem; color:#f8fafc; font-family:monospace;">-</strong>
+            <input type="text" id="ig-custom-coords-input" value="" placeholder="-6.171296, 106.683022" style="width:100%; margin-top:8px; padding:8px 12px; border-radius:8px; background:rgba(15,23,42,0.9); border:1px solid rgba(56,189,248,0.3); color:#fff; font-size:0.8rem; font-family:monospace;">
+            <span style="font-size:11px; color:#94a3b8; display:block; margin-top:2px;">Kalau kolom ini kosong, sistem akan pakai koordinat dari menu input lokasi. Isi manual hanya untuk pencarian area lain.</span>
+          </div>
+
+          <!-- COOKIES ID + GET COOKIE OTOMATIS BUTTON -->
+          <div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <label style="font-size:0.82rem; font-weight:700; color:#00f0ff;">Instagram Cookie ID:</label>
+              <div style="display:flex; gap:6px;">
+                <button type="button" class="button button-branch" style="font-size:11px; padding:4px 10px;" onclick="handleGetAutoCookie()">⚡ Auto-get Cookie via Browser</button>
+                <button type="button" class="button button-secondary" style="font-size:11px; padding:4px 8px; color:#f43f5e; border-color:rgba(244,63,94,0.3);" onclick="clearIgCookie()" title="Hapus Cookie">🗑️ Hapus</button>
+              </div>
+            </div>
+            <div style="position:relative;">
+              <input type="text" id="ig-cookies-input" placeholder="Cookie ID (sessionid=...) akan terisi otomatis dari browser atau ketik manual..." style="width:100%; padding:8px 30px 8px 12px; border-radius:8px; background:rgba(15,23,42,0.9); border:1px solid rgba(56,189,248,0.3); color:#fff; font-size:0.8rem; font-family:monospace;">
+              <button type="button" onclick="clearIgCookie()" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; border:none; color:#94a3b8; cursor:pointer; font-size:14px;" title="Clear Cookie">✕</button>
+            </div>
+            <span style="font-size:11px; color:#94a3b8; margin-top:4px; display:block;">Klik <strong>Auto-get Cookie via Browser</strong> untuk membuka Chrome & login ke Instagram. Cookie akan terisi otomatis dan dapat Anda hapus / edit kapan saja.</span>
+          </div>
+
+          <!-- SEARCH MODE -->
+          <div>
+            <label style="display:block; font-size:0.82rem; font-weight:700; color:#00f0ff; margin-bottom:4px;">Search Mode:</label>
+            <select id="ig-search-mode" style="width:100%; padding:8px 12px; border-radius:8px; background:rgba(15,23,42,0.9); border:1px solid rgba(56,189,248,0.3); color:#fff; font-size:0.82rem;">
+              <option value="normal">Normal Search</option>
+              <option value="fuzzy">Fuzzy Search</option>
+              <option value="grid">Perumahan Search</option>
+            </select>
+            <div id="ig-grid-options" style="display:none; margin-top:10px;">
+              <div style="display:flex; gap:10px;">
+                <div style="flex:1;">
+                  <label style="display:block; font-size:0.75rem; color:#94a3b8; margin-bottom:4px;">Radius (km)</label>
+                  <input type="number" id="ig-grid-radius" step="0.1" min="0.1" max="5" value="3.0" style="width:100%; padding:8px 10px; border-radius:8px; background:rgba(15,23,42,0.9); border:1px solid rgba(56,189,248,0.3); color:#fff; font-size:0.82rem;">
+                </div>
+                <div style="flex:1;">
+                  <label style="display:block; font-size:0.75rem; color:#94a3b8; margin-bottom:4px;">Step (m)</label>
+                  <input type="number" id="ig-grid-step" step="50" min="50" max="500" value="200" style="width:100%; padding:8px 10px; border-radius:8px; background:rgba(15,23,42,0.9); border:1px solid rgba(56,189,248,0.3); color:#fff; font-size:0.82rem;">
+                </div>
+              </div>
+              <span style="font-size:11px; color:#94a3b8; margin-top:4px; display:block;">Grid search memindai area secara sistematis untuk menemukan lokasi perumahan.</span>
+            </div>
+          </div>
+
+          <button type="submit" class="button button-primary" style="padding:10px; font-weight:700; width:100%;">🔍 Search Locations</button>
+        </form>
+
+        <div id="ig-search-results" style="margin-top:16px;">
+          <div style="padding:16px; text-align:center; color:#94a3b8; font-size:0.85rem; background:rgba(30,41,59,0.4); border-radius:10px; border:1px dashed rgba(255,255,255,0.15);">
+            Ikuti step di atas: cookie -> koordinat -> mode pencarian -> cari.
+          </div>
+        </div>
+      </div>
+
+      <!-- Drawer 7: Live CCTV Indonesia -->
+      <div class="drawer-container" id="drawer-cctv" style="width: 520px;">
+        <div class="drawer-header">
+          <h3>📹 Live CCTV Indonesia</h3>
+          <button class="drawer-close-btn" onclick="toggleDrawer('drawer-cctv')" title="Minimize drawer">&minus;</button>
+        </div>
+        
+        <!-- TOGGLE ON / OFF SWITCH CARD -->
+        <div class="cctv-toggle-card" style="background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 14px; padding: 16px; margin-bottom: 16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <strong style="display:block; color:#f8fafc; font-size:0.95rem; font-weight:800;">Layer Live CCTV Indonesia</strong>
+              <span id="cctv-layer-status" class="pill pill-accent" style="font-size:10px; margin-top:4px; display:inline-block; background:rgba(148, 163, 184, 0.2); color:#94a3b8; border:1px solid rgba(255,255,255,0.2);">NONAKTIF</span>
+            </div>
+            <button type="button" class="sidebar-mini-toggle layer-cctv" onclick="toggleCctvToggleFromSidebar()" title="Aktifkan CCTV">OFF</button>
+          </div>
+          <p style="margin:10px 0 0; font-size:0.8rem; color:#94a3b8; line-height:1.4;">
+            Klik toggle ke <strong>ON</strong> untuk memuat & menampilkan marker 243 Live CCTV seluruh daerah (Bekasi, Bogor, Depok, Tangerang) di koordinat peta.
+          </p>
+        </div>
+
+        <!-- REGION SELECTOR & SEARCH FILTER -->
+        <div class="cctv-controls-box" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 12px; padding: 14px; margin-bottom: 16px;">
+          <div style="margin-bottom:10px;">
+            <label style="display:block; font-size:0.8rem; font-weight:700; color:#00f0ff; margin-bottom:4px;">Filter Daerah CCTV:</label>
+            <select id="cctv-region-select" class="demo-province-select" onchange="filterCctvByRegion(this.value)" style="width:100%;">
+              <option value="ALL">🌐 Semua Area (243 Kamera CCTV)</option>
+              <option value="Bekasi Kota">🏙️ Bekasi Kota (19)</option>
+              <option value="Bogor Kabupaten">🏔️ Bogor Kabupaten (24)</option>
+              <option value="Bogor Kota">🌳 Bogor Kota (68)</option>
+              <option value="Depok">🏫 Depok (65)</option>
+              <option value="Tangerang Kabupaten">🏬 Tangerang Kabupaten (47)</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block; font-size:0.8rem; font-weight:700; color:#00f0ff; margin-bottom:4px;">Cari Lokasi / Nama CCTV:</label>
+            <input type="text" id="cctv-search-input" placeholder="🔍 Ketik nama jalan / landmark (misal: Sentul, Margonda, Kujang)..." oninput="filterCctvSearch(this.value)" style="width:100%; padding:8px 12px; border-radius:8px; background:rgba(15,23,42,0.9); border:1px solid rgba(56,189,248,0.25); color:#fff; font-size:0.82rem;">
+          </div>
+        </div>
+
+        <!-- CCTV LIST DISPLAY -->
+        <div class="cctv-list-wrap">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <strong style="font-size:0.85rem; color:#cbd5e1;">Titik CCTV Terdeteksi (<span id="cctv-count-display">0</span>)</strong>
+            <button type="button" class="kec-action-btn" onclick="fetchCctvData()">🔄 Refresh</button>
+          </div>
+          <div id="cctv-items-list" style="max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px;">
+            <div style="padding:20px; text-align:center; color:#94a3b8; font-size:0.85rem; background:rgba(30, 41, 59, 0.4); border-radius:10px; border:1px dashed rgba(255,255,255,0.15);">
+              Toggle layer dalam posisi <strong>NONAKTIF</strong>.<br>Silakan aktifkan switch di atas untuk memuat titik CCTV.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MAIN CONTENT: EXPANDED MAP & POI BREAKDOWN -->
+      <main class="main-content-area">
+        <section class="panel map-panel">
+          <div class="panel-title-row">
+            <h2 class="brand-title">⚡ SMART FINDER</h2>
+            <div class="panel-title-pills">
+              <span class="pill pill-accent">Radius 3 km</span>
+              <div class="map-mode-toggle">
+                <button type="button" id="map-mode-2d" class="map-mode-btn active" onclick="setMapMode('2d')" aria-pressed="true" title="Peta 2D Vektor Dark (OpenFreeMap)">🗺️ 2D</button>
+                <button type="button" id="map-mode-3d" class="map-mode-btn" onclick="setMapMode('3d')" aria-pressed="false" title="Peta 3D Perspektif Gedung (OpenFreeMap)">🏙️ 3D</button>
+                <button type="button" id="map-mode-sat" class="map-mode-btn" onclick="setMapMode('sat')" aria-pressed="false" title="Peta Satelit">🛰️ Satelit</button>
+              </div>
+              <button type="button" id="toggle-branch-map" class="button button-branch">📍 Peta Cabang</button>
+              <a href="/foot-traffic-dashboard.html" target="_blank" class="button button-branch" style="text-decoration:none;">📊 Foot Traffic</a>
+              <button type="button" id="download-poi-xls" class="button button-branch" disabled title="Aktif setelah crawl POI selesai">⬇️ Download POI XLS</button>
+            </div>
+          </div>
+          <div id="map-loading" class="panel-loading hidden" aria-hidden="true">
+            <div class="panel-loading-card">
+              <div class="spinner"></div>
+              <strong>Peta sedang dimuat</strong>
+              <p>Crawler Google Maps sedang mengumpulkan titik POI.</p>
+            </div>
+          </div>
+          <div id="map" aria-label="Peta lokasi"></div>
+        </section>
+
+        <!-- HIDDEN BACKEND ELEMENTS CONTAINER (Keeps JS running smoothly) -->
+        <div class="hidden" style="display:none !important;" aria-hidden="true">
+          <div class="metric-grid" id="metric-grid">
+            <article class="metric-card">
+              <span>Alamat Jalan</span>
+              <strong id="street-name">—</strong>
+            </article>
+            <article class="metric-card">
+              <span>Kecamatan</span>
+              <strong id="district-name">—</strong>
+            </article>
+            <article class="metric-card">
+              <span>Kota</span>
+              <strong id="city-name">—</strong>
+            </article>
+            <article class="metric-card">
+              <span>Total POI</span>
+              <strong id="poi-total">0</strong>
+            </article>
+            <article class="metric-card">
+              <span>Sinyal +</span>
+              <strong id="positive-score">0</strong>
+            </article>
+            <article class="metric-card">
+              <span>Sinyal −</span>
+              <strong id="risk-score">0</strong>
+            </article>
+          </div>
+
+          <div class="poi-breakdown-grid">
+            <div class="poi-breakdown-card">
+              <h3>Perumahan</h3>
+              <div class="table-wrap">
+                <table class="poi-breakdown-table">
+                  <thead><tr><th>Keyword</th><th>Jumlah</th></tr></thead>
+                  <tbody id="residential-breakdown-body">
+                    <tr><td colspan="2" class="empty-row">Belum ada data.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="poi-breakdown-card">
+              <h3>Kompetitor</h3>
+              <div class="table-wrap">
+                <table class="poi-breakdown-table">
+                  <thead><tr><th>Keyword</th><th>Jumlah</th></tr></thead>
+                  <tbody id="education-breakdown-body">
+                    <tr><td colspan="2" class="empty-row">Belum ada data.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="poi-breakdown-card">
+              <h3>Affiliate</h3>
+              <div class="table-wrap">
+                <table class="poi-breakdown-table">
+                  <thead><tr><th>Keyword</th><th>Jumlah</th></tr></thead>
+                  <tbody id="affiliate-breakdown-body">
+                    <tr><td colspan="2" class="empty-row">Belum ada data.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <button type="button" id="unified-analysis-button"></button>
+          <button type="button" id="instagram-locations-button"></button>
+          <div id="analysis-loading"></div>
+          <div id="analysis-status-banner"></div>
+          <div id="ai-analysis-results"></div>
+          <div id="ai-area-analysis-panel"></div>
+          <div id="ai-area-loading"></div>
+          <div id="ai-area-results"></div>
+          <div id="ai-area-status"></div>
+          <div id="feasibility-study-panel"></div>
+          <div id="feasibility-loading"></div>
+          <div id="feasibility-status"></div>
+          <div id="feasibility-input-summary"></div>
+          <div id="feasibility-input-table"></div>
+          <div id="feasibility-results"></div>
+          <div id="unified-analysis-panel"></div>
+          <div id="tinyfish-status"></div>
+          <div id="litellm-status"></div>
+          <div id="manual-status"></div>
+          <div id="unified-loading"></div>
+          <div id="tab-structured"></div>
+          <div id="tab-deep-research"></div>
+          <div id="tab-purchasing"></div>
+          <div id="tab-social"></div>
+          <div id="structured-results"></div>
+          <div id="deep-research-results"></div>
+          <div id="purchasing-power-results"></div>
+          <div id="social-news-results"></div>
+          <div id="instagram-locations-panel"></div>
+          <div id="instagram-status"></div>
+          <div id="instagram-loading"></div>
+          <div id="instagram-results"></div>
+          <div id="poi-evidence-panel"></div>
+          <ul id="supporting-poi-visible"></ul>
+          <ul id="risk-poi-visible"></ul>
+          <div id="summary-cards"></div>
+          <ol id="top-districts"></ol>
+          <div id="opportunity-snapshot"></div>
+          <div id="summary-box"></div>
+          <div id="deep-research-box"></div>
+          <div id="poi-source-box"></div>
+          <div id="research-source-box"></div>
+          <ul id="supporting-poi"></ul>
+          <ul id="risk-poi"></ul>
+          <div id="heatmap-controls"></div>
+          <span id="heatmap-status"></span>
+          <div id="foot-traffic-summary"></div>
+          <strong id="ft-avg-score"></strong>
+          <strong id="ft-poi-count"></strong>
+          <strong id="ft-total-pois"></strong>
+          <strong id="ft-source"></strong>
+          <div id="demography-info-panel"></div>
+          <strong id="demo-info-title"></strong>
+          <button id="demo-info-close"></button>
+          <div id="demo-info-sub"></div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="./hotspot%20map%20V.2/xlsx.full.min.js"></script>
+  <script src="./app.js?v=20260907g" type="module"></script>
+  <script type="module">
+    // === MAPLIBRE GL JS: 2 MODE (2D & SATELIT) ===
+    import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.7.0/dist/maplibre-gl.mjs';
+    import * as turf from 'https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js';
+
+    // Expose ke window agar app.js (module terpisah) bisa menggunakannya
+    window.maplibregl = maplibregl;
+    window.turf = turf;
+
+    let maplibreMap = null;
+
+    // Helper function murni JS untuk membuat GeoJSON Polygon Circle 3km 100% reliable
+    function createGeoJsonCircle(centerLng, centerLat, radiusKm = 3, steps = 64) {
+      const ret = [];
+      const distanceX = radiusKm / (111.320 * Math.cos(centerLat * Math.PI / 180));
+      const distanceY = radiusKm / 110.574;
+
+      for (let i = 0; i < steps; i++) {
+        const theta = (i / steps) * (2 * Math.PI);
+        const x = distanceX * Math.cos(theta);
+        const y = distanceY * Math.sin(theta);
+        ret.push([centerLng + x, centerLat + y]);
+      }
+      ret.push(ret[0]);
+
+      return {
+        type: 'Feature',
+        geometry: {
+          type: 'Polygon',
+          coordinates: [ret],
+        },
+        properties: {},
+      };
+    }
+
+    // Style 2D: OpenFreeMap Dark Vector Style (100% Gratis, Tanpa API Key)
+    const style2D = 'https://tiles.openfreemap.org/styles/dark';
+
+    // Style Satelit: EOX Sentinel-2 Cloudless (gratis, tanpa API key)
+    const styleSat = {
+      version: 8,
+      sources: {
+        satellite: {
+          type: 'raster',
+          tiles: [
+            'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg',
+          ],
+          tileSize: 256,
+          attribution: '&copy; EOX / Sentinel-2 Cloudless',
+          maxzoom: 18,
+        },
+      },
+      layers: [
+        {
+          id: 'satellite-tiles',
+          type: 'raster',
+          source: 'satellite',
+        },
+      ],
+    };
+
+    let radiusLayerAdded = false;
+
+    function addRadiusCircle(centerLng, centerLat, radiusKm = 3) {
+      if (!maplibreMap) return;
+
+      // Hapus radius lama & marker lama jika ada
+      try {
+        if (maplibreMap.getLayer('center-target-marker')) maplibreMap.removeLayer('center-target-marker');
+        if (maplibreMap.getSource('center-target-source')) maplibreMap.removeSource('center-target-source');
+        if (maplibreMap.getLayer('radius-outline')) maplibreMap.removeLayer('radius-outline');
+        if (maplibreMap.getLayer('radius-fill')) maplibreMap.removeLayer('radius-fill');
+        if (maplibreMap.getSource('radius-source')) maplibreMap.removeSource('radius-source');
+      } catch (e) {}
+
+      const circleFeature = createGeoJsonCircle(centerLng, centerLat, radiusKm);
+
+      maplibreMap.addSource('radius-source', {
+        type: 'geojson',
+        data: circleFeature,
+      });
+
+      maplibreMap.addLayer({
+        id: 'radius-fill',
+        type: 'fill',
+        source: 'radius-source',
+        paint: {
+          'fill-color': '#f59e0b',
+          'fill-opacity': 0,
+        },
+      });
+
+      maplibreMap.addLayer({
+        id: 'radius-outline',
+        type: 'line',
+        source: 'radius-source',
+        paint: {
+          'line-color': '#f59e0b',
+          'line-width': 3,
+          'line-dasharray': [4, 3],
+        },
+      });
+
+      // Tambahkan Titik Marker Target Emas di Tengah Koordinat
+      maplibreMap.addSource('center-target-source', {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [centerLng, centerLat] },
+          properties: { nama: 'Titik Target Lokasi' }
+        }
+      });
+
+      maplibreMap.addLayer({
+        id: 'center-target-marker',
+        type: 'circle',
+        source: 'center-target-source',
+        paint: {
+          'circle-radius': 11,
+          'circle-color': '#f59e0b',
+          'circle-opacity': 1,
+          'circle-stroke-width': 3,
+          'circle-stroke-color': '#ffffff',
+        }
+      });
+
+      radiusLayerAdded = true;
+    }
+
+    function updateRadiusCircle(lat, lon, radiusKm = 3) {
+      if (!maplibreMap) return;
+      addRadiusCircle(lon, lat, radiusKm);
+    }
+
+    async function initMaplibreMap() {
+      const mapContainer = document.getElementById('map');
+
+      if (!mapContainer) return;
+
+      maplibreMap = new maplibregl.Map({
+        container: 'map',
+        center: [106.68302278968127, -6.171296275285527], // [lon, lat]
+        zoom: 14,
+        style: style2D,
+        attributionControl: false,
+        dragRotate: true,
+        pitchWithRotate: true,
+      });
+
+      // Assign ke window segera agar fungsi lain (app.js, onclick) bisa mengakses
+      window.maplibreMap = maplibreMap;
+
+      maplibreMap.addControl(new maplibregl.NavigationControl(), 'bottom-right');
+
+      window.addEventListener('resize', () => {
+        if (window.maplibreMap) {
+          window.maplibreMap.resize();
+        }
+      });
+
+      maplibreMap.on('load', () => {
+        // Set UI button ke mode 2D
+        const btn2d = document.getElementById('map-mode-2d');
+        const btnSat = document.getElementById('map-mode-sat');
+        if (btn2d) {
+          btn2d.setAttribute('aria-pressed', 'true');
+          btn2d.classList.add('active');
+        }
+        if (btnSat) {
+          btnSat.setAttribute('aria-pressed', 'false');
+          btnSat.classList.remove('active');
+        }
+        document.querySelector('.map-panel')?.classList.remove('satellite-active');
+      });
+
+      // Event klik peta untuk POI interaction
+      maplibreMap.on('click', (e) => {
+        // Placeholder: bisa ditambahkan logic click handling
+        console.log('Map click at:', e.lngLat.lng, e.lngLat.lat);
+      });
+
+      // Error handling
+      maplibreMap.on('error', (e) => {
+        console.warn('MapLibre error:', e.error?.message || e);
+      });
+    }
+
+    function setMapMode(mode) {
+      const mapPanel = document.querySelector('.map-panel');
+      const btn2d = document.getElementById('map-mode-2d');
+      const btn3d = document.getElementById('map-mode-3d');
+      const btnSat = document.getElementById('map-mode-sat');
+
+      if (!maplibreMap) return;
+
+      const center = maplibreMap.getCenter();
+      const currentZoom = maplibreMap.getZoom();
+
+      const updateButtons = (activeMode) => {
+        const btns = { '2d': btn2d, '3d': btn3d, 'sat': btnSat };
+        Object.keys(btns).forEach((m) => {
+          if (btns[m]) {
+            const isActive = m === activeMode;
+            btns[m].setAttribute('aria-pressed', isActive ? 'true' : 'false');
+            btns[m].classList.toggle('active', isActive);
+          }
+        });
+      };
+
+      updateButtons(mode);
+
+      if (mode === 'sat') {
+        mapPanel?.classList.add('satellite-active');
+        maplibreMap.setStyle(styleSat);
+        maplibreMap.once('style.load', () => {
+          maplibreMap.flyTo({ center: [center.lng, center.lat], zoom: currentZoom, pitch: 0, bearing: 0, duration: 500 });
+          if (radiusLayerAdded) {
+            addRadiusCircle(center.lng, center.lat, 3);
+          }
+          window.dispatchEvent(new Event('map-style-loaded'));
+        });
+      } else if (mode === '3d') {
+        mapPanel?.classList.remove('satellite-active');
+        const isSat = mapPanel?.classList.contains('satellite-active');
+        
+        const apply3dView = () => {
+          maplibreMap.easeTo({
+            center: [center.lng, center.lat],
+            zoom: Math.max(currentZoom, 15),
+            pitch: 60,
+            bearing: -17.6,
+            duration: 1000,
+          });
+          if (radiusLayerAdded) {
+            addRadiusCircle(center.lng, center.lat, 3);
+          }
+          window.dispatchEvent(new Event('map-style-loaded'));
+        };
+
+        if (isSat) {
+          maplibreMap.setStyle(style2D);
+          maplibreMap.once('style.load', apply3dView);
+        } else {
+          apply3dView();
+        }
+      } else {
+        // 2D Mode
+        mapPanel?.classList.remove('satellite-active');
+        
+        const apply2dView = () => {
+          maplibreMap.easeTo({
+            center: [center.lng, center.lat],
+            zoom: currentZoom,
+            pitch: 0,
+            bearing: 0,
+            duration: 800,
+          });
+          if (radiusLayerAdded) {
+            addRadiusCircle(center.lng, center.lat, 3);
+          }
+          window.dispatchEvent(new Event('map-style-loaded'));
+        };
+
+        apply2dView();
+      }
+    }
+
+    // Initialize Maplibre map when DOM ready
+    document.addEventListener('DOMContentLoaded', () => {
+      initMaplibreMap();
+    });
+
+    // Window reference untuk semua fungsi interaktif (wajib agar onclick HTML bisa memanggil)
+    window.setMapMode = setMapMode;
+    window.updateRadiusCircle = updateRadiusCircle;
+    window.toggleDrawer = toggleDrawer;
+    window.enableMapDraw = enableMapDraw;
+    window.clearMapDrawings = clearMapDrawings;
+
+    function toggleDrawer(drawerId) {
+      const target = document.getElementById(drawerId);
+      if (!target) return;
+      const isOpen = target.classList.contains('open');
+      
+      document.querySelectorAll('.drawer-container').forEach(d => d.classList.remove('open'));
+      document.querySelectorAll('.sidebar-item').forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-pressed', 'false');
+      });
+
+      if (!isOpen) {
+        target.classList.add('open');
+        const activeBtn = document.querySelector(`.sidebar-item[data-drawer="${drawerId}"]`);
+        if (activeBtn) {
+          activeBtn.classList.add('active');
+          activeBtn.setAttribute('aria-pressed', 'true');
+        }
+      }
+      if (window.refreshLayerNotifications) {
+        window.refreshLayerNotifications();
+      }
+    }
+
+    let userDrawings = [];
+    function enableMapDraw(type) {
+      if (!window.maplibreMap) return;
+      const mbMap = window.maplibreMap;
+      const center = mbMap.getCenter();
+      if (type === 'circle') {
+        // Tambah lingkaran radius sebagai GeoJSON circle (gunakan turf)
+        if (typeof turf === 'undefined') {
+          const script = document.createElement('script');
+          script.src = 'https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js';
+          script.onload = () => {
+            const circle = turf.circle([center.lng, center.lat], 3, { steps: 64, units: 'kilometers' });
+            mbMap.addSource('user-draw-' + Date.now(), { type: 'geojson', data: circle });
+            mbMap.addLayer({
+              id: 'user-draw-' + Date.now(),
+              type: 'fill',
+              source: 'user-draw-' + Date.now(),
+              paint: { 'fill-color': '#00f0ff', 'fill-opacity': 0.15 },
+            });
+            mbMap.addLayer({
+              id: 'user-draw-outline-' + Date.now(),
+              type: 'line',
+              source: 'user-draw-' + Date.now(),
+              paint: { 'line-color': '#00f0ff', 'line-width': 2 },
+            });
+            userDrawings.push({ type: 'circle', id: 'user-draw-' + Date.now() });
+          };
+          document.head.appendChild(script);
+        } else {
+          const circle = turf.circle([center.lng, center.lat], 3, { steps: 64, units: 'kilometers' });
+          const id = 'user-draw-' + Date.now();
+          mbMap.addSource(id, { type: 'geojson', data: circle });
+          mbMap.addLayer({ id, type: 'fill', source: id, paint: { 'fill-color': '#00f0ff', 'fill-opacity': 0.15 } });
+          mbMap.addLayer({ id: 'user-draw-outline-' + Date.now(), type: 'line', source: id, paint: { 'line-color': '#00f0ff', 'line-width': 2 } });
+          userDrawings.push({ type: 'circle', id });
+        }
+      } else if (type === 'pin') {
+        // Tambah marker sebagai GeoJSON point + circle layer
+        const id = 'user-pin-' + Date.now();
+        mbMap.addSource(id, {
+          type: 'geojson',
+          data: {
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [center.lng, center.lat] },
+            properties: { label: 'Custom Tactical Marker' },
+          },
+        });
+        mbMap.addLayer({
+          id,
+          type: 'circle',
+          source: id,
+          paint: { 'circle-radius': 8, 'circle-color': '#00f0ff', 'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff', 'circle-opacity': 1 },
+        });
+        
+        // Click handler untuk popup
+        mbMap.on('click', id, (e) => {
+          if (e.features && e.features.length) {
+            new maplibregl.Popup({ closeOnClick: true, autoClose: true })
+              .setLngLat(e.lngLat)
+              .setHTML('Custom Tactical Marker')
+              .addTo(mbMap);
+          }
+        });
+        
+        mbMap.on('mouseenter', id, () => { if (mbMap) mbMap.getCanvas().style.cursor = 'pointer'; });
+        mbMap.on('mouseleave', id, () => { if (mbMap) mbMap.getCanvas().style.cursor = ''; });
+        
+        userDrawings.push({ type: 'pin', id });
+      } else if (type === 'ruler') {
+        alert('Klik 2 titik di peta untuk mengukur jarak.');
+      }
+    }
+
+    function clearMapDrawings() {
+      const mbMap = window.maplibreMap;
+      if (!mbMap) return;
+      userDrawings.forEach(d => {
+        try {
+          if (d.type === 'circle') {
+            mbMap.removeLayer(d.id);
+            mbMap.removeLayer('user-draw-outline-' + d.id.split('-').pop());
+            mbMap.removeSource(d.id);
+          } else if (d.type === 'pin') {
+            mbMap.removeLayer(d.id);
+            mbMap.removeSource(d.id);
+          }
+        } catch (e) {}
+      });
+      userDrawings = [];
+    }
+
+    // ===== LIVE CCTV & INSTAGRAM LAYER TOGGLE MANAGEMENT =====
+    let allCctvData = [];
+    let activeCctvMarkers = [];
+    let isCctvLayerActive = false;
+
+    function syncCctvToggleUi() {
+      const cctvToggles = document.querySelectorAll('.layer-cctv');
+      const statusBadge = document.getElementById('cctv-layer-status');
+
+      cctvToggles.forEach((miniToggle) => {
+        miniToggle.classList.toggle('active', isCctvLayerActive);
+        miniToggle.setAttribute('aria-pressed', isCctvLayerActive ? 'true' : 'false');
+        miniToggle.textContent = isCctvLayerActive ? 'ON' : 'OFF';
+        miniToggle.title = isCctvLayerActive ? 'Nonaktifkan CCTV' : 'Aktifkan CCTV';
+      });
+
+      if (statusBadge) {
+        if (isCctvLayerActive) {
+          statusBadge.textContent = 'AKTIF';
+          statusBadge.style.background = 'rgba(239, 68, 68, 0.25)';
+          statusBadge.style.color = '#f87171';
+          statusBadge.style.borderColor = '#ef4444';
+        } else {
+          statusBadge.textContent = 'NONAKTIF';
+          statusBadge.style.background = 'rgba(148, 163, 184, 0.2)';
+          statusBadge.style.color = '#94a3b8';
+          statusBadge.style.borderColor = 'rgba(255,255,255,0.2)';
+        }
+      }
+    }
+
+    function toggleCctvToggleFromSidebar() {
+      toggleCctvLayer(!isCctvLayerActive);
+    }
+
+    async function toggleCctvLayer(enabled) {
+      if (typeof enabled === 'undefined') {
+        enabled = !isCctvLayerActive;
+      }
+      isCctvLayerActive = Boolean(enabled);
+      const itemsList = document.getElementById('cctv-items-list');
+
+      syncCctvToggleUi();
+
+      if (!isCctvLayerActive) {
+        clearCctvMarkers();
+        if (itemsList) {
+          itemsList.innerHTML = `
+            <div style="padding:20px; text-align:center; color:#94a3b8; font-size:0.85rem; background:rgba(30, 41, 59, 0.4); border-radius:10px; border:1px dashed rgba(255,255,255,0.15);">
+              Toggle layer dalam posisi <strong>NONAKTIF</strong>.<br>Silakan aktifkan switch di atas untuk memuat titik CCTV.
+            </div>
+          `;
+        }
+        const countDisplay = document.getElementById('cctv-count-display');
+        if (countDisplay) countDisplay.textContent = '0';
+        return;
+      }
+
+      if (allCctvData.length === 0) {
+        await fetchCctvData();
+      } else {
+        renderCctvMarkersAndList();
+      }
+    }
+
+    syncCctvToggleUi();
+
+    async function fetchCctvData() {
+      const itemsList = document.getElementById('cctv-items-list');
+      if (itemsList && isCctvLayerActive) {
+        itemsList.innerHTML = `
+          <div style="padding:20px; text-align:center; color:#00f0ff;">
+            <div class="spinner" style="margin: 0 auto 8px;"></div>
+            <span>Memuat data 243 Live CCTV Indonesia...</span>
+          </div>
+        `;
+      }
+
+      try {
+        const response = await fetch('/api/cctv');
+        const json = await response.json();
+        if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+          allCctvData = json.data;
+        } else {
+          const fbRes = await fetch('/cctv_embedded_data.json');
+          allCctvData = await fbRes.json();
+        }
+      } catch (err) {
+        try {
+          const fbRes = await fetch('/cctv_embedded_data.json');
+          allCctvData = await fbRes.json();
+        } catch (e) {
+          console.error('Failed to fetch CCTV data:', err);
+        }
+      }
+
+      if (isCctvLayerActive) {
+        renderCctvMarkersAndList();
+      }
+    }
+
+    function clearCctvMarkers() {
+      activeCctvMarkers.forEach((m) => {
+        try { m.remove(); } catch (e) {}
+      });
+      activeCctvMarkers = [];
+    }
+
+    function getFilteredCctvData() {
+      const region = document.getElementById('cctv-region-select')?.value || 'ALL';
+      const search = (document.getElementById('cctv-search-input')?.value || '').toLowerCase().trim();
+
+      return allCctvData.filter((item) => {
+        const matchRegion = region === 'ALL' || item.region === region;
+        const matchSearch = !search || item.name.toLowerCase().includes(search) || (item.district && item.district.toLowerCase().includes(search));
+        return matchRegion && matchSearch;
+      });
+    }
+
+    let activeHlsInstances = {};
+    let currentEnlargedHls = null;
+
+    function setupCctvVideoPlayer(videoEl, streamUrl, posterUrl) {
+      if (!streamUrl || !videoEl) return null;
+
+      if (posterUrl) {
+        videoEl.poster = posterUrl;
+      }
+
+      if (streamUrl.endsWith('.m3u8') || streamUrl.includes('.m3u8')) {
+        if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+          const hls = new Hls({ enableWorker: true, lowLatencyMode: true });
+          hls.loadSource(streamUrl);
+          hls.attachMedia(videoEl);
+          hls.on(Hls.Events.MANIFEST_PARSED, function() {
+            videoEl.play().catch(() => {});
+          });
+          hls.on(Hls.Events.ERROR, function(event, data) {
+            if (data.fatal && posterUrl) {
+              const parent = videoEl.parentElement;
+              if (parent && !parent.querySelector('.cctv-fallback-img')) {
+                videoEl.style.display = 'none';
+                const img = document.createElement('img');
+                img.className = 'cctv-fallback-img';
+                img.src = posterUrl;
+                img.style.cssText = 'width:100%; height:100%; object-fit:cover; display:block;';
+                parent.appendChild(img);
+              }
+            }
+          });
+          return hls;
+        } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+          videoEl.src = streamUrl;
+          videoEl.play().catch(() => {});
+        }
+      } else {
+        videoEl.src = streamUrl;
+        videoEl.play().catch(() => {});
+      }
+      return null;
+    }
+
+    function renderCctvMarkersAndList() {
+      clearCctvMarkers();
+      const filtered = getFilteredCctvData();
+      const mbMap = window.maplibreMap;
+      const itemsList = document.getElementById('cctv-items-list');
+      const countDisplay = document.getElementById('cctv-count-display');
+
+      if (countDisplay) countDisplay.textContent = filtered.length;
+
+      if (!isCctvLayerActive) return;
+
+      // Render markers on map
+      if (mbMap && typeof maplibregl !== 'undefined') {
+        filtered.forEach((cam) => {
+          // Pin marker berbentuk teardrop dengan ikon kamera CCTV di dalamnya
+          const el = document.createElement('div');
+          el.className = 'cctv-marker-el';
+          el.style.cssText = `
+            width: 36px;
+            height: 44px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            filter: drop-shadow(0 3px 8px rgba(239,68,68,0.6));
+          `;
+          el.title = cam.name;
+          // SVG pin teardrop + ikon CCTV surveillance camera modern
+          el.innerHTML = `<svg width="36" height="44" viewBox="0 0 36 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Teardrop body -->
+            <path d="M18 2C10.268 2 4 8.268 4 16C4 25.333 18 42 18 42C18 42 32 25.333 32 16C32 8.268 25.732 2 18 2Z"
+              fill="rgba(15,23,42,0.92)" stroke="#ef4444" stroke-width="1.8"/>
+            <!-- Lingkaran luar -->
+            <circle cx="18" cy="16" r="8.5" fill="rgba(239,68,68,0.15)" stroke="#ef4444" stroke-width="1.2"/>
+            <!-- Ikon surveillance camera modern -->
+            <g transform="translate(18,16)">
+              <!-- Badan kamera -->
+              <rect x="-5.5" y="-2.5" width="8" height="5" rx="1.2" fill="#ef4444"/>
+              <!-- Lensa -->
+              <circle cx="4.2" cy="0" r="2.2" fill="#ef4444" stroke="rgba(15,23,42,0.6)" stroke-width="0.8"/>
+              <circle cx="4.2" cy="0" r="1" fill="rgba(255,255,255,0.9)"/>
+              <!-- Kaki/mount -->
+              <line x1="-5.5" y1="0" x2="-7.5" y2="2.5" stroke="#ef4444" stroke-width="1.2" stroke-linecap="round"/>
+            </g>
+          </svg>`;
+
+          const isHls = cam.type === 'hls' || (cam.streamUrl && cam.streamUrl.includes('.m3u8'));
+          const isIframe = cam.type === 'iframe';
+
+          const popupContent = `
+            <div style="font-family: 'JetBrains Mono', monospace; font-size:12px; width:280px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <span style="background:#ef4444; color:#fff; font-size:10px; font-weight:800; padding:2px 6px; border-radius:4px;">LIVE CCTV • ${cam.region}</span>
+              </div>
+              <h4 style="margin:0 0 8px; color:#f8fafc; font-size:12px; font-weight:700; line-height:1.3;">${cam.name}</h4>
+              
+              <!-- MINI PLAYER LANGSUNG DI MAP -->
+              <div style="margin-bottom:8px; border-radius:8px; overflow:hidden; background:#000; position:relative; min-height:160px;">
+                ${isIframe && cam.streamUrl 
+                  ? `<iframe src="${cam.streamUrl}" width="100%" height="160" frameborder="0" allowfullscreen style="display:block; border:none;"></iframe>` 
+                  : isHls && cam.streamUrl 
+                  ? `<video id="cctv-popup-video-${cam.id}" controls autoplay muted playsinline style="width:100%; height:160px; object-fit:cover; background:#000; display:block;"></video>`
+                  : cam.streamUrl 
+                  ? `<img src="${cam.streamUrl}" style="width:100%; height:160px; object-fit:cover; display:block;" alt="CCTV Stream" onerror="this.onerror=null; this.src='https://placehold.co/280x160/0f172a/94a3b8?text=Live+CCTV+Stream';" />` 
+                  : '<div style="padding:40px 10px; text-align:center; color:#94a3b8;">Stream tidak tersedia</div>'
+                }
+              </div>
+
+              <!-- FITUR PERBESAR VIDEO (TIDAK DIRECT KE TAB BARU) -->
+              <button type="button" class="button button-branch" style="display:block; width:100%; text-align:center; font-size:11px; padding:6px; background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.4); color:#38bdf8; font-weight:700; border-radius:6px; cursor:pointer;" onclick="openEnlargedCctv('${cam.id}')">
+                🔍 PERBESAR
+              </button>
+            </div>
+          `;
+
+          const popup = new maplibregl.Popup({ offset: 20, closeOnClick: true, maxWidth: '300px' }).setHTML(popupContent);
+
+          popup.on('open', () => {
+            if (isHls && cam.streamUrl) {
+              setTimeout(() => {
+                const videoEl = document.getElementById(`cctv-popup-video-${cam.id}`);
+                if (videoEl) {
+                  activeHlsInstances[cam.id] = setupCctvVideoPlayer(videoEl, cam.streamUrl, cam.posterUrl);
+                }
+              }, 50);
+            }
+          });
+
+          popup.on('close', () => {
+            if (activeHlsInstances[cam.id]) {
+              try { activeHlsInstances[cam.id].destroy(); } catch(e){}
+              delete activeHlsInstances[cam.id];
+            }
+          });
+
+          const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+            .setLngLat([cam.lng, cam.lat])
+            .setPopup(popup)
+            .addTo(mbMap);
+
+          activeCctvMarkers.push(marker);
+        });
+      }
+
+      // Render list items in drawer
+      if (itemsList) {
+        if (filtered.length === 0) {
+          itemsList.innerHTML = `<div style="padding:16px; text-align:center; color:#94a3b8;">Tidak ada CCTV yang cocok dengan filter.</div>`;
+          return;
+        }
+
+        let html = '';
+        filtered.slice(0, 50).forEach((cam) => {
+          html += `
+            <div style="background:rgba(30,41,59,0.6); border:1px solid rgba(56,189,248,0.2); border-radius:10px; padding:10px 12px; display:flex; justify-content:space-between; align-items:center;">
+              <div style="flex:1; min-width:0; padding-right:8px;">
+                <span style="font-size:10px; color:#00f0ff; font-weight:700;">${cam.region}</span>
+                <div style="font-size:0.82rem; font-weight:700; color:#f8fafc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${cam.name}</div>
+              </div>
+              <div style="display:flex; gap:4px; flex-shrink:0;">
+                <button type="button" class="button button-branch" style="font-size:11px; padding:4px 8px;" onclick="focusCctvOnMap(${cam.lat}, ${cam.lng}, '${cam.id}')" title="Focus Peta">📍 Focus</button>
+                <button type="button" class="button button-primary" style="font-size:11px; padding:4px 8px; background:#0284c7; border:none; color:#fff;" onclick="openEnlargedCctv('${cam.id}')" title="Perbesar Video">🔍 Perbesar</button>
+              </div>
+            </div>
+          `;
+        });
+
+        if (filtered.length > 50) {
+          html += `<div style="text-align:center; color:#94a3b8; font-size:11px; padding:6px;">Menampilkan 50 dari ${filtered.length} titik CCTV. Gunakan pencarian untuk lokasi spesifik.</div>`;
+        }
+
+        itemsList.innerHTML = html;
+      }
+    }
+
+    function filterCctvByRegion(region) {
+      if (isCctvLayerActive) renderCctvMarkersAndList();
+    }
+
+    function filterCctvSearch(query) {
+      if (isCctvLayerActive) renderCctvMarkersAndList();
+    }
+
+    function focusCctvOnMap(lat, lng, id) {
+      const mbMap = window.maplibreMap;
+      if (!mbMap) return;
+
+      mbMap.flyTo({ center: [lng, lat], zoom: 16, duration: 1000 });
+      
+      activeCctvMarkers.forEach((m) => {
+        const pos = m.getLngLat();
+        if (Math.abs(pos.lat - lat) < 0.0001 && Math.abs(pos.lng - lng) < 0.0001) {
+          m.togglePopup();
+        }
+      });
+    }
+
+    function openEnlargedCctv(camId) {
+      const cam = allCctvData.find(c => String(c.id) === String(camId));
+      if (!cam) return;
+
+      const playerWidget = document.getElementById('cctv-enlarged-player');
+      const titleEl = document.getElementById('cctv-enlarged-title');
+      const regionEl = document.getElementById('cctv-enlarged-region');
+      const mediaContainer = document.getElementById('cctv-enlarged-media-container');
+
+      if (!playerWidget || !mediaContainer) return;
+
+      titleEl.textContent = cam.name;
+      regionEl.textContent = `Region: ${cam.region || '-'} ${cam.district ? '(' + cam.district + ')' : ''}`;
+
+      if (currentEnlargedHls) {
+        try { currentEnlargedHls.destroy(); } catch(e){}
+        currentEnlargedHls = null;
+      }
+
+      const isHls = cam.type === 'hls' || (cam.streamUrl && cam.streamUrl.includes('.m3u8'));
+      const isIframe = cam.type === 'iframe';
+
+      if (isIframe && cam.streamUrl) {
+        mediaContainer.innerHTML = `<iframe src="${cam.streamUrl}" width="100%" height="100%" frameborder="0" allowfullscreen style="display:block; border:none;"></iframe>`;
+      } else if (isHls && cam.streamUrl) {
+        mediaContainer.innerHTML = `<video id="cctv-enlarged-video" controls autoplay muted playsinline style="width:100%; height:100%; object-fit:cover; background:#000; display:block;"></video>`;
+        setTimeout(() => {
+          const videoEl = document.getElementById('cctv-enlarged-video');
+          if (videoEl) {
+            currentEnlargedHls = setupCctvVideoPlayer(videoEl, cam.streamUrl, cam.posterUrl);
+          }
+        }, 50);
+      } else if (cam.streamUrl) {
+        mediaContainer.innerHTML = `<img src="${cam.streamUrl}" style="width:100%; height:100%; object-fit:cover; display:block;" alt="${cam.name}" onerror="this.onerror=null; this.src='https://placehold.co/440x260/0f172a/94a3b8?text=Live+CCTV+Stream';" />`;
+      } else {
+        mediaContainer.innerHTML = `<div style="padding:80px 20px; text-align:center; color:#94a3b8;">Stream video tidak tersedia untuk CCTV ini.</div>`;
+      }
+
+      playerWidget.style.display = 'block';
+    }
+
+    function closeEnlargedCctv() {
+      const playerWidget = document.getElementById('cctv-enlarged-player');
+      const mediaContainer = document.getElementById('cctv-enlarged-media-container');
+
+      if (currentEnlargedHls) {
+        try { currentEnlargedHls.destroy(); } catch(e){}
+        currentEnlargedHls = null;
+      }
+
+      if (mediaContainer) mediaContainer.innerHTML = '';
+      if (playerWidget) playerWidget.style.display = 'none';
+    }
+
+    function toggleFullscreenCctv() {
+      const mediaContainer = document.getElementById('cctv-enlarged-media-container');
+      if (!mediaContainer) return;
+
+      if (!document.fullscreenElement) {
+        if (mediaContainer.requestFullscreen) {
+          mediaContainer.requestFullscreen();
+        } else if (mediaContainer.webkitRequestFullscreen) {
+          mediaContainer.webkitRequestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    }
+
+    function clearIgCookie() {
+      const cookieInput = document.getElementById('ig-cookies-input');
+      if (cookieInput) {
+        cookieInput.value = '';
+        cookieInput.focus();
+      }
+    }
+
+    // ===== INSTAGRAM LOCATOR SEARCH MANAGEMENT =====
+    let igMarkers = [];
+    let igManualCoordsOverride = false;
+    let igLastSyncedCoords = "";
+    let igSyncBound = false;
+
+    function getMainCoordinatesValue() {
+      return (document.getElementById('coordinates')?.value || '').trim();
+    }
+
+    function setIgCoordsDisplay(value) {
+      const displayEl = document.getElementById('ig-current-coords-display');
+      if (displayEl) {
+        displayEl.textContent = value || '-';
+      }
+    }
+
+    function syncIgCoordinatesFromMain(force = false) {
+      const mainCoords = getMainCoordinatesValue();
+      const customCoordsEl = document.getElementById('ig-custom-coords-input');
+      if (!customCoordsEl) {
+        setIgCoordsDisplay(mainCoords);
+        return mainCoords;
+      }
+
+      const customCoords = (customCoordsEl.value || '').trim();
+      const shouldMirrorMain = force || !customCoords || (!igManualCoordsOverride && customCoords === igLastSyncedCoords);
+      if (shouldMirrorMain && mainCoords) {
+        if (customCoords !== mainCoords) {
+          customCoordsEl.value = mainCoords;
+        }
+        igManualCoordsOverride = false;
+        igLastSyncedCoords = mainCoords;
+        setIgCoordsDisplay(mainCoords);
+        return mainCoords;
+      }
+
+      const resolved = customCoords || mainCoords;
+      setIgCoordsDisplay(resolved);
+      return resolved;
+    }
+
+    function bindIgCoordinateSync() {
+      if (igSyncBound) return;
+
+      const mainCoordsEl = document.getElementById('coordinates');
+      const customCoordsEl = document.getElementById('ig-custom-coords-input');
+      if (!mainCoordsEl || !customCoordsEl) return;
+
+      const updateFromMain = () => {
+        if (!customCoordsEl.value.trim() || (!igManualCoordsOverride && customCoordsEl.value.trim() === igLastSyncedCoords)) {
+          syncIgCoordinatesFromMain(true);
+        }
+      };
+
+      const updateFromCustom = () => {
+        const customValue = customCoordsEl.value.trim();
+        if (!customValue) {
+          igManualCoordsOverride = false;
+          igLastSyncedCoords = '';
+          setIgCoordsDisplay(getMainCoordinatesValue());
+          return;
+        }
+        igManualCoordsOverride = customValue !== getMainCoordinatesValue();
+        igLastSyncedCoords = customValue;
+        setIgCoordsDisplay(customValue);
+      };
+
+      mainCoordsEl.addEventListener('input', updateFromMain);
+      mainCoordsEl.addEventListener('change', updateFromMain);
+      customCoordsEl.addEventListener('input', updateFromCustom);
+      customCoordsEl.addEventListener('change', updateFromCustom);
+
+      syncIgCoordinatesFromMain(true);
+      igSyncBound = true;
+    }
+
+    function syncIgCoordinates() {
+      const mainCoords = getMainCoordinatesValue();
+      const customCoords = (document.getElementById('ig-custom-coords-input')?.value || '').trim();
+      const resolved = customCoords || mainCoords;
+      setIgCoordsDisplay(resolved);
+      return resolved;
+    }
+
+    function syncInstagramSearchMode() {
+      const modeEl = document.getElementById('ig-search-mode');
+      const gridOptionsEl = document.getElementById('ig-grid-options');
+      if (!modeEl || !gridOptionsEl) return;
+      const apply = () => {
+        gridOptionsEl.style.display = modeEl.value === 'grid' ? 'block' : 'none';
+      };
+      modeEl.addEventListener('change', apply);
+      apply();
+    }
+
+    bindIgCoordinateSync();
+
+    async function handleGetAutoCookie() {
+      const cookieInput = document.getElementById('ig-cookies-input');
+      const resultsContainer = document.getElementById('ig-search-results');
+
+      if (cookieInput) {
+        cookieInput.value = "\uD83C\uDF10 Memproses cookie dari browser...";
+      }
+
+      if (resultsContainer) {
+        resultsContainer.innerHTML = `
+          <div style="padding:16px; text-align:center; color:#00f0ff; background:rgba(30,41,59,0.4); border-radius:10px;">
+            <div class="spinner" style="margin: 0 auto 8px;"></div>
+            <span>Step 1/4: Mengambil cookie Instagram dari browser. Silakan login ke akun Instagram di jendela Chrome jika browser terbuka.</span>
+          </div>
+        `;
+      }
+
+      try {
+        const res = await fetch('/api/instagram-get-cookie');
+        const json = await res.json();
+        if (json.success && json.cookie) {
+          if (cookieInput) cookieInput.value = json.cookie;
+          if (resultsContainer) {
+            resultsContainer.innerHTML = `
+              <div style="padding:12px; color:#34d399; font-size:0.85rem; background:rgba(16,185,129,0.1); border-radius:8px; border:1px solid rgba(16,185,129,0.3);">
+                \u2714 Step 1 selesai. Cookie Instagram berhasil didapatkan. Lanjutkan ke Step 2 dan Step 3 sebelum klik <strong>Search Locations</strong>.
+              </div>
+            `;
+          }
+        } else {
+          const msg = (json.error || "Gagal mengambil cookie dari browser.").trim();
+          let hint = "";
+          if (msg.toLowerCase().includes("browser")) {
+            hint = "\n\n\uD83D\uDD27 Pastikan Chrome sudah terbuka, belum dalam keadaan \"headless only\", dan kamu sudah login di instagram.com.\n    Jika masih error, coba klik lagi atau masukkan cookie manual di kolom di atas.";
+          } else if (!msg) {
+            hint = "\n\n\uD83D\uDD27 Jika cookie hilang, coba klik lagi (\u21BB) atau masukkan cookie manual.";
+          }
+          if (cookieInput) cookieInput.value = "";
+          if (resultsContainer) {
+            resultsContainer.innerHTML = `
+              <div style="padding:12px; color:#f43f5e; font-size:0.85rem; background:rgba(244,63,94,0.1); border-radius:8px; border:1px solid rgba(244,63,94,0.3); white-space:pre-line;">
+                \u26A0\uFE0F ${msg}${hint}
+              </div>
+            `;
+          }
+        }
+      } catch (e) {
+        if (cookieInput) cookieInput.value = "";
+        if (resultsContainer) {
+          resultsContainer.innerHTML = `
+            <div style="padding:12px; color:#f43f5e; font-size:0.85rem; background:rgba(244,63,94,0.1); border-radius:8px; border:1px solid rgba(244,63,94,0.3);">
+              \u26A0\uFE0F Error: ${e.message}
+            </div>
+          `;
+        }
+      }
+    }
+
+    async function handleInstagramSearch(e) {
+      if (e) e.preventDefault();
+      let cookie = (document.getElementById('ig-cookies-input')?.value || '').trim();
+      const coords = syncIgCoordinates();
+      const searchMode = document.getElementById('ig-search-mode')?.value || 'normal';
+      const radiusKm = parseFloat(document.getElementById('ig-grid-radius')?.value) || 3.0;
+      const stepM = parseFloat(document.getElementById('ig-grid-step')?.value) || 200;
+      const resultsContainer = document.getElementById('ig-search-results');
+
+      if (!cookie) {
+        if (resultsContainer) {
+          resultsContainer.innerHTML = `
+            <div style="padding:16px; text-align:center; color:#fbbf24; background:rgba(251,191,36,0.08); border-radius:10px; border:1px solid rgba(251,191,36,0.25);">
+              Step 1/4 belum selesai. Mengambil cookie dulu dari browser...
+            </div>
+          `;
+        }
+        await handleGetAutoCookie();
+        cookie = (document.getElementById('ig-cookies-input')?.value || '').trim();
+      }
+
+      const parts = coords.split(',').map(s => parseFloat(s.trim()));
+      const lat = parts[0];
+      const lng = parts[1];
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        if (resultsContainer) {
+          resultsContainer.innerHTML = `
+            <div style="padding:16px; text-align:center; color:#f43f5e; background:rgba(244,63,94,0.1); border-radius:10px; border:1px solid rgba(244,63,94,0.25);">
+              Koordinat Instagram belum diisi. Isi koordinat utama atau masukkan koordinat manual di kolom Instagram Locator.
+            </div>
+          `;
+        }
+        return;
+      }
+
+      if (resultsContainer) {
+        resultsContainer.innerHTML = `
+          <div style="padding:20px; text-align:center; color:#00f0ff;">
+            <div class="spinner" style="margin: 0 auto 8px;"></div>
+            <span>Step 4/4: Mencari Instagram dengan mode ${searchMode} di koordinat ${lat.toFixed(4)}, ${lng.toFixed(4)}...</span>
+          </div>
+        `;
+      }
+
+      const modeOrder = searchMode === 'fuzzy'
+        ? ['fuzzy', 'normal', 'grid']
+        : searchMode === 'grid'
+          ? ['grid', 'normal', 'fuzzy']
+          : ['normal', 'fuzzy', 'grid'];
+
+      const mbMap = window.maplibreMap;
+      if (mbMap) {
+        mbMap.setCenter([lng, lat]);
+        mbMap.setZoom(15);
+        if (window.updateRadiusCircle) {
+          window.updateRadiusCircle(lat, lng, 3);
+        }
+      }
+
+      try {
+        let lastJson = null;
+        let rendered = false;
+
+        for (const mode of modeOrder) {
+          const response = await fetch('/api/instagram-locations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              lat,
+              lng,
+              cookie,
+              search_mode: mode,
+              radius_km: radiusKm,
+              step_m: stepM
+            })
+          });
+
+          const json = await response.json();
+          lastJson = json;
+
+          if (json.error) {
+            continue;
+          }
+
+          const items = Array.isArray(json.data) && json.data.length > 0
+            ? json.data
+            : Array.isArray(json.items) && json.items.length > 0
+              ? json.items
+              : [];
+
+          if (items.length > 0) {
+            renderInstagramResults(items);
+            rendered = true;
+            break;
+          }
+        }
+
+        if (!rendered) {
+          const json = lastJson || {};
+          const msg = json.error || (json.message || '').trim()
+            || (json.items == null ? '(tanpa response items)' : '(tanpa error, tapi items kosong)');
+          let detail = '';
+          try {
+            const meta = (json.meta || json) && (json.meta || json).toString && JSON.stringify(json.meta || json);
+            if (meta && meta.length < 800) detail = `\n[backend] ${meta.replace(/\\n/g,' ')}`;
+          } catch {}
+          if (json.error === 'Koordinat tidak valid.') {
+            resultsContainer.innerHTML = `<div style="color:#ef4444; padding:12px; font-size:0.85rem;">⚠️ Koordinat tidak valid.\nKalau dari UI, kemungkinan input lokasi belum terhubung ke form Instagram. Coba geser peta / klik lokasi dulu, baru search Instagram.</div>`;
+          } else if (json.items != null && Array.isArray(json.items) && json.items.length === 0) {
+            resultsContainer.innerHTML = `<div style="color:#ef4444; padding:12px; font-size:0.85rem;">Tidak ada lokasi Instagram terdeteksi di koordinat ini.${detail}</div>`;
+          } else {
+            resultsContainer.innerHTML = `<div style="color:#ef4444; padding:12px; font-size:0.85rem;">${msg}${detail}</div>`;
+          }
+        }
+      } catch (err) {
+        resultsContainer.innerHTML = `<div style="color:#ef4444; padding:12px; font-size:0.85rem;">Error: ${err.message}</div>`;
+      }
+    }
+
+    function renderInstagramResults(data) {
+      const resultsContainer = document.getElementById('ig-search-results');
+      const mbMap = window.maplibreMap;
+
+      igMarkers.forEach(m => { try { m.remove(); } catch(e){} });
+      igMarkers = [];
+
+      if (!data || data.length === 0) {
+        if (resultsContainer) resultsContainer.innerHTML = `<div style="padding:16px; text-align:center; color:#94a3b8; font-size:0.85rem;">Tidak ada lokasi Instagram yang ditemukan di area ini.</div>`;
+        return;
+      }
+
+      let html = `<strong style="display:block; margin-bottom:8px; color:#00f0ff; font-size:0.85rem;">Ditemukan ${data.length} Lokasi Instagram:</strong>`;
+      html += `<div style="max-height:260px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;">`;
+
+      data.forEach((item) => {
+        html += `
+          <div style="background:rgba(30,41,59,0.6); border:1px solid rgba(255,255,255,0.15); border-radius:8px; padding:10px;">
+            <strong style="color:#f8fafc; font-size:0.85rem; display:block;">${item.name}</strong>
+            <span style="font-size:11px; color:#94a3b8; display:block; margin:2px 0 6px;">${item.address || 'Instagram Location POI'}</span>
+            <a href="${item.url}" target="_blank" class="button button-branch" style="font-size:10px; padding:4px 8px; text-decoration:none; display:inline-block;">📸 Buka Halaman Instagram</a>
+          </div>
+        `;
+
+        if (mbMap && item.lat && item.lng && typeof maplibregl !== 'undefined') {
+          const el = document.createElement('div');
+          el.className = 'ig-marker-el';
+          el.style.width = '28px';
+          el.style.height = '28px';
+          el.style.borderRadius = '50%';
+          el.style.background = 'linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)';
+          el.style.border = '2px solid #ffffff';
+          el.style.boxShadow = '0 0 10px rgba(220, 39, 67, 0.8)';
+          el.style.display = 'flex';
+          el.style.alignItems = 'center';
+          el.style.justifyContent = 'center';
+          el.style.cursor = 'pointer';
+          el.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>`;
+
+          const popup = new maplibregl.Popup({ offset: 20 }).setHTML(`
+            <div style="font-family:'JetBrains Mono', monospace; font-size:12px;">
+              <strong style="color:#d6249f;">📸 ${item.name}</strong>
+              <p style="margin:4px 0 8px; font-size:11px; color:#64748b;">${item.address || ''}</p>
+              <a href="${item.url}" target="_blank" style="color:#0284c7; font-weight:700; text-decoration:none;">Buka Halaman Instagram</a>
+            </div>
+          `);
+
+          const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+            .setLngLat([item.lng, item.lat])
+            .setPopup(popup)
+            .addTo(mbMap);
+
+          igMarkers.push(marker);
+        }
+      });
+
+      html += `</div>`;
+      if (resultsContainer) resultsContainer.innerHTML = html;
+    }
+
+    window.toggleCctvLayer = toggleCctvLayer;
+    window.toggleCctvToggleFromSidebar = toggleCctvToggleFromSidebar;
+    window.fetchCctvData = fetchCctvData;
+    window.filterCctvByRegion = filterCctvByRegion;
+    window.filterCctvSearch = filterCctvSearch;
+    window.focusCctvOnMap = focusCctvOnMap;
+    window.openEnlargedCctv = openEnlargedCctv;
+    window.closeEnlargedCctv = closeEnlargedCctv;
+    window.toggleFullscreenCctv = toggleFullscreenCctv;
+    window.clearIgCookie = clearIgCookie;
+    window.handleInstagramSearch = handleInstagramSearch;
+    window.handleGetAutoCookie = handleGetAutoCookie;
+    window.syncIgCoordinates = syncIgCoordinates;
+    syncInstagramSearchMode();
+  </script>
+
+  <!-- FLOATING ENLARGED CCTV VIDEO PLAYER (POJOK KANAN BAWAH) -->
+  <div id="cctv-enlarged-player" style="display:none; position:fixed; bottom:20px; right:20px; width:440px; z-index:99999; background:rgba(15,23,42,0.95); border:1px solid #38bdf8; border-radius:14px; box-shadow:0 12px 35px rgba(0,0,0,0.85); backdrop-filter:blur(12px); overflow:hidden; font-family:'JetBrains Mono', monospace;">
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:rgba(30,41,59,0.85); border-bottom:1px solid rgba(56,189,248,0.25);">
+      <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+        <span style="background:#ef4444; color:#fff; font-size:10px; font-weight:800; padding:2px 6px; border-radius:4px; flex-shrink:0;">LIVE CCTV</span>
+        <span id="cctv-enlarged-title" style="color:#f8fafc; font-weight:700; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">CCTV Stream</span>
+      </div>
+      <div style="display:flex; gap:6px; flex-shrink:0;">
+        <button type="button" onclick="toggleFullscreenCctv()" style="background:none; border:none; color:#38bdf8; cursor:pointer; font-size:14px; padding:2px 6px;" title="Layar Penuh (Full Screen)">⛶</button>
+        <button type="button" onclick="closeEnlargedCctv()" style="background:none; border:none; color:#f43f5e; cursor:pointer; font-size:16px; padding:2px 6px;" title="Tutup">✕</button>
+      </div>
+    </div>
+    <div id="cctv-enlarged-media-container" style="width:100%; height:260px; background:#000; position:relative; overflow:hidden;">
+      <!-- Stream element loaded dynamically -->
+    </div>
+    <div style="padding:8px 14px; font-size:11px; color:#94a3b8; display:flex; justify-content:space-between; align-items:center; background:rgba(15,23,42,0.9);">
+      <span id="cctv-enlarged-region" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Region</span>
+      <button type="button" onclick="closeEnlargedCctv()" style="background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.3); color:#38bdf8; padding:3px 10px; border-radius:6px; cursor:pointer; font-size:11px; flex-shrink:0;">Minimize ✕</button>
+    </div>
+  </div>
+</body>
+</html>

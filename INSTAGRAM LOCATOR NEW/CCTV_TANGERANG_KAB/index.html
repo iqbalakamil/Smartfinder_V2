@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Peta CCTV Kabupaten Tangerang — ATCS</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📹</text></svg>">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Sidebar -->
+    <aside id="sidebar">
+      <header class="sidebar-header">
+        <div class="brand">
+          <div class="brand-icon">📹</div>
+          <div>
+            <h1>Peta CCTV</h1>
+            <p>Kabupaten Tangerang · ATCS Dishub</p>
+          </div>
+        </div>
+        <div id="live-badge" class="live-badge"><span class="dot"></span> LIVE</div>
+      </header>
+
+      <div class="search-wrap">
+        <input id="search" type="search" placeholder="Cari titik CCTV…" autocomplete="off">
+      </div>
+
+      <div id="cam-list" class="cam-list" role="list"></div>
+
+      <footer class="sidebar-footer">
+        <span id="cam-count">0 kamera</span>
+        <a href="https://cctv-dishub.tangerangkab.go.id/cctv-map" target="_blank" rel="noopener">Situs asli ↗</a>
+      </footer>
+    </aside>
+
+    <!-- Map -->
+    <div id="map"></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

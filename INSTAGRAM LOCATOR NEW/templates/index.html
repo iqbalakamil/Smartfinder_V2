@@ -1,0 +1,2452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instagram Location Search Dashboard</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #0f0f23;
+            color: #e0e0e0;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 380px;
+            background: #1a1a2e;
+            border-right: 1px solid #2a2a4a;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            padding: 24px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            text-align: center;
+        }
+
+        .sidebar-header h1 {
+            font-size: 20px;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 4px;
+        }
+
+        .sidebar-header p {
+            font-size: 12px;
+            color: rgba(255,255,255,0.8);
+        }
+
+        .sidebar-content {
+            padding: 20px;
+            flex: 1;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: #9d9dba;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px 14px;
+            background: #16213e;
+            border: 1px solid #2a2a4a;
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group textarea {
+            height: 80px;
+            resize: vertical;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 12px;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: #667eea;
+        }
+
+        .checkbox-group label {
+            font-size: 13px;
+            color: #b0b0d0;
+            cursor: pointer;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            background: #2a2a4a;
+            color: #e0e0e0;
+            margin-top: 8px;
+        }
+
+        .btn-secondary:hover {
+            background: #3a3a5a;
+        }
+
+        .btn-cookie {
+            background: #16213e;
+            border: 1px dashed #667eea;
+            color: #667eea;
+            margin-top: 4px;
+            font-size: 12px;
+            padding: 8px 12px;
+        }
+
+        .btn-cookie:hover {
+            background: #1a2744;
+        }
+
+        /* Results Section */
+        .results-section {
+            padding: 0 20px 20px;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .results-header h3 {
+            font-size: 14px;
+            color: #9d9dba;
+        }
+
+        .results-count {
+            background: #667eea;
+            color: white;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .export-buttons {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .export-btn {
+            padding: 6px 12px;
+            background: #16213e;
+            border: 1px solid #2a2a4a;
+            border-radius: 6px;
+            color: #b0b0d0;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .export-btn:hover {
+            background: #2a2a4a;
+            color: #e0e0e0;
+            border-color: #667eea;
+        }
+
+        .results-table {
+            max-height: 250px;
+            overflow-y: auto;
+            border-radius: 8px;
+            border: 1px solid #2a2a4a;
+        }
+
+        .results-table table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .results-table th {
+            background: #16213e;
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #9d9dba;
+            position: sticky;
+            top: 0;
+            border-bottom: 1px solid #2a2a4a;
+        }
+
+        .results-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #1a1a3a;
+        }
+
+        .results-table tr:hover td {
+            background: #16213e;
+        }
+
+        .results-table a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .results-table a:hover {
+            text-decoration: underline;
+        }
+
+        /* Map Area */
+        .map-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .map-header {
+            padding: 12px 20px;
+            background: #1a1a2e;
+            border-bottom: 1px solid #2a2a4a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .map-header h2 {
+            font-size: 14px;
+            color: #9d9dba;
+        }
+
+        .map-coords {
+            font-size: 12px;
+            color: #667eea;
+            font-family: monospace;
+        }
+
+        /* 2D / 3D view toggle (God's Eye View-style globe) */
+        .map-header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .view-toggle {
+            display: flex;
+            background: #131a30;
+            border: 1px solid #26304f;
+            border-radius: 8px;
+            padding: 3px;
+            gap: 2px;
+        }
+
+        .view-toggle button {
+            border: none;
+            background: transparent;
+            color: #8b93a7;
+            font-size: 11px;
+            font-weight: 600;
+            font-family: inherit;
+            padding: 5px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s;
+        }
+
+        .view-toggle button:hover {
+            color: #dfe6f5;
+            background: rgba(102, 126, 234, 0.15);
+        }
+
+        .view-toggle button.active {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+        }
+
+        #map,
+        #globe {
+            flex: 1;
+            position: relative;
+            min-height: 0;
+        }
+
+        #map {
+            background: #0f0f23;
+        }
+
+        #globe {
+            display: none;
+            background: #02030a;
+            overflow: hidden;
+        }
+
+        /* GEV-style telemetry card over the globe */
+        .gev-card {
+            display: none;
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            z-index: 3000;
+            width: 270px;
+            background: rgba(9, 12, 24, 0.94);
+            border: 1px solid #2a3a5a;
+            border-left: 3px solid #00e5ff;
+            border-radius: 10px;
+            color: #e0e6f0;
+            font-size: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+            overflow: hidden;
+            backdrop-filter: blur(4px);
+        }
+
+        .gev-card.show {
+            display: block;
+        }
+
+        .gev-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 10px 12px;
+            background: rgba(0, 229, 255, 0.08);
+            border-bottom: 1px solid #2a3a5a;
+        }
+
+        .gev-card-title {
+            font-weight: 700;
+            font-size: 13px;
+            color: #7ef0ff;
+            word-break: break-word;
+        }
+
+        .gev-close {
+            background: none;
+            border: none;
+            color: #8b93a7;
+            font-size: 16px;
+            line-height: 1;
+            cursor: pointer;
+            padding: 0 2px;
+        }
+
+        .gev-close:hover {
+            color: #fff;
+        }
+
+        .gev-card-body {
+            padding: 10px 12px;
+        }
+
+        .gev-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .gev-row-key {
+            color: #8b93a7;
+            min-width: 72px;
+            flex-shrink: 0;
+        }
+
+        .gev-row-val {
+            color: #e0e6f0;
+            word-break: break-word;
+        }
+
+        .gev-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .gev-btn {
+            flex: 1;
+            padding: 7px 10px;
+            border: 1px solid #2a3a5a;
+            border-radius: 6px;
+            background: #16213e;
+            color: #dfe6f5;
+            font-size: 11px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.15s;
+            text-align: center;
+        }
+
+        .gev-btn:hover {
+            background: #1e2c52;
+            border-color: #00e5ff;
+            color: #7ef0ff;
+        }
+
+        /* GEV-style live layers panel over the globe */
+        .gev-layers {
+            position: absolute;
+            bottom: 40px;
+            left: 14px;
+            z-index: 3000;
+            width: 216px;
+            background: rgba(9, 12, 24, 0.94);
+            border: 1px solid #2a3a5a;
+            border-left: 3px solid #00e5ff;
+            border-radius: 10px;
+            color: #e0e6f0;
+            font-size: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            overflow: hidden;
+        }
+
+        .gev-layers-header {
+            padding: 8px 12px;
+            background: rgba(0, 229, 255, 0.08);
+            border-bottom: 1px solid #2a3a5a;
+            font-weight: 700;
+            font-size: 11px;
+            color: #7ef0ff;
+            letter-spacing: 0.5px;
+        }
+
+        .gev-layer-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 12px;
+            border-bottom: 1px solid #1a2440;
+        }
+
+        .gev-layer-row:hover {
+            background: #16213e;
+        }
+
+        .layer-icon {
+            width: 18px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .layer-name {
+            flex: 1;
+            display: flex;
+            align-items: center;
+        }
+
+        .layer-count {
+            font-family: monospace;
+            font-size: 10px;
+            color: #8b93a7;
+            min-width: 26px;
+            text-align: right;
+        }
+
+        .live-dot {
+            display: inline-block;
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #ff4757;
+            margin-left: 5px;
+            animation: livePulse 1.6s ease-in-out infinite;
+            vertical-align: middle;
+        }
+
+        @keyframes livePulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.2; }
+        }
+
+        .layer-toggle {
+            border: 1px solid #2a3a5a;
+            background: #16213e;
+            color: #8b93a7;
+            font-size: 10px;
+            font-weight: 700;
+            font-family: inherit;
+            padding: 3px 9px;
+            border-radius: 5px;
+            cursor: pointer;
+            flex-shrink: 0;
+            min-width: 42px;
+            transition: all 0.15s;
+        }
+
+        .layer-toggle:hover {
+            border-color: #00e5ff;
+            color: #7ef0ff;
+        }
+
+        .layer-toggle.on {
+            background: #00e5ff;
+            border-color: #00e5ff;
+            color: #061018;
+        }
+
+        .gev-legend {
+            padding: 8px 12px;
+            font-size: 10px;
+            color: #8b93a7;
+        }
+
+        .gev-legend summary {
+            cursor: pointer;
+        }
+
+        .gev-legend-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px 10px;
+            padding-top: 6px;
+        }
+
+        .gev-legend-grid span {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .gev-legend-grid i {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            flex-shrink: 0;
+        }
+
+        .gev-credit {
+            position: absolute;
+            bottom: 12px;
+            left: 14px;
+            z-index: 2999;
+            font-size: 10px;
+            color: rgba(224, 230, 240, 0.55);
+            background: rgba(9, 12, 24, 0.5);
+            padding: 3px 8px;
+            border-radius: 4px;
+            max-width: 70%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Loading Overlay */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 15, 35, 0.85);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .loading-spinner {
+            text-align: center;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid #2a2a4a;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: #9d9dba;
+            font-size: 14px;
+        }
+
+        /* Toast Notification */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 14px 20px;
+            background: #1a1a2e;
+            border: 1px solid #2a2a4a;
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-size: 13px;
+            z-index: 2000;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            max-width: 350px;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast.error {
+            border-color: #ff6b6b;
+            background: #2a1a1a;
+        }
+
+        .toast.success {
+            border-color: #51cf66;
+            background: #1a2a1a;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1a1a2e;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #3a3a5a;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4a4a6a;
+        }
+
+        /* Popup styling */
+        .leaflet-popup-content-wrapper {
+            background: #1a1a2e;
+            color: #e0e0e0;
+            border-radius: 8px;
+            border: 1px solid #2a2a4a;
+        }
+
+        .leaflet-popup-tip {
+            background: #1a1a2e;
+        }
+
+        .leaflet-popup-content {
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .leaflet-popup-content a {
+            color: #667eea;
+        }
+
+        .popup-name {
+            font-weight: 700;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .popup-address {
+            color: #9d9dba;
+            font-size: 12px;
+            margin-bottom: 8px;
+        }
+
+        /* Map on click coord display */
+        .coord-hint {
+            font-size: 11px;
+            color: #667eea;
+            text-align: center;
+            padding: 4px;
+            background: #16213e;
+            border-top: 1px solid #2a2a4a;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h1><i class="fab fa-instagram"></i> Location Search</h1>
+                <p>Bellingcat Instagram Location Finder</p>
+            </div>
+
+            <div class="sidebar-content">
+                <!-- Cookie Input -->
+                <div class="form-group">
+                    <label><i class="fas fa-cookie-bite"></i> Instagram Cookie</label>
+                    <textarea id="cookie" placeholder="Paste your Instagram cookie here...&#10;Format: sessionid=xxx; csrftoken=xxx; ..."></textarea>
+                </div>
+
+                <button class="btn btn-cookie" onclick="getCookies()" type="button">
+                    <i class="fas fa-browser"></i> Auto-get Cookie via Browser
+                </button>
+
+                <br><br>
+
+                <!-- Coordinates -->
+                <div class="form-group">
+                    <label><i class="fas fa-map-marker-alt"></i> Koordinat (Lat, Lng)</label>
+                    <input type="text" id="coords" placeholder="Contoh: -6.2088, 106.8456" value="">
+                </div>
+
+                <p style="font-size: 11px; color: #6b7280; margin-top: -8px; margin-bottom: 12px;">
+                    <i class="fas fa-info-circle"></i> Klik pada peta untuk set koordinat (radius 3km)
+                </p>
+
+                <!-- Search Mode -->
+                <div class="form-group">
+                    <label><i class="fas fa-search-location"></i> Search Mode</label>
+                    <select id="search-mode" style="width:100%;padding:10px 14px;background:#16213e;border:1px solid #2a2a4a;border-radius:8px;color:#e0e0e0;font-size:14px;">
+                        <option value="normal">Normal Search</option>
+                        <option value="fuzzy">More Results (Fuzzy Search)</option>
+                        <option value="grid">Perumahan / Residential Area (Grid Search)</option>
+                    </select>
+                </div>
+
+                <!-- Grid Options (only show when grid mode selected) -->
+                <div id="grid-options" style="display:none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-circle"></i> Radius (km)</label>
+                            <input type="number" id="grid-radius" step="0.1" value="1.0" min="0.1" max="5.0" placeholder="1.0">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-ruler"></i> Step (m)</label>
+                            <input type="number" id="grid-step" step="50" value="200" min="50" max="500" placeholder="200">
+                        </div>
+                    </div>
+                    <p style="font-size: 10px; color: #6b7280; margin-top: -8px; margin-bottom: 12px;">
+                        <i class="fas fa-info-circle"></i> Grid search scans systematically across the area. Larger radius = slower but more thorough.
+                    </p>
+                </div>
+
+                <!-- Search Button -->
+                <button class="btn btn-primary" id="searchBtn" onclick="searchLocations()">
+                    <i class="fas fa-search"></i> Search Locations
+                </button>
+            </div>
+
+            <!-- Results Section -->
+            <div class="results-section" id="resultsSection" style="display: none;">
+                <div class="results-header">
+                    <h3>Results <span class="results-count" id="resultsCount">0</span></h3>
+                </div>
+
+                <div class="export-buttons">
+                    <a class="export-btn" href="/export/json" target="_blank"><i class="fas fa-file-code"></i> JSON</a>
+                    <a class="export-btn" href="/export/geojson" target="_blank"><i class="fas fa-globe"></i> GeoJSON</a>
+                    <a class="export-btn" href="/export/csv" target="_blank"><i class="fas fa-file-csv"></i> CSV</a>
+                    <a class="export-btn" href="/export/ids" target="_blank"><i class="fas fa-hashtag"></i> IDs</a>
+                    <a class="export-btn" href="/export/map" target="_blank"><i class="fas fa-map"></i> Map HTML</a>
+                </div>
+
+                <br>
+
+                <div class="results-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Address</th>
+                                <th>Coords</th>
+                                <th>Link</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Map Area -->
+        <div class="map-area">
+            <div class="map-header">
+                <div class="map-header-left">
+                    <h2><i class="fas fa-map"></i> <span id="viewTitle">Map View</span></h2>
+                    <div class="view-toggle">
+                        <button id="view2dBtn" class="active" onclick="setMapView('2d')"><i class="fas fa-map"></i> 2D</button>
+                        <button id="view3dBtn" onclick="setMapView('3d')"><i class="fas fa-globe"></i> 3D Globe</button>
+                    </div>
+                </div>
+                <span class="map-coords" id="mapCoords">Click map to set location</span>
+            </div>
+            <div id="map"></div>
+            <div id="globe">
+                <div class="gev-card" id="globeCard">
+                    <div class="gev-card-header">
+                        <span class="gev-card-title" id="globeCardTitle">Location</span>
+                        <button class="gev-close" onclick="closeGlobeCard()" title="Close">&times;</button>
+                    </div>
+                    <div class="gev-card-body" id="globeCardBody"></div>
+                </div>
+
+                <!-- Live world-data layers (God's Eye View-style) -->
+                <div class="gev-layers" id="globeLayers">
+                    <div class="gev-layers-header"><i class="fas fa-satellite-dish"></i> LIVE WORLD DATA</div>
+                    <div class="gev-layer-row">
+                        <span class="layer-icon">📍</span>
+                        <span class="layer-name">Instagram Locator</span>
+                        <span class="layer-count" id="layerCountloc"></span>
+                        <button class="layer-toggle on" id="layerToggleloc" onclick="toggleGlobeLayer('loc')">ON</button>
+                    </div>
+                    <div class="gev-layer-row">
+                        <span class="layer-icon">🏥</span>
+                        <span class="layer-name">Infrastructure</span>
+                        <span class="layer-count" id="layerCountinfra"></span>
+                        <button class="layer-toggle" id="layerToggleinfra" onclick="toggleGlobeLayer('infra')">OFF</button>
+                    </div>
+                    <div class="gev-layer-row">
+                        <span class="layer-icon">📹</span>
+                        <span class="layer-name">Traffic Cameras</span>
+                        <span class="layer-count" id="layerCountcams"></span>
+                        <button class="layer-toggle" id="layerTogglecams" onclick="toggleGlobeLayer('cams')">OFF</button>
+                    </div>
+                    <div class="gev-layer-row">
+                        <span class="layer-icon">🌋</span>
+                        <span class="layer-name">Earthquakes <span class="live-dot"></span></span>
+                        <span class="layer-count" id="layerCountquakes"></span>
+                        <button class="layer-toggle" id="layerTogglequakes" onclick="toggleGlobeLayer('quakes')">OFF</button>
+                    </div>
+                    <div class="gev-layer-row">
+                        <span class="layer-icon">✈️</span>
+                        <span class="layer-name">Live Flights <span class="live-dot"></span></span>
+                        <span class="layer-count" id="layerCountflights"></span>
+                        <button class="layer-toggle" id="layerToggleflights" onclick="toggleGlobeLayer('flights')">OFF</button>
+                    </div>
+                    <div class="gev-layer-row">
+                        <span class="layer-icon">🚗</span>
+                        <span class="layer-name">Traffic Sim (ID) <span class="live-dot"></span></span>
+                        <span class="layer-count" id="layerCounttraffic"></span>
+                        <button class="layer-toggle" id="layerToggletraffic" onclick="toggleGlobeLayer('traffic')">OFF</button>
+                    </div>
+                    <details class="gev-legend">
+                        <summary>Infrastructure legend</summary>
+                        <div class="gev-legend-grid">
+                            <span><i style="background:#ff4757"></i>Hospital</span>
+                            <span><i style="background:#1e90ff"></i>Police</span>
+                            <span><i style="background:#ff6348"></i>Fire</span>
+                            <span><i style="background:#feca57"></i>School</span>
+                            <span><i style="background:#a29bfe"></i>Government</span>
+                            <span><i style="background:#e17055"></i>Power</span>
+                            <span><i style="background:#55efc4"></i>Water</span>
+                            <span><i style="background:#74b9ff"></i>Airport</span>
+                            <span><i style="background:#81ecec"></i>Rail</span>
+                            <span><i style="background:#ffae00"></i>Military</span>
+                        </div>
+                    </details>
+                </div>
+
+                <div class="gev-credit" title="Imagery &copy; Esri &middot; Data &copy; OpenStreetMap contributors &middot; TfL Open Data &middot; USGS &middot; adsb.lol">
+                    Imagery &copy; Esri &middot; Data &copy; OpenStreetMap &middot; TfL Open Data &middot; USGS &middot; adsb.lol
+                </div>
+            </div>
+            <div class="coord-hint">
+                <i class="fas fa-mouse-pointer"></i> Klik pada peta untuk memindahkan titik pusat & radius 3km
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <div class="loading-text">Searching Instagram locations...</div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // Initialize Map
+        const map = L.map('map').setView([20, 0], 2);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        let markers = L.layerGroup().addTo(map);
+        let centerMarker = null;
+        let radiusCircle = null;
+
+        // Click on map to set coordinates
+        map.on('click', function(e) {
+            const lat = e.latlng.lat.toFixed(6);
+            const lng = e.latlng.lng.toFixed(6);
+
+            document.getElementById('coords').value = `${lat}, ${lng}`;
+            document.getElementById('mapCoords').textContent = `Lat: ${lat} | Lng: ${lng}`;
+
+            // Update center marker
+            if (centerMarker) {
+                map.removeLayer(centerMarker);
+            }
+            centerMarker = L.marker([lat, lng], {
+                icon: L.divIcon({
+                    className: 'custom-marker',
+                    html: '<div style="background:#667eea;width:14px;height:14px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);"></div>',
+                    iconSize: [14, 14],
+                    iconAnchor: [7, 7]
+                })
+            }).addTo(map);
+            centerMarker.bindPopup(`<b>Titik Pusat</b><br>Lat: ${lat}<br>Lng: ${lng}`).openPopup();
+
+            // Update radius circle
+            if (radiusCircle) {
+                map.removeLayer(radiusCircle);
+            }
+            radiusCircle = L.circle([lat, lng], {
+                radius: 3000,
+                color: '#667eea',
+                fillColor: '#667eea',
+                fillOpacity: 0.1,
+                weight: 2,
+                dashArray: '6, 6'
+            }).addTo(map);
+        });
+
+        // Update marker & circle when coordinates are typed manually
+        function updateMapFromInput() {
+            const coordsVal = document.getElementById('coords').value.trim();
+            if (!coordsVal || !coordsVal.includes(',')) return;
+
+            const parts = coordsVal.split(',').map(s => parseFloat(s.trim()));
+            const lat = parts[0];
+            const lng = parts[1];
+            if (isNaN(lat) || isNaN(lng)) return;
+
+            // Pan map
+            map.setView([lat, lng], 14);
+            document.getElementById('mapCoords').textContent = `Lat: ${lat.toFixed(6)} | Lng: ${lng.toFixed(6)}`;
+
+            // Update center marker
+            if (centerMarker) map.removeLayer(centerMarker);
+            centerMarker = L.marker([lat, lng], {
+                icon: L.divIcon({
+                    className: 'custom-marker',
+                    html: '<div style="background:#667eea;width:14px;height:14px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);"></div>',
+                    iconSize: [14, 14],
+                    iconAnchor: [7, 7]
+                })
+            }).addTo(map);
+            centerMarker.bindPopup(`<b>Titik Pusat</b><br>Lat: ${lat.toFixed(6)}<br>Lng: ${lng.toFixed(6)}`).openPopup();
+
+            // Update radius circle
+            if (radiusCircle) map.removeLayer(radiusCircle);
+            radiusCircle = L.circle([lat, lng], {
+                radius: 3000,
+                color: '#667eea',
+                fillColor: '#667eea',
+                fillOpacity: 0.1,
+                weight: 2,
+                dashArray: '6, 6'
+            }).addTo(map);
+        }
+
+        // Listen for manual coordinate input (on every keystroke with debounce)
+        let coordsDebounce = null;
+        document.getElementById('coords').addEventListener('input', function() {
+            clearTimeout(coordsDebounce);
+            coordsDebounce = setTimeout(updateMapFromInput, 500);
+        });
+
+        // Also update immediately on Enter key
+        document.getElementById('coords').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                updateMapFromInput();
+            }
+        });
+
+        // Search function
+        async function searchLocations() {
+            const cookie = document.getElementById('cookie').value.trim();
+            const coordsVal = document.getElementById('coords').value.trim();
+            const searchMode = document.getElementById('search-mode').value;
+            const more = searchMode === 'fuzzy';
+
+            if (!cookie) {
+                showToast('Please enter your Instagram cookie', 'error');
+                return;
+            }
+
+            if (!coordsVal || !coordsVal.includes(',')) {
+                showToast('Masukkan koordinat dengan format: lat, lng', 'error');
+                return;
+            }
+
+            const parts = coordsVal.split(',').map(s => parseFloat(s.trim()));
+            const lat = parts[0];
+            const lng = parts[1];
+
+            if (isNaN(lat) || isNaN(lng)) {
+                showToast('Koordinat tidak valid. Gunakan format: -6.2088, 106.8456', 'error');
+                return;
+            }
+
+            showLoading(true);
+
+            try {
+                const response = await fetch('/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        cookie: cookie,
+                        lat: parseFloat(lat),
+                        lng: parseFloat(lng),
+                        more: more,
+                        search_mode: searchMode,
+                        radius_km: parseFloat(document.getElementById('grid-radius').value) || 1.0,
+                        step_m: parseFloat(document.getElementById('grid-step').value) || 200
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    showToast(data.error || 'Search failed', 'error');
+                    return;
+                }
+
+                if (data.count === 0) {
+                    currentLocations = [];
+                    if (globeActive && globeViewer) renderGlobeLocations([], false);
+                    showToast(data.message || 'No locations found', 'error');
+                    return;
+                }
+
+                // Remember latest results so the 3D globe can show them
+                currentLocations = data.locations;
+                currentCenter = { lat: parseFloat(lat), lng: parseFloat(lng) };
+                if (globeActive && globeViewer) {
+                    renderGlobeLocations(currentLocations, true);
+                }
+
+                // Update map
+                markers.clearLayers();
+                const bounds = L.latLngBounds();
+
+                data.geojson.features.forEach(feature => {
+                    const [lng, lat] = feature.geometry.coordinates;
+                    const props = feature.properties;
+
+                    const marker = L.marker([lat, lng]);
+                    marker.bindPopup(`
+                        <div class="popup-name">${props.name || 'Unknown'}</div>
+                        <div class="popup-address">${props.address || 'No address'}</div>
+                        <a href="#" onclick="openInBrowser('https://www.instagram.com/explore/locations/${props.external_id}'); return false;">
+                            <i class="fab fa-instagram"></i> View on Instagram
+                        </a>
+                    `);
+                    markers.addLayer(marker);
+                    bounds.extend([lat, lng]);
+                });
+
+                // Fit map to bounds
+                if (data.count > 0) {
+                    map.fitBounds(bounds, { padding: [30, 30] });
+                }
+
+                // Update results table
+                document.getElementById('resultsSection').style.display = 'block';
+                document.getElementById('resultsCount').textContent = data.count;
+
+                const tbody = document.getElementById('resultsBody');
+                tbody.innerHTML = '';
+
+                data.locations.forEach(loc => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td><strong>${loc.name || 'Unknown'}</strong></td>
+                        <td>${loc.address || '-'}</td>
+                        <td style="font-family:monospace;font-size:11px;">${loc.lat ? loc.lat.toFixed(4) : '-'}, ${loc.lng ? loc.lng.toFixed(4) : '-'}</td>
+                        <td><a href="#" onclick="openInBrowser('https://www.instagram.com/explore/locations/${loc.external_id}'); return false;"><i class="fas fa-external-link-alt"></i></a></td>
+                    `;
+                    // Click row to zoom to location
+                    row.style.cursor = 'pointer';
+                    row.onclick = () => {
+                        if (loc.lat && loc.lng) {
+                            if (globeActive && globeViewer) {
+                                flyToLoc(loc);
+                            } else {
+                                map.setView([loc.lat, loc.lng], 17);
+                            }
+                        }
+                    };
+                    tbody.appendChild(row);
+                });
+
+                showToast(`Found ${data.count} locations!`, 'success');
+
+            } catch (err) {
+                showToast('Network error: ' + err.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Get cookies via browser
+        async function getCookies() {
+            showLoading(true);
+            try {
+                const response = await fetch('/get-cookies', { method: 'POST' });
+                const data = await response.json();
+
+                if (data.cookie) {
+                    document.getElementById('cookie').value = data.cookie;
+                    showToast('Cookie obtained successfully!', 'success');
+                } else {
+                    showToast(data.error || 'Failed to get cookies', 'error');
+                }
+            } catch (err) {
+                showToast('Error: ' + err.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Open URL in the same browser that has Instagram cookies
+        async function openInBrowser(url) {
+            try {
+                const response = await fetch('/open-url', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: url })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showToast('Opened in browser!', 'success');
+                } else {
+                    showToast(data.error || 'Failed to open in browser', 'error');
+                    // Fallback: open in new tab if browser is not available
+                    window.open(url, '_blank');
+                }
+            } catch (err) {
+                showToast('Browser not available, opening in new tab', 'error');
+                window.open(url, '_blank');
+            }
+        }
+
+        // Toggle grid options visibility
+        document.getElementById('search-mode').addEventListener('change', function() {
+            const gridOptions = document.getElementById('grid-options');
+            gridOptions.style.display = this.value === 'grid' ? 'block' : 'none';
+        });
+
+        // ================================================================
+        //  God's Eye View-style 3D Satellite Globe (CesiumJS)
+        //  Concept inspired by github.com/bilawalsidhu/gods-eye-view (MIT).
+        //  Lightweight local port: lazy-loaded, requestRenderMode on, no
+        //  Cesium Ion token required (keyless Esri satellite imagery).
+        // ================================================================
+        let globeViewer = null;
+        let globeActive = false;
+        let globeInitializing = false;
+        let currentLocations = [];   // populated by every successful search
+        let currentCenter = null;    // last search center
+        let selectedGlobeEntity = null; // selected entity on globe
+
+        const CESIUM_VERSION = '1.124.0';
+        const CESIUM_BASE = 'https://unpkg.com/cesium@' + CESIUM_VERSION + '/Build/Cesium/';
+        const ESRI_IMAGERY_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+        const GEV_ACCENT = '#00e5ff';
+
+        // ---- live world-data layer registry (God's Eye View-style) ----
+        const globeLayers = {
+            loc:     { label: 'Instagram Locator',   refreshMs: 0,      enabled: true,  entities: [], timer: null, busy: false },
+            infra:   { label: 'Infrastructure',      refreshMs: 0,      enabled: false, entities: [], timer: null, busy: false },
+            cams:    { label: 'Traffic Cameras',     refreshMs: 0,      enabled: false, entities: [], timer: null, busy: false },
+            quakes:  { label: 'Earthquakes (live)',  refreshMs: 300000, enabled: false, entities: [], timer: null, busy: false },
+            flights: { label: 'Live Flights (live)', refreshMs: 30000,  enabled: false, entities: [], timer: null, busy: false },
+            traffic: { label: 'Traffic Sim (Indonesia)', refreshMs: 0, enabled: false, entities: [], timer: null, busy: false },
+        };
+
+        // Indonesia-only guard for the traffic simulation
+        const INDONESIA_BBOX = { minLat: -11, maxLat: 6.5, minLng: 95, maxLng: 141.5 };
+        function inIndonesia(lat, lng) {
+            return lat >= INDONESIA_BBOX.minLat && lat <= INDONESIA_BBOX.maxLat &&
+                   lng >= INDONESIA_BBOX.minLng && lng <= INDONESIA_BBOX.maxLng;
+        }
+
+        const ROAD_SPEEDS = {
+            motorway: 27, motorway_link: 18, trunk: 20, trunk_link: 14,
+            primary: 15, primary_link: 11, secondary: 12, secondary_link: 9,
+            tertiary: 10, tertiary_link: 8, unclassified: 8, residential: 7, service: 4,
+        };
+
+        const INFRA_COLORS = {
+            hospital: '#ff4757', clinic: '#ff6b81', police: '#1e90ff', fire_station: '#ff6348',
+            school: '#feca57', university: '#ffd32a', government: '#a29bfe',
+            power: '#e17055', substation: '#e17055', water: '#55efc4', tower: '#00cec9',
+            aerodrome: '#74b9ff', railway: '#81ecec', transport: '#0abde3', military: '#ffae00',
+            other: '#b2bec3',
+        };
+        const INFRA_LABELS = {
+            hospital: 'Hospital', clinic: 'Clinic', police: 'Police', fire_station: 'Fire station',
+            school: 'School', university: 'University', government: 'Government', power: 'Power plant',
+            substation: 'Substation', water: 'Water tower', tower: 'Comms tower', aerodrome: 'Aerodrome / Heliport',
+            railway: 'Railway station', transport: 'Transport hub', military: 'Military site', other: 'Other',
+        };
+
+        const ICON_CAMERA = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24">' +
+            '<rect x="2.5" y="7" width="13" height="10" rx="2" fill="#00e5ff" stroke="#061018" stroke-width="1.2"/>' +
+            '<path d="M15.5 11.2l5-2.7v7l-5-2.7z" fill="#7ef0ff" stroke="#061018" stroke-width="0.8"/>' +
+            '<circle cx="9" cy="12" r="2.6" fill="#061018"/></svg>');
+        const ICON_PLANE = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24">' +
+            '<path fill="#ffffff" stroke="#0b0e1a" stroke-width="0.6" d="M21 11.5l-9.5-4.5v3.6L3 13v2l8.5 1.9v3.6l9.5-4.5z"/></svg>');
+        const ICON_CAR = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24">' +
+            '<rect x="2" y="8" width="20" height="8" rx="3" fill="#ffae00" stroke="#0b0e1a" stroke-width="1"/>' +
+            '<path d="M5.5 8l1.5-4h9l1.5 4z" fill="#7ef0ff" stroke="#0b0e1a" stroke-width="0.6"/>' +
+            '<circle cx="7" cy="17" r="2.2" fill="#0b0e1a"/><circle cx="17" cy="17" r="2.2" fill="#0b0e1a"/></svg>');
+
+        let trackedFlight = null;     // { hex, callsign, trailPositions, trailEntity, interval, lost }
+        let globeCardFlightHex = null; // hex of the flight currently shown in the GEV card
+        let trafficSim = null;         // { roadData, vehicles, ticker, lastTick }
+
+        function bagValue(bag, key) {
+            const p = bag && bag[key];
+            return p ? p.getValue(Cesium.JulianDate.now()) : undefined;
+        }
+
+        function coordsText(item) {
+            const lat = parseFloat(item && item.lat);
+            const lng = parseFloat(item && item.lng);
+            return (isFinite(lat) && isFinite(lng)) ? lat.toFixed(5) + ', ' + lng.toFixed(5) : '\u2014';
+        }
+
+        function setMapView(mode) {
+            const is3d = (mode === '3d');
+            globeActive = is3d;
+
+            document.getElementById('map').style.display = is3d ? 'none' : 'block';
+            document.getElementById('globe').style.display = is3d ? 'block' : 'none';
+            document.getElementById('viewTitle').textContent = is3d ? '3D Globe View' : 'Map View';
+            document.getElementById('view2dBtn').classList.toggle('active', !is3d);
+            document.getElementById('view3dBtn').classList.toggle('active', is3d);
+
+            if (!is3d) {
+                map.invalidateSize();
+                closeGlobeCard();
+                stopTracking();
+                stopTrafficSim();
+                syncLayerTimers();
+                return;
+            }
+
+            if (globeViewer) {
+                globeViewer.resize();
+                globeViewer.scene.requestRender();
+                if (currentLocations.length) {
+                    renderGlobeLocations(currentLocations, false);
+                } else if (currentCenter) {
+                    flyToLoc(currentCenter);
+                }
+                syncLayerTimers();
+                refetchEnabledLayers();
+            } else {
+                ensureGlobe();
+            }
+        }
+
+        function loadCesiumAsset(src, isCss) {
+            return new Promise((resolve, reject) => {
+                const el = document.createElement(isCss ? 'link' : 'script');
+                if (isCss) {
+                    el.rel = 'stylesheet';
+                    el.href = src;
+                } else {
+                    el.src = src;
+                }
+                el.onload = resolve;
+                el.onerror = () => reject(new Error('Could not load ' + src));
+                document.head.appendChild(el);
+            });
+        }
+
+        async function ensureGlobe() {
+            if (globeViewer || globeInitializing) return;
+            globeInitializing = true;
+
+            const loadingEl = document.querySelector('.loading-text');
+            const originalText = loadingEl ? loadingEl.textContent : '';
+            if (loadingEl) loadingEl.textContent = 'Loading 3D Globe... (first time only)';
+            showLoading(true);
+
+            try {
+                // Must be set before Cesium.js executes.
+                window.CESIUM_BASE_URL = CESIUM_BASE;
+                await loadCesiumAsset(CESIUM_BASE + 'Widgets/widgets.css', true);
+                await loadCesiumAsset(CESIUM_BASE + 'Cesium.js', false);
+
+                // The user may have switched back to 2D while Cesium was
+                // still loading. Never create a Viewer on a hidden container
+                // (a 0x0 canvas gives the camera frustum NaN geometry, which
+                // crashes the render loop). The next click on "3D Globe" will
+                // finish the job instantly since the assets are cached.
+                if (!globeActive) return;
+
+                initGlobe();
+                if (!globeViewer) return; // init aborted (container hidden)
+                syncLayerTimers();
+                refetchEnabledLayers();
+                if (currentLocations.length) {
+                    renderGlobeLocations(currentLocations, true);
+                } else if (currentCenter) {
+                    flyToLoc(currentCenter);
+                }
+                showToast('3D Globe ready — drag to orbit, scroll to zoom, click a marker', 'success');
+            } catch (err) {
+                console.error('3D globe failed to start:', err);
+                showToast('Failed to load 3D globe: ' + err.message, 'error');
+                setMapView('2d');
+            } finally {
+                showLoading(false);
+                if (loadingEl) loadingEl.textContent = originalText;
+                globeInitializing = false;
+            }
+        }
+
+        function initGlobe() {
+            const container = document.getElementById('globe');
+
+            // Safety: never create the Viewer while the container is hidden or
+            // zero-sized. A 0x0 canvas gives the camera frustum NaN geometry,
+            // which crashes the render loop with "RangeError: Invalid array
+            // length" inside createPotentiallyVisibleSet.
+            if (
+                !globeActive ||
+                container.clientWidth === 0 ||
+                container.clientHeight === 0
+            ) {
+                return;
+            }
+
+            const viewer = new Cesium.Viewer(container, {
+                baseLayer: false,            // no Ion default imagery -> no token needed
+                animation: false,
+                timeline: false,
+                geocoder: false,
+                homeButton: false,
+                sceneModePicker: false,
+                baseLayerPicker: false,
+                navigationHelpButton: false,
+                fullscreenButton: false,
+                infoBox: false,
+                selectionIndicator: false,
+                requestRenderMode: true,     // render only on change -> no idle lag
+                maximumRenderTimeChange: Infinity,
+            });
+
+            const scene = viewer.scene;
+            scene.globe.baseColor = Cesium.Color.fromCssColorString('#101a30');
+            scene.backgroundColor = Cesium.Color.BLACK;
+
+            // Keyless satellite imagery (Esri World Imagery — same default
+            // basemap God's Eye View uses when no API key is configured).
+            viewer.imageryLayers.addImageryProvider(new Cesium.UrlTemplateImageryProvider({
+                url: ESRI_IMAGERY_URL,
+                credit: 'Imagery © Esri, Maxar, Earthstar Geographics',
+                maximumLevel: 19,
+            }));
+
+            globeViewer = viewer;
+            viewer.resize();
+
+            // Start from a known-good camera instead of relying on the default
+            // view, so the first rendered frame always has a valid frustum.
+            let startLat = 0;
+            let startLng = 0;
+            let startHeight = 12000000; // whole-earth view
+            if (
+                currentCenter &&
+                isFinite(currentCenter.lat) &&
+                isFinite(currentCenter.lng)
+            ) {
+                startLat = currentCenter.lat;
+                startLng = currentCenter.lng;
+                startHeight = 3000000;
+            }
+            viewer.camera.setView({
+                destination: Cesium.Cartesian3.fromDegrees(
+                    startLng, startLat, startHeight
+                ),
+            });
+
+            // Self-healing: Cesium's "RangeError: Invalid array length" in
+            // updateFrustums is a catch-all for NaN values reaching the render
+            // pipeline (bad camera state, bad entity data, ...). If it ever
+            // happens, reset the camera and rebuild the entities from clean
+            // data so the globe keeps working instead of dying permanently.
+            let lastRenderRecovery = 0;
+            scene.renderError.addEventListener((s, err) => {
+                console.error('Cesium render error (attempting recovery):', err);
+                const now = Date.now();
+                if (now - lastRenderRecovery < 1000) return; // avoid tight loops
+                lastRenderRecovery = now;
+                try {
+                    stopTracking();
+                    rebuildAllGlobeLayers();
+                    s.camera.setView({
+                        destination: Cesium.Cartesian3.fromDegrees(0, 0, 12000000),
+                    });
+                    s.requestRender();
+                } catch (e) {
+                    // Never let recovery itself take the render loop down.
+                }
+            });
+
+            // Keep the canvas in sync with the window size while in 3D.
+            window.addEventListener('resize', () => {
+                if (globeActive && globeViewer) globeViewer.resize();
+            });
+
+            // Left-click an entity -> GEV-style telemetry card
+            const pickHandler = new Cesium.ScreenSpaceEventHandler(scene.canvas);
+            pickHandler.setInputAction((click) => {
+                const picked = scene.pick(click.position);
+                if (Cesium.defined(picked) && picked.id) {
+                    const entity = picked.id;
+                    const bag = entity.properties;
+                    const kind = bag ? bagValue(bag, 'kind') : null;
+                    const data = bag ? bagValue(bag, 'data') : null;
+                    if (kind && data) {
+                        selectedGlobeEntity = entity;
+                        updateGlobeLabels();
+                        if (kind === 'loc') showLocCard(data);
+                        else if (kind === 'infra') showInfraCard(data);
+                        else if (kind === 'cam') showCamCard(data);
+                        else if (kind === 'quake') showQuakeCard(data);
+                        else if (kind === 'flight') showFlightCard(data);
+                        scene.requestRender();
+                        return;
+                    }
+                }
+                closeGlobeCard();
+            }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+            // Double-click an entity -> dive to it
+            pickHandler.setInputAction((click) => {
+                const picked = scene.pick(click.position);
+                if (Cesium.defined(picked) && picked.id) {
+                    const bag = picked.id.properties;
+                    const data = bag ? bagValue(bag, 'data') : null;
+                    if (data && isFinite(parseFloat(data.lat)) && isFinite(parseFloat(data.lng))) {
+                        flyToItem(data);
+                    }
+                }
+            }, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+
+            // Location labels appear once the camera is close to the ground
+            viewer.camera.moveEnd.addEventListener(() => {
+                updateGlobeLabels();
+                scene.requestRender();
+            });
+            viewer.camera.changed.addEventListener(() => updateGlobeLabels());
+            scene.requestRender();
+        }
+
+        function renderGlobeLocations(locations, doFly) {
+            if (!globeViewer) return;
+            const viewer = globeViewer;
+            clearGlobeLayer('loc');
+            if (!globeLayers.loc.enabled) return;
+            if (!locations || !locations.length) return;
+
+            locations.forEach((loc) => {
+                const lat = parseFloat(loc.lat);
+                const lng = parseFloat(loc.lng);
+                if (!isFinite(lat) || !isFinite(lng)) return;
+
+                const entity = viewer.entities.add({
+                    id: 'globe-loc-' + loc.external_id,
+                    position: Cesium.Cartesian3.fromDegrees(lng, lat),
+                    point: {
+                        pixelSize: 9,
+                        color: Cesium.Color.fromCssColorString(GEV_ACCENT).withAlpha(0.95),
+                        outlineColor: Cesium.Color.WHITE.withAlpha(0.9),
+                        outlineWidth: 1.5,
+                        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                    },
+                    label: {
+                        text: String(loc.name || 'Unknown').slice(0, 40),
+                        font: '11px "Segoe UI", sans-serif',
+                        fillColor: Cesium.Color.WHITE,
+                        outlineColor: Cesium.Color.fromCssColorString('#0b0e1a'),
+                        outlineWidth: 3,
+                        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+                        pixelOffset: new Cesium.Cartesian2(0, -12),
+                        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                        show: false,
+                    },
+                    properties: { kind: 'loc', data: loc, labelMinHeight: 60000 },
+                });
+                globeLayers.loc.entities.push(entity);
+            });
+
+            updateLayerBadge('loc');
+            updateGlobeLabels();
+            if (doFly) fitGlobeToLocations(locations);
+            viewer.scene.requestRender();
+        }
+
+        function updateGlobeLabels() {
+            if (!globeViewer) return;
+            globeViewer.entities.values.forEach((e) => {
+                if (!e.label) return;
+                const isSelected = !!(selectedGlobeEntity && selectedGlobeEntity.id === e.id);
+                if (e.label.show !== isSelected) {
+                    e.label.show = isSelected;
+                }
+            });
+        }
+
+        function fitGlobeToLocations(locations) {
+            if (!globeViewer || !locations.length) return;
+
+            // A single non-numeric lat/lng would turn the averaged camera
+            // destination into NaN and crash the render loop, so only consider
+            // locations with usable coordinates.
+            const valid = locations.filter((l) => {
+                const lat = parseFloat(l.lat);
+                const lng = parseFloat(l.lng);
+                return isFinite(lat) && isFinite(lng);
+            });
+            if (!valid.length) return;
+
+            let latSum = 0, lngSum = 0;
+            valid.forEach((l) => {
+                latSum += parseFloat(l.lat);
+                lngSum += parseFloat(l.lng);
+            });
+            const cLat = latSum / valid.length;
+            const cLng = lngSum / valid.length;
+            if (!isFinite(cLat) || !isFinite(cLng)) return;
+
+            let maxDistKm = 0;
+            valid.forEach((l) => {
+                const d = haversineKm(cLat, cLng, parseFloat(l.lat), parseFloat(l.lng));
+                if (d > maxDistKm) maxDistKm = d;
+            });
+            const altitude = Math.max(4000, Math.min(600000, maxDistKm * 1000 * 3 + 3000));
+            globeViewer.camera.flyTo({
+                destination: Cesium.Cartesian3.fromDegrees(cLng, cLat, altitude),
+                duration: 2.2,
+            });
+        }
+
+        function flyToLoc(loc) {
+            if (!globeViewer || !loc) return;
+            const lat = parseFloat(loc.lat);
+            const lng = parseFloat(loc.lng);
+            if (!isFinite(lat) || !isFinite(lng)) return;
+            globeViewer.camera.flyTo({
+                destination: Cesium.Cartesian3.fromDegrees(lng, lat, 4000),
+                duration: 1.8,
+            });
+        }
+
+        function haversineKm(lat1, lng1, lat2, lng2) {
+            const R = 6371;
+            const toRad = (d) => (d * Math.PI) / 180;
+            const dLat = toRad(lat2 - lat1);
+            const dLng = toRad(lng2 - lng1);
+            const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+            return 2 * R * Math.asin(Math.sqrt(a));
+        }
+
+        // ---- generic GEV card + per-kind card builders ----
+        function setGlobeCard(title, rows, actions) {
+            const card = document.getElementById('globeCard');
+            document.getElementById('globeCardTitle').textContent = title;
+            const body = document.getElementById('globeCardBody');
+            body.innerHTML = '';
+            (rows || []).forEach(([key, value]) => {
+                const row = document.createElement('div');
+                row.className = 'gev-row';
+                const k = document.createElement('span');
+                k.className = 'gev-row-key';
+                k.textContent = key;
+                const v = document.createElement('span');
+                v.className = 'gev-row-val';
+                v.textContent = value;
+                row.appendChild(k);
+                row.appendChild(v);
+                body.appendChild(row);
+            });
+            if (actions) body.appendChild(actions);
+            card.classList.add('show');
+        }
+
+        function makeGevBtn(html, onClick) {
+            const b = document.createElement('button');
+            b.className = 'gev-btn';
+            b.innerHTML = html;
+            b.onclick = onClick;
+            return b;
+        }
+
+        function showLocCard(loc) {
+            if (!loc) return;
+            const actions = document.createElement('div');
+            actions.className = 'gev-actions';
+            actions.appendChild(makeGevBtn('<i class="fas fa-crosshairs"></i> Focus', () => flyToLoc(loc)));
+            actions.appendChild(makeGevBtn('<i class="fab fa-instagram"></i> Open', () =>
+                openInBrowser('https://www.instagram.com/explore/locations/' + loc.external_id)));
+            setGlobeCard(loc.name || 'Unknown Location', [
+                ['Address', loc.address || '\u2014'],
+                ['Coordinates', coordsText(loc)],
+                ['Instagram ID', String(loc.external_id)],
+            ], actions);
+        }
+
+        function showInfraCard(item) {
+            if (!item) return;
+            const rows = [
+                ['Type', INFRA_LABELS[item.category] || item.category || '\u2014'],
+                ['Name', item.name || '\u2014'],
+            ];
+            if (item.operator) rows.push(['Operator', item.operator]);
+            if (item.address) rows.push(['Address', item.address]);
+            rows.push(['Coordinates', coordsText(item)]);
+            const actions = document.createElement('div');
+            actions.className = 'gev-actions';
+            actions.appendChild(makeGevBtn('<i class="fas fa-crosshairs"></i> Focus', () => flyToItem(item)));
+            actions.appendChild(makeGevBtn('<i class="fab fa-openstreetmap"></i> OSM', () =>
+                window.open('https://www.openstreetmap.org/?mlat=' + item.lat + '&mlon=' + item.lng + '#map=17/' + item.lat + '/' + item.lng, '_blank')));
+            setGlobeCard(item.name || 'Infrastructure', rows, actions);
+        }
+
+        function showCamCard(item) {
+            if (!item) return;
+            const rows = [
+                ['Source', item.source === 'tfl' ? 'TfL JamCams (London)' : 'OpenStreetMap / ATCS CCTV'],
+                ['Name', item.name || '\u2014'],
+            ];
+            if (item.view) rows.push(['View', item.view]);
+            if (item.operator) rows.push(['Operator', item.operator]);
+            if (item.direction) rows.push(['Direction', item.direction]);
+            if (item.ref) rows.push(['Ref ID', item.ref]);
+            rows.push(['Coordinates', coordsText(item)]);
+
+            const actions = document.createElement('div');
+            actions.className = 'gev-actions';
+            actions.style.flexWrap = 'wrap';
+            actions.appendChild(makeGevBtn('<i class="fas fa-crosshairs"></i> Focus', () => flyToItem(item)));
+
+            const streamUrl = item.videoUrl || item.imageUrl || item.url;
+            if (streamUrl) {
+                actions.appendChild(makeGevBtn('<i class="fas fa-video"></i> Akses Live Stream', () =>
+                    window.open(streamUrl, '_blank')));
+            } else {
+                // Official Indonesian Live Traffic CCTV Portals
+                actions.appendChild(makeGevBtn('<i class="fas fa-satellite"></i> RTTMC Dephub', () =>
+                    window.open('http://rttmc.dephub.go.id/rttmc/livecctv', '_blank')));
+                actions.appendChild(makeGevBtn('<i class="fas fa-road"></i> BPJT Tol', () =>
+                    window.open('https://bpjt.pu.go.id/cctv', '_blank')));
+                actions.appendChild(makeGevBtn('<i class="fas fa-search"></i> Cari ATCS Dishub', () =>
+                    window.open('https://www.google.com/search?q=cctv+atcs+live+stream+' + encodeURIComponent(item.name || '') + '+' + item.lat + ',' + item.lng, '_blank')));
+            }
+            setGlobeCard('Traffic Camera (CCTV)', rows, actions);
+
+            const cardBody = document.getElementById('globeCardBody');
+            if (item.imageUrl) {
+                const img = document.createElement('img');
+                img.src = item.imageUrl;
+                img.alt = item.name || 'Traffic camera';
+                img.style.cssText = 'width:100%;border-radius:6px;margin-top:8px;border:1px solid #2a3a5a;background:#061018;';
+                cardBody.appendChild(img);
+            } else if (item.videoUrl && (item.videoUrl.endsWith('.mp4') || item.videoUrl.includes('embed'))) {
+                const iframe = document.createElement('iframe');
+                iframe.src = item.videoUrl;
+                iframe.style.cssText = 'width:100%;height:160px;border-radius:6px;margin-top:8px;border:1px solid #2a3a5a;background:#061018;';
+                iframe.allow = 'autoplay; encrypted-media';
+                cardBody.appendChild(iframe);
+            }
+        }
+
+        function showQuakeCard(item) {
+            if (!item) return;
+            const rows = [
+                ['Magnitude', 'M ' + Number(item.mag).toFixed(1)],
+                ['Location', item.place || '\u2014'],
+                ['Depth', Number(item.depth || 0).toFixed(1) + ' km'],
+                ['Time', item.time ? new Date(item.time).toLocaleString() : '\u2014'],
+                ['Coordinates', coordsText(item)],
+            ];
+            const actions = document.createElement('div');
+            actions.className = 'gev-actions';
+            actions.appendChild(makeGevBtn('<i class="fas fa-crosshairs"></i> Focus', () => flyToItem(item)));
+            if (item.url) {
+                actions.appendChild(makeGevBtn('<i class="fas fa-external-link-alt"></i> USGS', () => window.open(item.url, '_blank')));
+            }
+            setGlobeCard('Earthquake', rows, actions);
+        }
+
+        function flightRows(item) {
+            return [
+                ['Callsign', item.callsign || item.hex || '\u2014'],
+                ['Registration', item.registration || '\u2014'],
+                ['Aircraft', item.type || '\u2014'],
+                ['Altitude', item.alt != null ? Math.round(item.alt).toLocaleString() + ' ft' : '\u2014'],
+                ['Ground speed', item.gs != null ? Math.round(item.gs) + ' kt' : '\u2014'],
+                ['Heading', item.track != null ? Math.round(item.track) + '\u00b0' : '\u2014'],
+                ['V/S', item.vrate != null ? Math.round(item.vrate) + ' ft/min' : '\u2014'],
+                ['ICAO24', item.hex || '\u2014'],
+            ];
+        }
+
+        function showFlightCard(item) {
+            if (!item) return;
+            globeCardFlightHex = item.hex;
+            const tracking = trackedFlight && trackedFlight.hex === item.hex;
+            const actions = document.createElement('div');
+            actions.className = 'gev-actions';
+            actions.appendChild(makeGevBtn(
+                tracking ? '<i class="fas fa-stop"></i> Stop' : '<i class="fas fa-crosshairs"></i> Track',
+                () => (tracking ? stopTracking() : trackFlight(item))
+            ));
+            actions.appendChild(makeGevBtn('<i class="fas fa-external-link-alt"></i> adsb.lol', () =>
+                window.open('https://globe.adsb.lol/' + item.hex, '_blank')));
+            setGlobeCard('Aircraft ' + (item.callsign || item.hex || ''), flightRows(item), actions);
+        }
+
+        function updateFlightCard(item) {
+            // Live-refresh the telemetry card while tracking this aircraft
+            if (trackedFlight && item && globeCardFlightHex === item.hex) {
+                showFlightCard(item);
+            }
+        }
+
+        function closeGlobeCard() {
+            selectedGlobeEntity = null;
+            updateGlobeLabels();
+            const card = document.getElementById('globeCard');
+            if (card) card.classList.remove('show');
+            if (globeViewer) globeViewer.scene.requestRender();
+        }
+
+        // ================================================================
+        //  Live traffic simulation (Indonesia only) — vehicles drive the
+        //  real OSM road network, speed by road class, animated in real time
+        // ================================================================
+        function getRealtimeTrafficFactor() {
+            // Indonesia WIB (UTC+7) time profile
+            const now = new Date();
+            const utcMs = now.getTime() + (now.getTimezoneOffset() * 60000);
+            const wibDate = new Date(utcMs + (3600000 * 7));
+            const hours = wibDate.getHours() + (wibDate.getMinutes() / 60);
+
+            let factor = 1.0;
+            let label = 'Lancar / Normal';
+
+            // Peak hours WIB: 07:00-09:15 & 16:30-19:30
+            if ((hours >= 7.0 && hours <= 9.25) || (hours >= 16.5 && hours <= 19.5)) {
+                factor = 0.35; // Heavy congestion (slow speeds)
+                label = 'Macet / Jam Sibuk Peak Hour';
+            } else if ((hours >= 6.0 && hours < 7.0) || (hours > 9.25 && hours <= 10.5) || (hours >= 15.0 && hours < 16.5) || (hours > 19.5 && hours <= 21.0)) {
+                factor = 0.65; // Moderate traffic
+                label = 'Padat Merayap / Moderate';
+            } else if (hours >= 22.0 || hours < 5.5) {
+                factor = 1.3; // Night time free flow
+                label = 'Sangat Lancar / Malam';
+            }
+
+            const hStr = String(wibDate.getHours()).padStart(2, '0');
+            const mStr = String(wibDate.getMinutes()).padStart(2, '0');
+            return { factor: factor, label: label, timeStr: hStr + ':' + mStr + ' WIB' };
+        }
+
+        function startTrafficSim(roads) {
+            stopTrafficSim();
+            if (!globeViewer) return;
+            const viewer = globeViewer;
+
+            // Precompute per-road point arrays + cumulative lengths (metres)
+            const roadData = [];
+            (roads || []).forEach((r) => {
+                const pts = (r.geometry || []).map((p) => [parseFloat(p[0]), parseFloat(p[1])]);
+                if (pts.length < 2) return;
+                const cum = [0];
+                let total = 0;
+                for (let i = 1; i < pts.length; i++) {
+                    total += haversineKm(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]) * 1000;
+                    cum.push(total);
+                }
+                if (total < 30) return; // ignore tiny fragments
+                roadData.push({
+                    id: r.id,
+                    name: r.name || '',
+                    pts: pts,
+                    cum: cum,
+                    total: total,
+                    speed: (ROAD_SPEEDS[r.highway] || 8) * (0.7 + Math.random() * 0.6),
+                });
+            });
+            if (!roadData.length) {
+                showToast('Traffic Sim: no drivable roads found in this area', 'error');
+                return;
+            }
+
+            trafficSim = { roadData: roadData, vehicles: [], ticker: null, lastTick: 0 };
+            const count = Math.min(180, Math.max(25, Math.round(roadData.length * 0.12)));
+            for (let i = 0; i < count; i++) spawnTrafficVehicle();
+
+            const tf = getRealtimeTrafficFactor();
+            showToast('Traffic Sim Realtime: ' + tf.label + ' (' + tf.timeStr + ') — Kecepatan ' + Math.round(tf.factor * 100) + '%', 'success');
+
+            // Continuous rendering keeps the moving cars smooth (like GEV)
+            viewer.scene.requestRenderMode = false;
+            trafficSim.lastTick = performance.now();
+            trafficSim.ticker = setInterval(advanceTrafficSim, 100);
+            updateLayerBadge('traffic');
+            viewer.scene.requestRender();
+        }
+
+        function spawnTrafficVehicle() {
+            const sim = trafficSim;
+            if (!sim || !globeViewer) return;
+            const rd = sim.roadData[Math.floor(Math.random() * sim.roadData.length)];
+            const s = Math.random() * rd.total;
+            const { lat, lng, heading } = pointAlongRoad(rd, s);
+            const entity = globeViewer.entities.add({
+                id: 'traffic-car-' + sim.vehicles.length,
+                position: Cesium.Cartesian3.fromDegrees(lng, lat),
+                billboard: {
+                    image: ICON_CAR,
+                    width: 18,
+                    height: 18,
+                    rotation: Cesium.Math.toRadians(90 - heading),
+                    disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                },
+                properties: { kind: 'traffic', data: { road: rd.id, name: rd.name } },
+            });
+            sim.vehicles.push({ road: rd, s: s, speed: rd.speed, entity: entity });
+            globeLayers.traffic.entities.push(entity);
+        }
+
+        function pointAlongRoad(rd, s) {
+            const pts = rd.pts;
+            const cum = rd.cum;
+            let i = 1;
+            while (i < cum.length - 1 && cum[i] < s) i++;
+            const segLen = (cum[i] - cum[i - 1]) || 1;
+            const t = Math.min(1, Math.max(0, (s - cum[i - 1]) / segLen));
+            const lat = pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * t;
+            const lng = pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * t;
+            const heading = bearingDeg(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]);
+            return { lat: lat, lng: lng, heading: heading };
+        }
+
+        function bearingDeg(lat1, lng1, lat2, lng2) {
+            const toRad = (d) => (d * Math.PI) / 180;
+            const y = Math.sin(toRad(lng2 - lng1)) * Math.cos(toRad(lat2));
+            const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+                Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(toRad(lng2 - lng1));
+            return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+        }
+
+        function advanceTrafficSim() {
+            const sim = trafficSim;
+            if (!sim || !globeViewer) return;
+            const now = performance.now();
+            const dt = Math.min(0.5, (now - sim.lastTick) / 1000);
+            sim.lastTick = now;
+            const tf = getRealtimeTrafficFactor();
+
+            sim.vehicles.forEach((v) => {
+                const effectiveSpeed = v.speed * tf.factor;
+                v.s += effectiveSpeed * dt;
+                if (v.s > v.road.total) { v.s = 2 * v.road.total - v.s; v.speed = -Math.abs(v.speed); }
+                if (v.s < 0) { v.s = -v.s; v.speed = Math.abs(v.speed); }
+                const p = pointAlongRoad(v.road, Math.abs(v.s));
+                if (v.entity) {
+                    v.entity.position = new Cesium.ConstantPositionProperty(
+                        Cesium.Cartesian3.fromDegrees(p.lng, p.lat));
+                    if (v.entity.billboard) {
+                        v.entity.billboard.rotation = Cesium.Math.toRadians(90 - p.heading);
+                    }
+                }
+            });
+            globeViewer.scene.requestRender();
+        }
+
+        function stopTrafficSim() {
+            if (trafficSim) {
+                if (trafficSim.ticker) clearInterval(trafficSim.ticker);
+                trafficSim = null;
+            }
+            clearGlobeLayer('traffic');
+            if (globeViewer) {
+                if (!trackedFlight) globeViewer.scene.requestRenderMode = true; // flight tracking may still need it
+                globeViewer.scene.requestRender();
+            }
+        }
+
+        // ================================================================
+        //  Live world-data layers: toggle, fetch, render, realtime refresh
+        // ================================================================
+        function toggleGlobeLayer(key) {
+            const layer = globeLayers[key];
+            if (!layer) return;
+            layer.enabled = !layer.enabled;
+            const btn = document.getElementById('layerToggle' + key);
+            if (btn) {
+                btn.textContent = layer.enabled ? 'ON' : 'OFF';
+                btn.classList.toggle('on', layer.enabled);
+            }
+            if (layer.enabled) {
+                if (globeActive && globeViewer) {
+                    fetchGlobeLayer(key);
+                    syncLayerTimers();
+                }
+            } else {
+                if (key === 'flights') stopTracking();
+                else if (key === 'traffic') stopTrafficSim();
+                else clearGlobeLayer(key);
+                syncLayerTimers();
+            }
+        }
+
+        function getLayerCenter() {
+            if (currentCenter) return currentCenter;
+            if (globeViewer) {
+                const c = globeViewer.camera.positionCartographic;
+                if (c && isFinite(c.longitude)) {
+                    return { lat: Cesium.Math.toDegrees(c.latitude), lng: Cesium.Math.toDegrees(c.longitude) };
+                }
+            }
+            return { lat: 0, lng: 0 };
+        }
+
+        async function fetchGlobeLayer(key) {
+            const layer = globeLayers[key];
+            if (!layer || !globeViewer || layer.busy) return;
+            layer.busy = true;
+            const btn = document.getElementById('layerToggle' + key);
+            const prevText = btn ? btn.textContent : '';
+            if (btn) btn.textContent = '\u2026';
+            try {
+                const center = getLayerCenter();
+                let items = [];
+                if (key === 'infra') {
+                    const r = await fetch('/api/infrastructure', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ lat: center.lat, lng: center.lng, radius_km: 10 }),
+                    });
+                    const d = await r.json();
+                    if (!d.ok) throw new Error(d.error || 'request failed');
+                    items = d.items;
+                } else if (key === 'cams') {
+                    const r = await fetch('/api/traffic-cameras', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ lat: center.lat, lng: center.lng, radius_km: 10, source: 'all' }),
+                    });
+                    const d = await r.json();
+                    if (!d.ok) throw new Error(d.error || 'request failed');
+                    items = d.items;
+                    if (d.errors && d.errors.length) {
+                        showToast(layer.label + ': one source failed — ' + d.errors[0].slice(0, 90), 'error');
+                    }
+                } else if (key === 'quakes') {
+                    const r = await fetch('/api/live/earthquakes?hours=24');
+                    const d = await r.json();
+                    if (!d.ok) throw new Error(d.error || 'request failed');
+                    items = d.items;
+                } else if (key === 'flights') {
+                    const r = await fetch('/api/live/flights', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ lat: center.lat, lng: center.lng, radius_km: 100 }),
+                    });
+                    const d = await r.json();
+                    if (!d.ok) throw new Error(d.error || 'request failed');
+                    items = d.items;
+                } else if (key === 'traffic') {
+                    if (!inIndonesia(center.lat, center.lng)) {
+                        showToast('Traffic simulation is Indonesia-only — move the search center to Indonesia', 'error');
+                        toggleGlobeLayer('traffic'); // switch the layer back off
+                        return;
+                    }
+                    const r = await fetch('/api/roads', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ lat: center.lat, lng: center.lng, radius_km: 8 }),
+                    });
+                    const d = await r.json();
+                    if (!d.ok) throw new Error(d.error || 'request failed');
+                    if (d.in_indonesia === false) {
+                        showToast('Traffic simulation is Indonesia-only — move the search center to Indonesia', 'error');
+                        toggleGlobeLayer('traffic');
+                        return;
+                    }
+                    items = d.items;
+                }
+                // The layer may have been toggled off while the fetch was in flight
+                if (!layer.enabled || !globeActive || !globeViewer) return;
+                renderGlobeLayer(key, items);
+            } catch (err) {
+                console.error('Layer ' + key + ' failed:', err);
+                showToast(layer.label + ': ' + err.message, 'error');
+            } finally {
+                layer.busy = false;
+                if (btn) btn.textContent = layer.enabled ? 'ON' : 'OFF';
+            }
+        }
+
+        function renderGlobeLayer(key, items) {
+            const layer = globeLayers[key];
+            if (!layer || !globeViewer) return;
+            clearGlobeLayer(key);
+            if (!layer.enabled) return;
+            const renderers = {
+                infra: renderInfraItems,
+                cams: renderCamItems,
+                quakes: renderQuakeItems,
+                flights: renderFlightItems,
+                traffic: startTrafficSim,
+            };
+            const fn = renderers[key];
+            if (fn) {
+                fn(items || []);
+            } else {
+                (items || []).forEach((it) => {
+                    const lat = parseFloat(it.lat);
+                    const lng = parseFloat(it.lng);
+                    if (!isFinite(lat) || !isFinite(lng)) return;
+                    const e = globeViewer.entities.add({
+                        position: Cesium.Cartesian3.fromDegrees(lng, lat),
+                        point: { pixelSize: 8, color: Cesium.Color.fromCssColorString(GEV_ACCENT) },
+                        properties: { kind: key, data: it },
+                    });
+                    layer.entities.push(e);
+                });
+            }
+            updateLayerBadge(key);
+            updateGlobeLabels();
+            globeViewer.scene.requestRender();
+        }
+
+        function clearGlobeLayer(key) {
+            const layer = globeLayers[key];
+            if (!layer || !globeViewer) return;
+            layer.entities.forEach((e) => {
+                if (e) {
+                    if (selectedGlobeEntity && selectedGlobeEntity.id === e.id) {
+                        selectedGlobeEntity = null;
+                    }
+                    globeViewer.entities.remove(e);
+                }
+            });
+            layer.entities = [];
+            updateLayerBadge(key);
+            updateGlobeLabels();
+        }
+
+        function updateLayerBadge(key) {
+            const badge = document.getElementById('layerCount' + key);
+            if (!badge) return;
+            const layer = globeLayers[key];
+            badge.textContent = layer.enabled ? String(layer.entities.length) : '';
+        }
+
+        function syncLayerTimers() {
+            Object.keys(globeLayers).forEach((key) => {
+                const layer = globeLayers[key];
+                if (layer.timer) {
+                    clearInterval(layer.timer);
+                    layer.timer = null;
+                }
+                if (layer.enabled && globeActive && globeViewer && layer.refreshMs > 0) {
+                    layer.timer = setInterval(() => fetchGlobeLayer(key), layer.refreshMs);
+                }
+            });
+        }
+
+        function refetchEnabledLayers() {
+            Object.keys(globeLayers).forEach((key) => {
+                if (key !== 'loc' && globeLayers[key].enabled) fetchGlobeLayer(key);
+            });
+        }
+
+        function rebuildAllGlobeLayers() {
+            if (!globeViewer) return;
+            Object.keys(globeLayers).forEach((key) => {
+                if (key === 'loc') {
+                    if (currentLocations.length) renderGlobeLocations(currentLocations, false);
+                } else if (globeLayers[key].enabled) {
+                    fetchGlobeLayer(key);
+                }
+            });
+        }
+
+        function flyToItem(item) {
+            if (!globeViewer || !item) return;
+            const lat = parseFloat(item.lat);
+            const lng = parseFloat(item.lng);
+            if (!isFinite(lat) || !isFinite(lng)) return;
+            globeViewer.camera.flyTo({
+                destination: Cesium.Cartesian3.fromDegrees(lng, lat, 9000),
+                duration: 1.8,
+            });
+        }
+
+        // ---- layer renderers ----
+        function addLabelSpec(text, minHeight) {
+            return {
+                text: String(text || '').slice(0, 36),
+                font: '10px "Segoe UI", sans-serif',
+                fillColor: Cesium.Color.WHITE,
+                outlineColor: Cesium.Color.fromCssColorString('#0b0e1a'),
+                outlineWidth: 3,
+                style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+                pixelOffset: new Cesium.Cartesian2(0, -10),
+                disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                show: false,
+            };
+        }
+
+        function renderInfraItems(items) {
+            const viewer = globeViewer;
+            items.forEach((it) => {
+                const lat = parseFloat(it.lat);
+                const lng = parseFloat(it.lng);
+                if (!isFinite(lat) || !isFinite(lng)) return;
+                const e = viewer.entities.add({
+                    id: it.id,
+                    position: Cesium.Cartesian3.fromDegrees(lng, lat),
+                    point: {
+                        pixelSize: 10,
+                        color: Cesium.Color.fromCssColorString(INFRA_COLORS[it.category] || INFRA_COLORS.other),
+                        outlineColor: Cesium.Color.WHITE.withAlpha(0.85),
+                        outlineWidth: 1.2,
+                        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                    },
+                    label: addLabelSpec(it.name, 90000),
+                    properties: { kind: 'infra', data: it, labelMinHeight: 90000 },
+                });
+                globeLayers.infra.entities.push(e);
+            });
+        }
+
+        function renderCamItems(items) {
+            const viewer = globeViewer;
+            items.forEach((it) => {
+                const lat = parseFloat(it.lat);
+                const lng = parseFloat(it.lng);
+                if (!isFinite(lat) || !isFinite(lng)) return;
+                const e = viewer.entities.add({
+                    id: it.id,
+                    position: Cesium.Cartesian3.fromDegrees(lng, lat),
+                    billboard: {
+                        image: ICON_CAMERA,
+                        width: 26,
+                        height: 26,
+                        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+                        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                    },
+                    label: addLabelSpec(it.name, 90000),
+                    properties: { kind: 'cam', data: it, labelMinHeight: 90000 },
+                });
+                globeLayers.cams.entities.push(e);
+            });
+        }
+
+        function renderQuakeItems(items) {
+            const viewer = globeViewer;
+            items.forEach((it) => {
+                const lat = parseFloat(it.lat);
+                const lng = parseFloat(it.lng);
+                const mag = parseFloat(it.mag);
+                if (!isFinite(lat) || !isFinite(lng) || !isFinite(mag)) return;
+                const depth = parseFloat(it.depth) || 0;
+                const color = depth < 70 ? '#ff4757' : (depth < 300 ? '#ffa502' : '#2ed573');
+                const e = viewer.entities.add({
+                    id: it.id,
+                    position: Cesium.Cartesian3.fromDegrees(lng, lat),
+                    point: {
+                        pixelSize: Math.max(5, Math.min(20, 4 + mag * 2.2)),
+                        color: Cesium.Color.fromCssColorString(color).withAlpha(0.9),
+                        outlineColor: Cesium.Color.WHITE.withAlpha(0.9),
+                        outlineWidth: 1.5,
+                        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                    },
+                    label: {
+                        text: 'M ' + mag.toFixed(1),
+                        font: '11px "Segoe UI", sans-serif',
+                        fillColor: Cesium.Color.WHITE,
+                        outlineColor: Cesium.Color.fromCssColorString('#0b0e1a'),
+                        outlineWidth: 3,
+                        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+                        pixelOffset: new Cesium.Cartesian2(0, -12),
+                        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                        show: false,
+                    },
+                    properties: { kind: 'quake', data: it, labelMinHeight: 200000 },
+                });
+                globeLayers.quakes.entities.push(e);
+            });
+        }
+
+        function renderFlightItems(items) {
+            const viewer = globeViewer;
+            items.forEach((it) => {
+                const lat = parseFloat(it.lat);
+                const lng = parseFloat(it.lng);
+                if (!isFinite(lat) || !isFinite(lng)) return;
+                const track = parseFloat(it.track);
+                const e = viewer.entities.add({
+                    id: 'flight-' + it.hex,
+                    position: Cesium.Cartesian3.fromDegrees(lng, lat),
+                    billboard: {
+                        image: ICON_PLANE,
+                        width: 28,
+                        height: 28,
+                        rotation: isFinite(track) ? Cesium.Math.toRadians(90 - track) : 0,
+                        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                    },
+                    label: {
+                        text: String(it.callsign || it.hex || 'AC').slice(0, 8),
+                        font: '11px Consolas, monospace',
+                        fillColor: Cesium.Color.fromCssColorString('#7ef0ff'),
+                        outlineColor: Cesium.Color.fromCssColorString('#0b0e1a'),
+                        outlineWidth: 3,
+                        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+                        pixelOffset: new Cesium.Cartesian2(0, -12),
+                        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                        show: false,
+                    },
+                    properties: { kind: 'flight', data: it, labelMinHeight: 120000 },
+                });
+                globeLayers.flights.entities.push(e);
+            });
+            // Re-attach the chase camera to the aircraft we are tracking
+            if (trackedFlight) {
+                const match = items.find((it) => it.hex === trackedFlight.hex);
+                if (match) updateTrackedFlight(match);
+            }
+        }
+
+        function findFlightItem(hex) {
+            if (!hex) return null;
+            return globeLayers.flights.entities
+                .map((e) => (e.properties ? bagValue(e.properties, 'data') : null))
+                .find((d) => d && d.hex === hex) || null;
+        }
+
+        // ================================================================
+        //  Click-to-track a live aircraft: chase camera + fading trail
+        // ================================================================
+        function trackFlight(item) {
+            stopTracking();
+            if (!globeViewer || !item) return;
+            const viewer = globeViewer;
+            trackedFlight = {
+                hex: item.hex,
+                callsign: item.callsign || item.hex,
+                trailPositions: [],
+                trailEntity: null,
+                interval: null,
+                lost: 0,
+            };
+            // Continuous rendering so the chase camera and trail stay smooth
+            viewer.scene.requestRenderMode = false;
+            updateTrackedFlight(item);
+            // Keep the camera glued to the aircraft between data polls
+            trackedFlight.interval = setInterval(() => {
+                if (!trackedFlight || !globeActive) return;
+                const cur = findFlightItem(trackedFlight.hex);
+                if (cur) {
+                    updateTrackedFlight(cur);
+                } else {
+                    trackedFlight.lost++;
+                    if (trackedFlight.lost > 6) {
+                        showToast('Flight ' + trackedFlight.callsign + ': signal lost, tracking stopped', 'error');
+                        stopTracking();
+                    }
+                }
+            }, 2500);
+            showFlightCard(item);
+        }
+
+        function updateTrackedFlight(item) {
+            if (!trackedFlight || !globeViewer) return;
+            trackedFlight.lost = 0;
+            const viewer = globeViewer;
+            const lat = parseFloat(item.lat);
+            const lng = parseFloat(item.lng);
+            if (!isFinite(lat) || !isFinite(lng)) return;
+
+            const pos = Cesium.Cartesian3.fromDegrees(lng, lat);
+            const entity = viewer.entities.getById('flight-' + item.hex);
+            if (entity) {
+                entity.position = new Cesium.ConstantPositionProperty(pos);
+                const track = parseFloat(item.track);
+                if (isFinite(track) && entity.billboard) {
+                    entity.billboard.rotation = Cesium.Math.toRadians(90 - track);
+                }
+            }
+
+            // Trail of recent fixes
+            trackedFlight.trailPositions.push(pos);
+            if (trackedFlight.trailPositions.length > 120) trackedFlight.trailPositions.shift();
+            if (!trackedFlight.trailEntity) {
+                trackedFlight.trailEntity = viewer.entities.add({
+                    id: 'flight-trail-' + item.hex,
+                    polyline: {
+                        positions: new Cesium.CallbackProperty(() => trackedFlight.trailPositions, false),
+                        width: 2,
+                        material: Cesium.Color.fromCssColorString(GEV_ACCENT).withAlpha(0.85),
+                    },
+                });
+            }
+
+            // Chase camera riding along at a safe altitude above the aircraft
+            const track = parseFloat(item.track);
+            const altFt = parseFloat(item.alt);
+            const alt = (isFinite(altFt) && altFt > 0)
+                ? Math.min(altFt * 0.3048 + 2500, 20000)
+                : 4500;
+            viewer.camera.flyTo({
+                destination: Cesium.Cartesian3.fromDegrees(lng, lat, alt),
+                orientation: {
+                    heading: isFinite(track) ? Cesium.Math.toRadians(track) : 0,
+                    pitch: Cesium.Math.toRadians(-25),
+                    roll: 0,
+                },
+                duration: 1.6,
+            });
+            updateFlightCard(item);
+        }
+
+        function stopTracking() {
+            if (!trackedFlight) return;
+            if (trackedFlight.interval) {
+                clearInterval(trackedFlight.interval);
+                trackedFlight.interval = null;
+            }
+            if (trackedFlight.trailEntity && globeViewer) {
+                globeViewer.entities.remove(trackedFlight.trailEntity);
+            }
+            if (globeViewer) {
+                if (!trafficSim) globeViewer.scene.requestRenderMode = true; // traffic may still need it
+                globeViewer.scene.requestRender();
+            }
+            trackedFlight = null;
+            // Refresh the card button state if the tracked flight is still open
+            if (globeCardFlightHex) {
+                const cur = findFlightItem(globeCardFlightHex);
+                if (cur) showFlightCard(cur);
+            }
+        }
+
+        // Helpers
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').classList.toggle('active', show);
+            document.getElementById('searchBtn').disabled = show;
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast show ' + type;
+            setTimeout(() => {
+                toast.className = 'toast';
+            }, 4000);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instagram Location Search Dashboard</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #0f0f23;
+            color: #e0e0e0;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 380px;
+            background: #1a1a2e;
+            border-right: 1px solid #2a2a4a;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            padding: 24px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            text-align: center;
+        }
+
+        .sidebar-header h1 {
+            font-size: 20px;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 4px;
+        }
+
+        .sidebar-header p {
+            font-size: 12px;
+            color: rgba(255,255,255,0.8);
+        }
+
+        .sidebar-content {
+            padding: 20px;
+            flex: 1;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: #9d9dba;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px 14px;
+            background: #16213e;
+            border: 1px solid #2a2a4a;
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group textarea {
+            height: 80px;
+            resize: vertical;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 12px;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: #667eea;
+        }
+
+        .checkbox-group label {
+            font-size: 13px;
+            color: #b0b0d0;
+            cursor: pointer;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            background: #2a2a4a;
+            color: #e0e0e0;
+            margin-top: 8px;
+        }
+
+        .btn-secondary:hover {
+            background: #3a3a5a;
+        }
+
+        .btn-cookie {
+            background: #16213e;
+            border: 1px dashed #667eea;
+            color: #667eea;
+            margin-top: 4px;
+            font-size: 12px;
+            padding: 8px 12px;
+        }
+
+        .btn-cookie:hover {
+            background: #1a2744;
+        }
+
+        /* Results Section */
+        .results-section {
+            padding: 0 20px 20px;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .results-header h3 {
+            font-size: 14px;
+            color: #9d9dba;
+        }
+
+        .results-count {
+            background: #667eea;
+            color: white;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .export-buttons {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .export-btn {
+            padding: 6px 12px;
+            background: #16213e;
+            border: 1px solid #2a2a4a;
+            border-radius: 6px;
+            color: #b0b0d0;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .export-btn:hover {
+            background: #2a2a4a;
+            color: #e0e0e0;
+            border-color: #667eea;
+        }
+
+        .results-table {
+            max-height: 250px;
+            overflow-y: auto;
+            border-radius: 8px;
+            border: 1px solid #2a2a4a;
+        }
+
+        .results-table table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .results-table th {
+            background: #16213e;
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #9d9dba;
+            position: sticky;
+            top: 0;
+            border-bottom: 1px solid #2a2a4a;
+        }
+
+        .results-table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid #1a1a3a;
+        }
+
+        .results-table tr:hover td {
+            background: #16213e;
+        }
+
+        .results-table a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .results-table a:hover {
+            text-decoration: underline;
+        }
+
+        /* Map Area */
+        .map-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .map-header {
+            padding: 12px 20px;
+            background: #1a1a2e;
+            border-bottom: 1px solid #2a2a4a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .map-header h2 {
+            font-size: 14px;
+            color: #9d9dba;
+        }
+
+        .map-coords {
+            font-size: 12px;
+            color: #667eea;
+            font-family: monospace;
+        }
+
+        #map {
+            flex: 1;
+            background: #0f0f23;
+        }
+
+        /* Loading Overlay */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 15, 35, 0.85);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .loading-spinner {
+            text-align: center;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid #2a2a4a;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: #9d9dba;
+            font-size: 14px;
+        }
+
+        /* Toast Notification */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 14px 20px;
+            background: #1a1a2e;
+            border: 1px solid #2a2a4a;
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-size: 13px;
+            z-index: 2000;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            max-width: 350px;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast.error {
+            border-color: #ff6b6b;
+            background: #2a1a1a;
+        }
+
+        .toast.success {
+            border-color: #51cf66;
+            background: #1a2a1a;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1a1a2e;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #3a3a5a;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4a4a6a;
+        }
+
+        /* Popup styling */
+        .leaflet-popup-content-wrapper {
+            background: #1a1a2e;
+            color: #e0e0e0;
+            border-radius: 8px;
+            border: 1px solid #2a2a4a;
+        }
+
+        .leaflet-popup-tip {
+            background: #1a1a2e;
+        }
+
+        .leaflet-popup-content {
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .leaflet-popup-content a {
+            color: #667eea;
+        }
+
+        .popup-name {
+            font-weight: 700;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .popup-address {
+            color: #9d9dba;
+            font-size: 12px;
+            margin-bottom: 8px;
+        }
+
+        /* Map on click coord display */
+        .coord-hint {
+            font-size: 11px;
+            color: #667eea;
+            text-align: center;
+            padding: 4px;
+            background: #16213e;
+            border-top: 1px solid #2a2a4a;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h1><i class="fab fa-instagram"></i> Location Search</h1>
+                <p>Bellingcat Instagram Location Finder</p>
+            </div>
+
+            <div class="sidebar-content">
+                <!-- Cookie Input -->
+                <div class="form-group">
+                    <label><i class="fas fa-cookie-bite"></i> Instagram Cookie</label>
+                    <textarea id="cookie" placeholder="Paste your Instagram cookie here...&#10;Format: sessionid=xxx; csrftoken=xxx; ..."></textarea>
+                </div>
+
+                <button class="btn btn-cookie" onclick="getCookies()" type="button">
+                    <i class="fas fa-browser"></i> Auto-get Cookie via Browser
+                </button>
+
+                <br><br>
+
+                <!-- Coordinates -->
+                <div class="form-group">
+                    <label><i class="fas fa-map-marker-alt"></i> Koordinat (Lat, Lng)</label>
+                    <input type="text" id="coords" placeholder="Contoh: -6.2088, 106.8456" value="">
+                </div>
+
+                <p style="font-size: 11px; color: #6b7280; margin-top: -8px; margin-bottom: 12px;">
+                    <i class="fas fa-info-circle"></i> Klik pada peta untuk set koordinat (radius 3km)
+                </p>
+
+                <!-- Search Mode -->
+                <div class="form-group">
+                    <label><i class="fas fa-search-location"></i> Search Mode</label>
+                    <select id="search-mode" style="width:100%;padding:10px 14px;background:#16213e;border:1px solid #2a2a4a;border-radius:8px;color:#e0e0e0;font-size:14px;">
+                        <option value="normal">Normal Search</option>
+                        <option value="fuzzy">More Results (Fuzzy Search)</option>
+                        <option value="grid">Perumahan / Residential Area (Grid Search)</option>
+                    </select>
+                </div>
+
+                <!-- Grid Options (only show when grid mode selected) -->
+                <div id="grid-options" style="display:none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-circle"></i> Radius (km)</label>
+                            <input type="number" id="grid-radius" step="0.1" value="1.0" min="0.1" max="5.0" placeholder="1.0">
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-ruler"></i> Step (m)</label>
+                            <input type="number" id="grid-step" step="50" value="200" min="50" max="500" placeholder="200">
+                        </div>
+                    </div>
+                    <p style="font-size: 10px; color: #6b7280; margin-top: -8px; margin-bottom: 12px;">
+                        <i class="fas fa-info-circle"></i> Grid search scans systematically across the area. Larger radius = slower but more thorough.
+                    </p>
+                </div>
+
+                <!-- Search Button -->
+                <button class="btn btn-primary" id="searchBtn" onclick="searchLocations()">
+                    <i class="fas fa-search"></i> Search Locations
+                </button>
+            </div>
+
+            <!-- Results Section -->
+            <div class="results-section" id="resultsSection" style="display: none;">
+                <div class="results-header">
+                    <h3>Results <span class="results-count" id="resultsCount">0</span></h3>
+                </div>
+
+                <div class="export-buttons">
+                    <a class="export-btn" href="/export/json" target="_blank"><i class="fas fa-file-code"></i> JSON</a>
+                    <a class="export-btn" href="/export/geojson" target="_blank"><i class="fas fa-globe"></i> GeoJSON</a>
+                    <a class="export-btn" href="/export/csv" target="_blank"><i class="fas fa-file-csv"></i> CSV</a>
+                    <a class="export-btn" href="/export/ids" target="_blank"><i class="fas fa-hashtag"></i> IDs</a>
+                    <a class="export-btn" href="/export/map" target="_blank"><i class="fas fa-map"></i> Map HTML</a>
+                </div>
+
+                <br>
+
+                <div class="results-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Address</th>
+                                <th>Coords</th>
+                                <th>Link</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Map Area -->
+        <div class="map-area">
+            <div class="map-header">
+                <h2><i class="fas fa-map"></i> Map View</h2>
+                <span class="map-coords" id="mapCoords">Click map to set location</span>
+            </div>
+            <div id="map"></div>
+            <div class="coord-hint">
+                <i class="fas fa-mouse-pointer"></i> Klik pada peta untuk memindahkan titik pusat & radius 3km
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <div class="loading-text">Searching Instagram locations...</div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // Initialize Map
+        const map = L.map('map').setView([20, 0], 2);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        let markers = L.layerGroup().addTo(map);
+        let centerMarker = null;
+        let radiusCircle = null;
+
+        // Click on map to set coordinates
+        map.on('click', function(e) {
+            const lat = e.latlng.lat.toFixed(6);
+            const lng = e.latlng.lng.toFixed(6);
+
+            document.getElementById('coords').value = `${lat}, ${lng}`;
+            document.getElementById('mapCoords').textContent = `Lat: ${lat} | Lng: ${lng}`;
+
+            // Update center marker
+            if (centerMarker) {
+                map.removeLayer(centerMarker);
+            }
+            centerMarker = L.marker([lat, lng], {
+                icon: L.divIcon({
+                    className: 'custom-marker',
+                    html: '<div style="background:#667eea;width:14px;height:14px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);"></div>',
+                    iconSize: [14, 14],
+                    iconAnchor: [7, 7]
+                })
+            }).addTo(map);
+            centerMarker.bindPopup(`<b>Titik Pusat</b><br>Lat: ${lat}<br>Lng: ${lng}`).openPopup();
+
+            // Update radius circle
+            if (radiusCircle) {
+                map.removeLayer(radiusCircle);
+            }
+            radiusCircle = L.circle([lat, lng], {
+                radius: 3000,
+                color: '#667eea',
+                fillColor: '#667eea',
+                fillOpacity: 0.1,
+                weight: 2,
+                dashArray: '6, 6'
+            }).addTo(map);
+        });
+
+        // Update marker & circle when coordinates are typed manually
+        function updateMapFromInput() {
+            const coordsVal = document.getElementById('coords').value.trim();
+            if (!coordsVal || !coordsVal.includes(',')) return;
+
+            const parts = coordsVal.split(',').map(s => parseFloat(s.trim()));
+            const lat = parts[0];
+            const lng = parts[1];
+            if (isNaN(lat) || isNaN(lng)) return;
+
+            // Pan map
+            map.setView([lat, lng], 14);
+            document.getElementById('mapCoords').textContent = `Lat: ${lat.toFixed(6)} | Lng: ${lng.toFixed(6)}`;
+
+            // Update center marker
+            if (centerMarker) map.removeLayer(centerMarker);
+            centerMarker = L.marker([lat, lng], {
+                icon: L.divIcon({
+                    className: 'custom-marker',
+                    html: '<div style="background:#667eea;width:14px;height:14px;border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);"></div>',
+                    iconSize: [14, 14],
+                    iconAnchor: [7, 7]
+                })
+            }).addTo(map);
+            centerMarker.bindPopup(`<b>Titik Pusat</b><br>Lat: ${lat.toFixed(6)}<br>Lng: ${lng.toFixed(6)}`).openPopup();
+
+            // Update radius circle
+            if (radiusCircle) map.removeLayer(radiusCircle);
+            radiusCircle = L.circle([lat, lng], {
+                radius: 3000,
+                color: '#667eea',
+                fillColor: '#667eea',
+                fillOpacity: 0.1,
+                weight: 2,
+                dashArray: '6, 6'
+            }).addTo(map);
+        }
+
+        // Listen for manual coordinate input (on every keystroke with debounce)
+        let coordsDebounce = null;
+        document.getElementById('coords').addEventListener('input', function() {
+            clearTimeout(coordsDebounce);
+            coordsDebounce = setTimeout(updateMapFromInput, 500);
+        });
+
+        // Also update immediately on Enter key
+        document.getElementById('coords').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                updateMapFromInput();
+            }
+        });
+
+        // Search function
+        async function searchLocations() {
+            const cookie = document.getElementById('cookie').value.trim();
+            const coordsVal = document.getElementById('coords').value.trim();
+            const searchMode = document.getElementById('search-mode').value;
+            const more = searchMode === 'fuzzy';
+
+            if (!cookie) {
+                showToast('Please enter your Instagram cookie', 'error');
+                return;
+            }
+
+            if (!coordsVal || !coordsVal.includes(',')) {
+                showToast('Masukkan koordinat dengan format: lat, lng', 'error');
+                return;
+            }
+
+            const parts = coordsVal.split(',').map(s => parseFloat(s.trim()));
+            const lat = parts[0];
+            const lng = parts[1];
+
+            if (isNaN(lat) || isNaN(lng)) {
+                showToast('Koordinat tidak valid. Gunakan format: -6.2088, 106.8456', 'error');
+                return;
+            }
+
+            showLoading(true);
+
+            try {
+                const response = await fetch('/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        cookie: cookie,
+                        lat: parseFloat(lat),
+                        lng: parseFloat(lng),
+                        more: more,
+                        search_mode: searchMode,
+                        radius_km: parseFloat(document.getElementById('grid-radius').value) || 1.0,
+                        step_m: parseFloat(document.getElementById('grid-step').value) || 200
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    showToast(data.error || 'Search failed', 'error');
+                    return;
+                }
+
+                if (data.count === 0) {
+                    showToast(data.message || 'No locations found', 'error');
+                    return;
+                }
+
+                // Update map
+                markers.clearLayers();
+                const bounds = L.latLngBounds();
+
+                data.geojson.features.forEach(feature => {
+                    const [lng, lat] = feature.geometry.coordinates;
+                    const props = feature.properties;
+
+                    const marker = L.marker([lat, lng]);
+                    marker.bindPopup(`
+                        <div class="popup-name">${props.name || 'Unknown'}</div>
+                        <div class="popup-address">${props.address || 'No address'}</div>
+                        <a href="#" onclick="openInBrowser('https://www.instagram.com/explore/locations/${props.external_id}'); return false;">
+                            <i class="fab fa-instagram"></i> View on Instagram
+                        </a>
+                    `);
+                    markers.addLayer(marker);
+                    bounds.extend([lat, lng]);
+                });
+
+                // Fit map to bounds
+                if (data.count > 0) {
+                    map.fitBounds(bounds, { padding: [30, 30] });
+                }
+
+                // Update results table
+                document.getElementById('resultsSection').style.display = 'block';
+                document.getElementById('resultsCount').textContent = data.count;
+
+                const tbody = document.getElementById('resultsBody');
+                tbody.innerHTML = '';
+
+                data.locations.forEach(loc => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td><strong>${loc.name || 'Unknown'}</strong></td>
+                        <td>${loc.address || '-'}</td>
+                        <td style="font-family:monospace;font-size:11px;">${loc.lat ? loc.lat.toFixed(4) : '-'}, ${loc.lng ? loc.lng.toFixed(4) : '-'}</td>
+                        <td><a href="#" onclick="openInBrowser('https://www.instagram.com/explore/locations/${loc.external_id}'); return false;"><i class="fas fa-external-link-alt"></i></a></td>
+                    `;
+                    // Click row to zoom to location
+                    row.style.cursor = 'pointer';
+                    row.onclick = () => {
+                        if (loc.lat && loc.lng) {
+                            map.setView([loc.lat, loc.lng], 17);
+                        }
+                    };
+                    tbody.appendChild(row);
+                });
+
+                showToast(`Found ${data.count} locations!`, 'success');
+
+            } catch (err) {
+                showToast('Network error: ' + err.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Get cookies via browser
+        async function getCookies() {
+            showLoading(true);
+            try {
+                const response = await fetch('/get-cookies', { method: 'POST' });
+                const data = await response.json();
+
+                if (data.cookie) {
+                    document.getElementById('cookie').value = data.cookie;
+                    showToast('Cookie obtained successfully!', 'success');
+                } else {
+                    showToast(data.error || 'Failed to get cookies', 'error');
+                }
+            } catch (err) {
+                showToast('Error: ' + err.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Open URL in the same browser that has Instagram cookies
+        async function openInBrowser(url) {
+            try {
+                const response = await fetch('/open-url', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: url })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showToast('Opened in browser!', 'success');
+                } else {
+                    showToast(data.error || 'Failed to open in browser', 'error');
+                    // Fallback: open in new tab if browser is not available
+                    window.open(url, '_blank');
+                }
+            } catch (err) {
+                showToast('Browser not available, opening in new tab', 'error');
+                window.open(url, '_blank');
+            }
+        }
+
+        // Toggle grid options visibility
+        document.getElementById('search-mode').addEventListener('change', function() {
+            const gridOptions = document.getElementById('grid-options');
+            gridOptions.style.display = this.value === 'grid' ? 'block' : 'none';
+        });
+
+        // Helpers
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').classList.toggle('active', show);
+            document.getElementById('searchBtn').disabled = show;
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast show ' + type;
+            setTimeout(() => {
+                toast.className = 'toast';
+            }, 4000);
+        }
+    </script>
+</body>
+</html>

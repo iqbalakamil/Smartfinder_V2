@@ -1,0 +1,3 @@
+contoh .pbfkey = https://api.maptiler.com/tiles/v3/11/1631/1059.pbf?key=6mDvVmws6MAP2ihtR5FS
+tiles.json = https://api.maptiler.com/tiles/v3/tiles.json?key=6mDvVmws6MAP2ihtR5FS
+sprite@2x.json = https://api.maptiler.com/maps/streets/sprite@2x.json

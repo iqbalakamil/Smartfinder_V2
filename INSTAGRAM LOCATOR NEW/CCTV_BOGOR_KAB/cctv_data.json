@@ -1,0 +1,412 @@
+[
+  {
+    "id_lokasi": 1,
+    "nama_lokasi": "SENTUL",
+    "ket_lokasi": "Simpang Sentul",
+    "lat": -6.518387,
+    "lng": 106.836096,
+    "tahun": 2015,
+    "is_active": true,
+    "cameras": [
+      {
+        "id": 1,
+        "nama": "SENTUL1",
+        "nama_alias": "SIMPANG SENTUL 1",
+        "deskripsi": "KAMERA FIX 1 SIMPANG SENTUL",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/SENTUL1/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/SENTUL1/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/SENTUL1_2_71593.jpg"
+      },
+      {
+        "id": 1,
+        "nama": "SENTUL2",
+        "nama_alias": "SIMPANG SENTUL 2",
+        "deskripsi": "KAMERA FIX 2 SIMPANG SENTUL",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/SENTUL2/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/SENTUL2/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/SENTUL2_3_56566.jpg"
+      },
+      {
+        "id": 1,
+        "nama": "SENTUL3",
+        "nama_alias": "SIMPANG SENTUL 3",
+        "deskripsi": "KAMERA FIX 3 SIMPANG SENTUL",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/SENTUL3/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/SENTUL3/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/SENTUL3_4_71593.jpg"
+      },
+      {
+        "id": 1,
+        "nama": "SENTUL4",
+        "nama_alias": "SIMPANG SENTUL 4",
+        "deskripsi": "KAMERA FIX 4 SIMPANG SENTUL",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/SENTUL4/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/SENTUL4/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/SENTUL4_5_71593.jpg"
+      },
+      {
+        "id": 1,
+        "nama": "SENTUL",
+        "nama_alias": "SIMPANG SENTUL",
+        "deskripsi": "KAMERA PTZ SIMPANG SENTUL",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/SENTUL/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/SENTUL/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/SENTUL_1_71593.jpg"
+      }
+    ]
+  },
+  {
+    "id_lokasi": 2,
+    "nama_lokasi": "PEMDA",
+    "ket_lokasi": "Simpang Pemda",
+    "lat": -6.485058,
+    "lng": 106.843667,
+    "tahun": 2015,
+    "is_active": true,
+    "cameras": [
+      {
+        "id": 2,
+        "nama": "PEMDA",
+        "nama_alias": "SIMPANG PEMDA",
+        "deskripsi": "KAMERA PTZ SIMPANG PEMDA",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/PEMDA/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/PEMDA/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/PEMDA_6_61515.jpg"
+      },
+      {
+        "id": 2,
+        "nama": "PEMDA1",
+        "nama_alias": "SIMPANG PEMDA 1",
+        "deskripsi": "KAMERA FIX 1 SIMPANG PEMDA",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/PEMDA1/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/PEMDA1/?controls=1&autoplay=1&muted=1",
+        "poster_url": null
+      },
+      {
+        "id": 2,
+        "nama": "PEMDA2",
+        "nama_alias": "SIMPANG PEMDA 2",
+        "deskripsi": "KAMERA FIX 2 SIMPANG PEMDA",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/PEMDA2/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/PEMDA2/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/PEMDA2_8_61515.jpg"
+      },
+      {
+        "id": 2,
+        "nama": "PEMDA3",
+        "nama_alias": "SIMPANG PEMDA 3",
+        "deskripsi": "KAMERA FIX 3 SIMPANG PEMDA",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/PEMDA3/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/PEMDA3/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/PEMDA3_9_61515.jpg"
+      }
+    ]
+  },
+  {
+    "id_lokasi": 3,
+    "nama_lokasi": "PDAM",
+    "ket_lokasi": "Simpang PDAM",
+    "lat": -6.482619,
+    "lng": 106.817786,
+    "tahun": 2015,
+    "is_active": true,
+    "cameras": [
+      {
+        "id": 3,
+        "nama": "PDAM",
+        "nama_alias": "SIMPANG PDAM",
+        "deskripsi": "KAMERA PTZ SIMPANG PDAM",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/PDAM/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/PDAM/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/PDAM_10_61515.jpg"
+      },
+      {
+        "id": 3,
+        "nama": "PDAM1",
+        "nama_alias": "SIMPANG PDAM 1",
+        "deskripsi": "KAMERA FIX 1 SIMPANG PDAM",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/PDAM/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/PDAM/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/PDAM1_11_61515.jpg"
+      },
+      {
+        "id": 3,
+        "nama": "PDAM2",
+        "nama_alias": "SIMPANG PDAM 2",
+        "deskripsi": "KAMERA FIX 2 SIMPANG PDAM",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/PDAM1/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/PDAM1/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/PDAM2_12_55395.jpg"
+      },
+      {
+        "id": 3,
+        "nama": "PDAM3",
+        "nama_alias": "SIMPANG PDAM 3",
+        "deskripsi": "KAMERA FIX 3 SIMPANG PDAM",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/PDAM2/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/PDAM2/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/PDAM3_13_61515.jpg"
+      },
+      {
+        "id": 3,
+        "nama": "PDAM4",
+        "nama_alias": "SIMPANG PDAM 4",
+        "deskripsi": "KAMERA FIX 4 SIMPANG PDAM",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/PDAM3/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/PDAM3/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/PDAM4_14_61515.jpg"
+      }
+    ]
+  },
+  {
+    "id_lokasi": 4,
+    "nama_lokasi": "CIBINONG",
+    "ket_lokasi": "Simpang Cibinong",
+    "lat": -6.465406,
+    "lng": 106.855573,
+    "tahun": 2017,
+    "is_active": true,
+    "cameras": [
+      {
+        "id": 4,
+        "nama": "CIBINONG",
+        "nama_alias": "SIMPANG CIBINONG",
+        "deskripsi": "KAMERA PTZ SIMPANG CIBINONG",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/CIBINONG/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/CIBINONG/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/CIBINONG_15_61515.jpg"
+      }
+    ]
+  },
+  {
+    "id_lokasi": 5,
+    "nama_lokasi": "CIKARET",
+    "ket_lokasi": "Simpang Cikaret",
+    "lat": -6.477931,
+    "lng": 106.84496,
+    "tahun": 2017,
+    "is_active": true,
+    "cameras": [
+      {
+        "id": 5,
+        "nama": "CIKARET",
+        "nama_alias": "SIMPANG CIKARET",
+        "deskripsi": "KAMERA PTZ SIMPANG CIKARET",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/CIKARET/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/CIKARET/?controls=1&autoplay=1&muted=1",
+        "poster_url": null
+      }
+    ]
+  },
+  {
+    "id_lokasi": 6,
+    "nama_lokasi": "CIAWI",
+    "ket_lokasi": "Simpang Ciawi",
+    "lat": -6.655799,
+    "lng": 106.847146,
+    "tahun": 2017,
+    "is_active": true,
+    "cameras": [
+      {
+        "id": 6,
+        "nama": "CIAWI",
+        "nama_alias": "SIMPANG CIAWI",
+        "deskripsi": "KAMERA PTZ SIMPANG CIAWI",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/CIAWI/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/CIAWI/?controls=1&autoplay=1&muted=1",
+        "poster_url": null
+      },
+      {
+        "id": 6,
+        "nama": "CIAWI1",
+        "nama_alias": "SIMPANG CIAWI 1",
+        "deskripsi": "KAMERA FIX 1 SIMPANG CIAWI",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/CIAWI1/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/CIAWI1/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/CIAWI1_18_71577.jpg"
+      },
+      {
+        "id": 6,
+        "nama": "CIAWI2",
+        "nama_alias": "SIMPANG CIAWI 2",
+        "deskripsi": "KAMERA FIX 2 SIMPANG CIAWI",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/CIAWI2/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/CIAWI2/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/CIAWI2_19_71577.jpg"
+      },
+      {
+        "id": 6,
+        "nama": "CIAWI3",
+        "nama_alias": "SIMPANG CIAWI 3",
+        "deskripsi": "KAMERA FIX 3 SIMPANG CIAWI",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/CIAWI3/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/CIAWI3/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/CIAWI3_20_71577.jpg"
+      }
+    ]
+  },
+  {
+    "id_lokasi": 7,
+    "nama_lokasi": "GADOG",
+    "ket_lokasi": "Simpang Gadog",
+    "lat": -6.655415,
+    "lng": 106.859108,
+    "tahun": 2017,
+    "is_active": true,
+    "cameras": [
+      {
+        "id": 7,
+        "nama": "GADOG",
+        "nama_alias": "SIMPANG GADOG",
+        "deskripsi": "KAMERA PTZ SIMPANG GADOG",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/GADOG/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/GADOG/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/GADOG_21_71577.jpg"
+      },
+      {
+        "id": 7,
+        "nama": "GADOG1",
+        "nama_alias": "SIMPANG GADOG 1",
+        "deskripsi": "KAMERA FIX 1 SIMPANG GADOG",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/GADOG1/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/GADOG1/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/GADOG1_22_71577.jpg"
+      },
+      {
+        "id": 7,
+        "nama": "GADOG2",
+        "nama_alias": "SIMPANG GADOG 2",
+        "deskripsi": "KAMERA FIX 2 SIMPANG GADOG",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/GADOG2/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/GADOG2/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/GADOG2_23_71577.jpg"
+      },
+      {
+        "id": 7,
+        "nama": "GADOG3",
+        "nama_alias": "SIMPANG GADOG 3",
+        "deskripsi": "KAMERA FIX 3 SIMPANG GADOG",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/GADOG3/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/GADOG3/?controls=1&autoplay=1&muted=1",
+        "poster_url": null
+      }
+    ]
+  },
+  {
+    "id_lokasi": 8,
+    "nama_lokasi": "KANTOR DISHUB",
+    "ket_lokasi": "Simpang Kantor Dishub",
+    "lat": -6.530293,
+    "lng": 106.82958,
+    "tahun": 2018,
+    "is_active": true,
+    "cameras": [
+      {
+        "id": 8,
+        "nama": "KANTORDISHUB",
+        "nama_alias": "SIMPANG KANTOR DISHUB",
+        "deskripsi": "KAMERA PTZ SIMPANG KANTOR DISHUB",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/KANTORDISHUB/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/KANTORDISHUB/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/KANTORDISHUB_25_71577.jpg"
+      }
+    ]
+  },
+  {
+    "id_lokasi": 9,
+    "nama_lokasi": "TAMAN SAFARI",
+    "ket_lokasi": "Taman Safari",
+    "lat": -6.687401,
+    "lng": 106.94012,
+    "tahun": 2021,
+    "is_active": true,
+    "cameras": [
+      {
+        "id": 9,
+        "nama": "TAMANSAFARI",
+        "nama_alias": "TAMAN SAFARI",
+        "deskripsi": "KAMERA PTZ TAMAN SAFARI",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/TAMANSAFARI/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/TAMANSAFARI/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/TAMANSAFARI_26_51732.jpg"
+      }
+    ]
+  },
+  {
+    "id_lokasi": 10,
+    "nama_lokasi": "BAPPENDA",
+    "ket_lokasi": "Simpang Bappenda",
+    "lat": -6.484866,
+    "lng": 106.835879,
+    "tahun": 2025,
+    "is_active": true,
+    "cameras": [
+      {
+        "id": 10,
+        "nama": "BAPPENDA",
+        "nama_alias": "SIMPANG BAPPENDA",
+        "deskripsi": "KAMERA PTZ SIMPANG BAPPENDA",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/BAPPENDA/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/BAPPENDA/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/BAPPENDA_27_61515.jpg"
+      },
+      {
+        "id": 10,
+        "nama": "BAPPENDA1",
+        "nama_alias": "SIMPANG BAPPENDA 1",
+        "deskripsi": "KAMERA FIX 1 SIMPANG BAPPENDA",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/BAPPENDA1/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/BAPPENDA1/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/BAPPENDA1_28_61515.jpg"
+      },
+      {
+        "id": 10,
+        "nama": "BAPPENDA2",
+        "nama_alias": "SIMPANG BAPPENDA 2",
+        "deskripsi": "KAMERA FIX 2 SIMPANG BAPPENDA",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/BAPPENDA2/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/BAPPENDA2/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/BAPPENDA2_29_61513.jpg"
+      },
+      {
+        "id": 10,
+        "nama": "BAPPENDA3",
+        "nama_alias": "SIMPANG BAPPENDA 3",
+        "deskripsi": "KAMERA FIX 3 SIMPANG BAPPENDA",
+        "type_cam": 1,
+        "url_proxy_hls": "https://itscctv-dishub.bogorkab.go.id/stream/BAPPENDA3/",
+        "stream_iframe_url": "https://itscctv-dishub.bogorkab.go.id/stream/BAPPENDA3/?controls=1&autoplay=1&muted=1",
+        "poster_url": "https://itscctv-dishub.bogorkab.go.id/poster/BAPPENDA3_30_51214.jpg"
+      }
+    ]
+  }
+]

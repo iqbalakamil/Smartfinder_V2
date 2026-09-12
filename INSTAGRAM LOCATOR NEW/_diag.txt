@@ -1,0 +1,31 @@
+"""Minimal diagnostic for the page script (temporary)."""
+import json
+import time
+
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+
+opts = Options()
+opts.add_argument("--headless=new")
+opts.add_argument("--window-size=1400,900")
+opts.add_argument("--disable-gpu")
+opts.add_argument("--no-sandbox")
+opts.set_capability("goog:loggingPrefs", {"browser": "ALL"})
+
+try:
+    from selenium.webdriver.chrome.service import Service
+    from webdriver_manager.chrome import ChromeDriverManager
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=opts)
+except Exception:
+    driver = webdriver.Chrome(options=opts)
+
+try:
+    driver.get("http://127.0.0.1:5000/")
+    time.sleep(4)
+    print("globals:", driver.execute_script(
+        "return { viewer: typeof globeViewer, map: typeof map, startTraffic: typeof startTrafficSim, inIdn: typeof inIndonesia };"))
+    for entry in driver.get_log("browser"):
+        if entry.get("level") in ("SEVERE", "ERROR"):
+            print("ERR:", entry.get("message", "")[:400])
+finally:
+    driver.quit()

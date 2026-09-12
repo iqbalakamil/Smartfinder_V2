@@ -1,0 +1,131 @@
+/* Custom CSS for CCTV Kabupaten Bogor Web App */
+
+/* Custom Scrollbars */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.6);
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #475569;
+}
+
+/* Animations */
+@keyframes scaleUp {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+.animate-scale-up {
+    animation: scaleUp 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Leaflet Dark Theme Overrides */
+.leaflet-container {
+    font-family: 'Inter', sans-serif !important;
+    background-color: #0b0f19 !important;
+}
+
+.leaflet-popup-content-wrapper {
+    background: #1e293b !important;
+    color: #f8fafc !important;
+    border: 1px solid #334155 !important;
+    border-radius: 1rem !important;
+    padding: 0.25rem !important;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5) !important;
+}
+
+.leaflet-popup-tip {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+}
+
+.leaflet-popup-close-button {
+    color: #94a3b8 !important;
+    padding: 8px 10px 0 0 !important;
+}
+
+.leaflet-popup-close-button:hover {
+    color: #ffffff !important;
+}
+
+/* Custom Marker Pin Animation */
+.cctv-marker-pin {
+    width: 38px;
+    height: 38px;
+    border-radius: 50% 50% 50% 0;
+    position: absolute;
+    transform: rotate(-45deg);
+    left: 50%;
+    top: 50%;
+    margin: -19px 0 0 -19px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
+    border: 2px solid #ffffff;
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.5);
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+
+.cctv-marker-pin:hover {
+    transform: rotate(-45deg) scale(1.15);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.8);
+}
+
+.cctv-marker-pin i {
+    transform: rotate(45deg);
+    color: #ffffff;
+    font-size: 15px;
+}
+
+.cctv-marker-pulse {
+    background: rgba(99, 102, 241, 0.4);
+    border-radius: 50%;
+    height: 14px;
+    width: 14px;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    margin: 11px 0 0 -7px;
+    transform: rotateX(55deg);
+    z-index: -1;
+}
+
+.cctv-marker-pulse:after {
+    content: "";
+    border-radius: 50%;
+    height: 40px;
+    width: 40px;
+    position: absolute;
+    margin: -13px 0 0 -13px;
+    animation: pulsate 2s ease-out infinite;
+    opacity: 0;
+    box-shadow: 0 0 1px 2px #6366f1;
+}
+
+@keyframes pulsate {
+    0% {
+        transform: scale(0.1, 0.1);
+        opacity: 0;
+    }
+    50% {
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1.2, 1.2);
+        opacity: 0;
+    }
+}

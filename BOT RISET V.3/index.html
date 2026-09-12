@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smartkidz Geo-Market Research Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">AI Geo-Market Research Dashboard</p>
+        <h1>Analisis lokasi cabang baru Bimba Smartkidz berbasis koordinat</h1>
+        <p class="hero-text">
+          Dashboard ini membantu Anda melakukan riset pasar online, kompetitor, digital footprint,
+          market sizing, dan rekomendasi strategi pembukaan cabang baru untuk anak usia 2-7 tahun.
+        </p>
+      </div>
+      <div class="hero-card">
+        <div class="hero-metric">
+          <span>Produk</span>
+          <strong>Bimba & Preschool</strong>
+        </div>
+        <div class="hero-metric">
+          <span>SPP</span>
+          <strong>Rp500K - Rp700K / bulan</strong>
+        </div>
+        <div class="hero-metric">
+          <span>Pertemuan</span>
+          <strong>12x / bulan</strong>
+        </div>
+      </div>
+    </header>
+
+    <main class="dashboard-grid">
+      <section class="panel panel-form">
+        <div class="panel-heading">
+          <h2>Input Analisis</h2>
+          <p>Masukkan titik koordinat dan jalankan analisis backend radius 3 KM.</p>
+        </div>
+
+        <form id="research-form" class="form-grid">
+          <label class="full-width">
+            <span>Koordinat (Latitude, Longitude)</span>
+            <input id="coordinates" name="coordinates" type="text" placeholder="-6.200000, 106.816666" required>
+          </label>
+
+          <label>
+            <span>Tipe Bisnis</span>
+            <input id="businessType" name="businessType" type="text" value="Bimba Smartkidz - pendidikan anak usia dini">
+          </label>
+
+          <label>
+            <span>Target Customer</span>
+            <input id="targetCustomer" name="targetCustomer" type="text" value="Orang tua anak usia 2-7 tahun kelas menengah di area urban/suburban Indonesia">
+          </label>
+
+          <label>
+            <span>Mode Analisis</span>
+            <select id="analysisMode" name="analysisMode">
+              <option value="balanced" selected>Balanced</option>
+              <option value="fast">Fast</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Backend URL</span>
+            <input id="proxyUrl" name="proxyUrl" type="url" value="http://127.0.0.1:8787" required>
+          </label>
+
+          <label class="checkbox-row full-width">
+            <input id="rememberSettings" name="rememberSettings" type="checkbox" checked>
+            <span>Simpan pengaturan form di browser ini</span>
+          </label>
+
+          <label class="checkbox-row full-width">
+            <input id="useProxy" name="useProxy" type="checkbox" checked>
+            <span>Gunakan proxy lokal agar request browser lebih stabil</span>
+          </label>
+
+          <label class="full-width">
+            <span>Catatan Tambahan</span>
+            <textarea id="extraNotes" name="extraNotes" rows="4" placeholder="Contoh: prioritaskan area keluarga muda, dekat sekolah, dan minim kompetitor langsung."></textarea>
+          </label>
+
+          <div class="form-actions full-width">
+            <button id="submitButton" type="submit">Mulai Riset</button>
+            <button id="sampleButton" type="button" class="secondary">Isi Contoh Koordinat</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel panel-status">
+        <div class="panel-heading">
+          <h2>Status & Ringkasan</h2>
+          <p>Hasil inti akan ditampilkan di sini setelah JSON tervalidasi.</p>
+        </div>
+
+        <div id="statusBanner" class="status-banner idle">
+          Siap menjalankan analisis.
+        </div>
+
+        <div id="coordinateHint" class="coordinate-hint">
+          Koordinat akan dinormalisasi sebagai latitude lalu longitude, misalnya `-6.174465, 106.822745`.
+        </div>
+
+        <div id="resolvedLocation" class="coordinate-hint">
+          Lokasi tervalidasi dari koordinat akan muncul di sini sebelum analisis AI dijalankan.
+        </div>
+
+        <div id="summaryCards" class="summary-cards">
+          <article class="summary-card">
+            <span>Decision</span>
+            <strong>-</strong>
+          </article>
+          <article class="summary-card">
+            <span>Confidence</span>
+            <strong>-</strong>
+          </article>
+          <article class="summary-card">
+            <span>Potential Revenue</span>
+            <strong>-</strong>
+          </article>
+        </div>
+
+        <div class="insight-box">
+          <h3>Market Area</h3>
+          <ol id="topDistricts" class="rank-list">
+            <li>Belum ada hasil.</li>
+          </ol>
+        </div>
+
+        <div class="insight-box">
+          <h3>Narasi Strategis</h3>
+          <div id="opportunitySnapshot" class="snapshot-text">
+            Jalankan analisis untuk melihat narasi bisnis dari hasil JSON.
+          </div>
+        </div>
+      </section>
+
+      <section class="panel panel-prompt">
+        <div class="panel-heading">
+          <h2>Analysis Context</h2>
+          <p>Payload kerja backend dan ringkasan fetch layer akan muncul di bawah.</p>
+        </div>
+        <pre id="promptPreview" class="code-block">Belum ada context.</pre>
+      </section>
+
+      <section class="panel panel-result">
+        <div class="panel-heading">
+          <h2>JSON Result</h2>
+          <p>Output wajib valid JSON sesuai schema analisa geo-market.</p>
+        </div>
+        <div class="result-actions">
+          <button id="copyButton" type="button" class="secondary">Copy JSON</button>
+          <button id="downloadButton" type="button" class="secondary">Download JSON</button>
+        </div>
+        <pre id="jsonOutput" class="code-block large">Belum ada hasil.</pre>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

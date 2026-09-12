@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Monitoring CCTV Kota Depok</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <!-- Google Fonts (Inter) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- HLS.js for m3u8 streaming -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --bg-card: #1e293b;
+      --bg-card-hover: #334155;
+      --border-color: rgba(255, 255, 255, 0.08);
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #22c55e;
+      --danger: #ef4444;
+      --text-main: #f8fafc;
+      --text-sub: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* HEADER */
+    header {
+      height: 60px;
+      background-color: #0b1329;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 1000;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      width: 38px;
+      height: 38px;
+      background: linear-gradient(135deg, var(--primary), #6366f1);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+
+    .brand-text h1 {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+      color: #fff;
+    }
+
+    .brand-text p {
+      font-size: 11px;
+      color: var(--text-sub);
+    }
+
+    .header-stats {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .stat-badge {
+      background-color: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    .dot.green { background-color: var(--success); box-shadow: 0 0 8px var(--success); }
+    .dot.red { background-color: var(--danger); }
+    .dot.blue { background-color: var(--primary); }
+
+    .realtime-clock {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-sub);
+      font-variant-numeric: tabular-nums;
+      margin-left: 10px;
+      padding-left: 15px;
+      border-left: 1px solid var(--border-color);
+    }
+
+    /* MAIN CONTAINER */
+    .main-container {
+      flex: 1;
+      display: flex;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* SIDEBAR */
+    .sidebar {
+      width: 340px;
+      background-color: var(--bg-card);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      z-index: 900;
+      transition: transform 0.3s ease;
+    }
+
+    .sidebar-search {
+      padding: 16px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .search-box {
+      position: relative;
+    }
+
+    .search-box i {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-sub);
+      font-size: 14px;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 10px 12px 10px 36px;
+      background-color: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-main);
+      font-size: 13px;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    .search-input:focus {
+      border-color: var(--primary);
+      background-color: rgba(0, 0, 0, 0.4);
+    }
+
+    .filter-tabs {
+      display: flex;
+      gap: 6px;
+      margin-top: 12px;
+    }
+
+    .filter-tab {
+      flex: 1;
+      padding: 6px 0;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid transparent;
+      border-radius: 6px;
+      color: var(--text-sub);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .filter-tab.active {
+      background: rgba(59, 130, 246, 0.15);
+      border-color: rgba(59, 130, 246, 0.4);
+      color: var(--primary);
+    }
+
+    .cctv-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+
+    .cctv-list::-webkit-scrollbar {
+      width: 5px;
+    }
+    .cctv-list::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+    }
+
+    .cctv-item {
+      padding: 12px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid transparent;
+      margin-bottom: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.2s;
+    }
+
+    .cctv-item:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-color);
+    }
+
+    .cctv-item-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .cctv-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: rgba(59, 130, 246, 0.1);
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+
+    .cctv-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-main);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .cctv-status {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 12px;
+      flex-shrink: 0;
+    }
+
+    .cctv-status.online {
+      background-color: rgba(34, 197, 94, 0.15);
+      color: var(--success);
+    }
+
+    .cctv-status.offline {
+      background-color: rgba(239, 68, 68, 0.15);
+      color: var(--danger);
+    }
+
+    /* MAP CONTAINER */
+    #map {
+      flex: 1;
+      height: 100%;
+      background: #090d16;
+      z-index: 1;
+    }
+
+    /* MAP CUSTOM MARKERS */
+    .marker-pin {
+      width: 30px;
+      height: 30px;
+      border-radius: 50% 50% 50% 0;
+      position: absolute;
+      transform: rotate(-45deg);
+      left: 50%;
+      top: 50%;
+      margin: -15px 0 0 -15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    }
+
+    .marker-pin::after {
+      content: '';
+      width: 14px;
+      height: 14px;
+      margin: 8px 0 0 8px;
+      background: #fff;
+      position: absolute;
+      border-radius: 50%;
+    }
+
+    .marker-pin.online {
+      background: var(--success);
+    }
+
+    .marker-pin.offline {
+      background: #64748b;
+    }
+
+    .custom-div-icon i {
+      transform: rotate(45deg);
+      color: #0f172a;
+      font-size: 12px;
+      z-index: 10;
+      position: relative;
+    }
+
+    /* MODAL VIDEO PLAYER */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
+      z-index: 2000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-backdrop.active {
+      display: flex;
+    }
+
+    .modal-box {
+      width: 100%;
+      max-width: 800px;
+      background: #0f172a;
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+      display: flex;
+      flex-direction: column;
+      animation: modalIn 0.25s ease-out;
+    }
+
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .modal-header {
+      padding: 16px 20px;
+      background: #1e293b;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-header h3 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .modal-close-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.05);
+      border: none;
+      color: var(--text-sub);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .modal-close-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+    }
+
+    .video-container {
+      position: relative;
+      width: 100%;
+      background: #000;
+      aspect-ratio: 16 / 9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #videoPlayer {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .video-loading {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      color: var(--text-sub);
+      font-size: 13px;
+    }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .modal-footer {
+      padding: 14px 20px;
+      background: #1e293b;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--text-sub);
+    }
+
+    .live-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--danger);
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+    }
+
+    .live-tag .dot {
+      width: 6px;
+      height: 6px;
+      background-color: var(--danger);
+      border-radius: 50%;
+      animation: blink 1.2s infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* RESPONSIVE TOGGLE FOR MOBILE */
+    .mobile-toggle {
+      display: none;
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    @media (max-width: 768px) {
+      .mobile-toggle { display: block; }
+      .header-stats { display: none; }
+      .sidebar {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 280px;
+        transform: translateX(-100%);
+      }
+      .sidebar.open {
+        transform: translateX(0);
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <div class="brand">
+      <button class="mobile-toggle" id="menuToggleBtn">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+      <div class="brand-icon">
+        <i class="fa-solid fa-video"></i>
+      </div>
+      <div class="brand-text">
+        <h1>Monitoring CCTV Kota Depok</h1>
+        <p>Dinas Perhubungan Kota Depok</p>
+      </div>
+    </div>
+
+    <div class="header-stats">
+      <div class="stat-badge">
+        <span class="dot blue"></span> Total: <strong id="totalCount">0</strong>
+      </div>
+      <div class="stat-badge">
+        <span class="dot green"></span> Online: <strong id="onlineCount">0</strong>
+      </div>
+      <div class="stat-badge">
+        <span class="dot red"></span> Offline: <strong id="offlineCount">0</strong>
+      </div>
+      <div class="realtime-clock" id="clock">00:00:00</div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <div class="main-container">
+    
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-search">
+        <div class="search-box">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text" id="searchInput" class="search-input" placeholder="Cari nama atau lokasi CCTV...">
+        </div>
+        <div class="filter-tabs">
+          <button class="filter-tab active" data-filter="all">Semua</button>
+          <button class="filter-tab" data-filter="online">Online</button>
+          <button class="filter-tab" data-filter="offline">Offline</button>
+        </div>
+      </div>
+
+      <div class="cctv-list" id="cctvList">
+        <!-- Rendered dynamically -->
+      </div>
+    </aside>
+
+    <!-- MAP -->
+    <div id="map"></div>
+
+  </div>
+
+  <!-- VIDEO PLAYER MODAL -->
+  <div class="modal-backdrop" id="videoModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="modalTitle"><i class="fa-solid fa-video"></i> Nama CCTV</h3>
+        <button class="modal-close-btn" id="closeModalBtn">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="video-container">
+        <div class="video-loading" id="videoSpinner">
+          <div class="spinner"></div>
+          <span>Menghubungkan ke Stream...</span>
+        </div>
+        <video id="videoPlayer" controls autoplay muted playsinline></video>
+      </div>
+
+      <div class="modal-footer">
+        <span class="live-tag"><span class="dot"></span> Live Streaming</span>
+        <span id="cctvIpText">IP: -</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    // State Variables
+    let cctvData = [];
+    let activeFilter = 'all';
+    let map, markersGroup;
+    let hlsPlayer = null;
+
+    // DOM Elements
+    const cctvListEl = document.getElementById('cctvList');
+    const searchInput = document.getElementById('searchInput');
+    const filterTabs = document.querySelectorAll('.filter-tab');
+    const videoModal = document.getElementById('videoModal');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const videoPlayer = document.getElementById('videoPlayer');
+    const videoSpinner = document.getElementById('videoSpinner');
+    const modalTitle = document.getElementById('modalTitle');
+    const cctvIpText = document.getElementById('cctvIpText');
+    const menuToggleBtn = document.getElementById('menuToggleBtn');
+    const sidebar = document.getElementById('sidebar');
+
+    // Realtime Clock
+    function updateClock() {
+      const now = new Date();
+      document.getElementById('clock').textContent = now.toLocaleTimeString('id-ID');
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Mobile Sidebar Toggle
+    menuToggleBtn.addEventListener('click', () => {
+      sidebar.classList.toggle('open');
+    });
+
+    // Initialize Map
+    function initMap() {
+      // Centered on Depok City
+      map = L.map('map', {
+        zoomControl: false
+      }).setView([-6.4022, 106.7928], 12);
+
+      // Dark Mode Tile Layer (CartoDB Dark Matter)
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        subdomains: 'abcd',
+        maxZoom: 19
+      }).addTo(map);
+
+      // Add Zoom Control to Top Right
+      L.control.zoom({ position: 'topright' }).addTo(map);
+
+      markersGroup = L.layerGroup().addTo(map);
+    }
+
+    // Custom Marker Icon Creator
+    function createCustomMarker(isOnline) {
+      const className = isOnline ? 'online' : 'offline';
+      return L.divIcon({
+        className: 'custom-div-icon',
+        html: `<div class="marker-pin ${className}"><i class="fa-solid fa-video"></i></div>`,
+        iconSize: [30, 42],
+        iconAnchor: [15, 42]
+      });
+    }
+
+    // Load CCTV Data
+    async function loadCCTVData() {
+      try {
+        const response = await fetch('cctv_data.json');
+        cctvData = await response.json();
+        
+        updateStats();
+        renderSidebar();
+        renderMapMarkers();
+      } catch (err) {
+        console.error('Gagal memuat data CCTV:', err);
+      }
+    }
+
+    // Update Header Statistics
+    function updateStats() {
+      const total = cctvData.length;
+      const online = cctvData.filter(item => item.status === 1).length;
+      const offline = total - online;
+
+      document.getElementById('totalCount').textContent = total;
+      document.getElementById('onlineCount').textContent = online;
+      document.getElementById('offlineCount').textContent = offline;
+    }
+
+    // Render Sidebar List
+    function renderSidebar() {
+      const keyword = searchInput.value.toLowerCase();
+      
+      const filtered = cctvData.filter(item => {
+        const matchName = item.nama_cctv.toLowerCase().includes(keyword);
+        const matchFilter = activeFilter === 'all' || 
+          (activeFilter === 'online' && item.status === 1) ||
+          (activeFilter === 'offline' && item.status !== 1);
+        return matchName && matchFilter;
+      });
+
+      cctvListEl.innerHTML = '';
+
+      if (filtered.length === 0) {
+        cctvListEl.innerHTML = `
+          <div style="text-align: center; padding: 30px; color: var(--text-sub); font-size: 13px;">
+            <i class="fa-solid fa-video-slash" style="font-size: 24px; margin-bottom: 8px; display: block;"></i>
+            Tidak ada CCTV ditemukan
+          </div>
+        `;
+        return;
+      }
+
+      filtered.forEach(item => {
+        const isOnline = item.status === 1;
+        const div = document.createElement('div');
+        div.className = 'cctv-item';
+        div.innerHTML = `
+          <div class="cctv-item-info">
+            <div class="cctv-icon"><i class="fa-solid fa-video"></i></div>
+            <div class="cctv-title" title="${item.nama_cctv}">${item.nama_cctv}</div>
+          </div>
+          <span class="cctv-status ${isOnline ? 'online' : 'offline'}">
+            ${isOnline ? 'Online' : 'Offline'}
+          </span>
+        `;
+
+        div.addEventListener('click', () => {
+          map.flyTo([item.latitude, item.longitude], 16, { duration: 1.2 });
+          openVideoModal(item);
+          if (window.innerWidth <= 768) {
+            sidebar.classList.remove('open');
+          }
+        });
+
+        cctvListEl.appendChild(div);
+      });
+    }
+
+    // Render Map Markers
+    function renderMapMarkers() {
+      markersGroup.clearLayers();
+
+      cctvData.forEach(item => {
+        const isOnline = item.status === 1;
+        const marker = L.marker([item.latitude, item.longitude], {
+          icon: createCustomMarker(isOnline)
+        });
+
+        marker.bindTooltip(`<b>${item.nama_cctv}</b><br>Status: ${isOnline ? 'Online' : 'Offline'}`, {
+          direction: 'top',
+          offset: [0, -35]
+        });
+
+        marker.on('click', () => {
+          openVideoModal(item);
+        });
+
+        markersGroup.addLayer(marker);
+      });
+    }
+
+    // Open Video Modal & Play HLS Stream
+    function openVideoModal(item) {
+      if (item.status !== 1) {
+        alert(`CCTV "${item.nama_cctv}" sedang Offline.`);
+        return;
+      }
+
+      modalTitle.innerHTML = `<i class="fa-solid fa-video" style="color: var(--primary);"></i> ${item.nama_cctv}`;
+      cctvIpText.textContent = `IP: ${item.ip}`;
+      videoSpinner.style.display = 'flex';
+      videoModal.classList.add('active');
+
+      const streamUrl = item.stream_url;
+
+      if (hlsPlayer) {
+        hlsPlayer.destroy();
+        hlsPlayer = null;
+      }
+
+      if (Hls.isSupported()) {
+        hlsPlayer = new Hls({ maxBufferLength: 10 });
+        hlsPlayer.loadSource(streamUrl);
+        hlsPlayer.attachMedia(videoPlayer);
+        hlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => {
+          videoSpinner.style.display = 'none';
+          videoPlayer.play().catch(e => console.log('Autoplay error:', e));
+        });
+        hlsPlayer.on(Hls.Events.ERROR, (event, data) => {
+          if (data.fatal) {
+            videoSpinner.style.display = 'none';
+            alert('Gagal memuat stream video. CCTV mungkin sedang tidak merespons.');
+          }
+        });
+      } else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+        // Native HLS Support (Safari / iOS)
+        videoPlayer.src = streamUrl;
+        videoPlayer.addEventListener('loadedmetadata', () => {
+          videoSpinner.style.display = 'none';
+          videoPlayer.play();
+        });
+      }
+    }
+
+    // Close Video Modal
+    function closeModal() {
+      videoModal.classList.remove('active');
+      if (hlsPlayer) {
+        hlsPlayer.destroy();
+        hlsPlayer = null;
+      }
+      videoPlayer.pause();
+      videoPlayer.src = '';
+    }
+
+    closeModalBtn.addEventListener('click', closeModal);
+    videoModal.addEventListener('click', (e) => {
+      if (e.target === videoModal) closeModal();
+    });
+
+    // Filter Listeners
+    filterTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        filterTabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        activeFilter = tab.getAttribute('data-filter');
+        renderSidebar();
+      });
+    });
+
+    searchInput.addEventListener('input', renderSidebar);
+
+    // Initial Execution
+    window.addEventListener('DOMContentLoaded', () => {
+      initMap();
+      loadCCTVData();
+    });
+  </script>
+</body>
+</html>

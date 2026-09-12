@@ -1,0 +1,1 @@
+https://maps.googleapis.com/maps/api/js?key=AIzaSyCmL18misQw9KdwqGaw3zHkitj8vG6QF2Y&paint_origin=&libraries=geometry,search&v=weekly&loading=async&language=en&region=id&experimentation=allowed&callback=onApiLoad

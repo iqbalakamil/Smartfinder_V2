@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>SMARTKIDZ HOT MAP</title>
+  <style>
+    :root {
+      --bg: #f4efe7;
+      --panel: #fffaf2;
+      --panel-strong: #ffffff;
+      --ink: #1f2933;
+      --muted: #6b7280;
+      --line: #e5dccd;
+      --primary: #d97706;
+      --primary-strong: #b45309;
+      --primary-soft: #fff1db;
+      --success: #166534;
+      --danger: #b91c1c;
+      --shadow: 0 18px 38px rgba(120, 86, 32, 0.12);
+      --radius: 18px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 90vw;
+      min-width: 720px;
+      max-width: 90vw;
+      margin: 0;
+      padding: 20px;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      color: var(--ink);
+      overflow: hidden;
+      background:
+        radial-gradient(circle at top left, rgba(255, 214, 153, 0.8), transparent 32%),
+        linear-gradient(160deg, #f8f4ee 0%, #f0e7da 50%, #f7f2ea 100%);
+    }
+
+    .viewport {
+      width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding-bottom: 6px;
+    }
+
+    .shell {
+      background: var(--panel);
+      border: 1px solid rgba(181, 128, 47, 0.12);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      min-width: 1120px;
+    }
+
+    .hero {
+      padding: 22px 24px 16px;
+      background:
+        linear-gradient(135deg, rgba(217, 119, 6, 0.12), rgba(255, 247, 237, 0.8)),
+        linear-gradient(120deg, #fffaf2, #f8ecd9);
+      border-bottom: 1px solid var(--line);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 26px;
+      line-height: 1.1;
+      letter-spacing: 0.02em;
+    }
+
+    .subtitle {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .content {
+      padding: 18px 24px 22px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--panel-strong);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+
+    .panel-title {
+      margin: 0 0 12px;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .chip-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .chip {
+      border: 1px solid #d9c4a3;
+      background: #fffdf8;
+      color: var(--ink);
+      border-radius: 14px;
+      padding: 9px 10px;
+      text-align: left;
+      cursor: pointer;
+      transition: 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 60px;
+    }
+
+    .chip:hover {
+      border-color: var(--primary);
+      transform: translateY(-1px);
+    }
+
+    .chip.active {
+      background: var(--primary-soft);
+      border-color: var(--primary);
+      box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.15);
+    }
+
+    .chip-copy {
+      min-width: 0;
+    }
+
+    .chip-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 2px;
+      line-height: 1.2;
+    }
+
+    .chip-note {
+      display: block;
+      font-size: 9px;
+      color: var(--muted);
+      line-height: 1.25;
+    }
+
+    .toggle-pill {
+      min-width: 40px;
+      padding: 3px;
+      border-radius: 999px;
+      background: #eadfcd;
+      position: relative;
+      flex-shrink: 0;
+      transition: background 0.2s ease;
+    }
+
+    .toggle-pill::before {
+      content: "";
+      display: block;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 2px 6px rgba(31, 41, 51, 0.18);
+      transform: translateX(0);
+      transition: transform 0.2s ease;
+    }
+
+    .toggle-text {
+      display: block;
+      margin-top: 4px;
+      font-size: 8px;
+      text-align: center;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+    }
+
+    .chip.active .toggle-pill {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+    }
+
+    .chip.active .toggle-pill::before {
+      transform: translateX(20px);
+    }
+
+    .chip.active .toggle-text {
+      color: var(--primary-strong);
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    select,
+    input,
+    textarea,
+    button {
+      font: inherit;
+    }
+
+    select,
+    input,
+    textarea {
+      width: 100%;
+      border: 1px solid #d7cfbf;
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: #fff;
+      color: var(--ink);
+    }
+
+    textarea {
+      min-height: 78px;
+      resize: vertical;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .button {
+      border: none;
+      border-radius: 999px;
+      padding: 11px 18px;
+      cursor: pointer;
+      transition: 0.2s ease;
+      font-weight: 700;
+    }
+
+    .button.primary {
+      background: linear-gradient(135deg, var(--primary), #f59e0b);
+      color: #fff;
+    }
+
+    .button.primary:hover {
+      background: linear-gradient(135deg, var(--primary-strong), #d97706);
+    }
+
+    .button.secondary {
+      background: #fff;
+      color: var(--ink);
+      border: 1px solid #d7cfbf;
+    }
+
+    .button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .status-box {
+      display: grid;
+      gap: 10px;
+    }
+
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .progress-track {
+      width: 280px;
+      max-width: 100%;
+      height: 10px;
+      background: #f3e8d5;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #f59e0b, #d97706);
+      transition: width 0.25s ease;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .summary-card {
+      background: #fff8ee;
+      border: 1px solid #f2dfbe;
+      border-radius: 14px;
+      padding: 10px;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .summary-card strong {
+      display: block;
+      font-size: 16px;
+      color: var(--primary-strong);
+      line-height: 1.15;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .summary-card span {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 3px;
+      overflow-wrap: anywhere;
+    }
+
+    .message {
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+
+    .message.error {
+      color: var(--danger);
+    }
+
+    .message.success {
+      color: var(--success);
+    }
+
+    .table-wrap {
+      max-height: 320px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #efe7da;
+      font-size: 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: #fff7eb;
+      z-index: 1;
+    }
+
+    .footer {
+      padding-top: 4px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .footer a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      color: var(--primary-strong);
+    }
+
+  </style>
+</head>
+<body>
+  <div class="viewport">
+    <div class="shell">
+      <div class="hero">
+        <h1>SMARTKIDZ HOT MAP</h1>
+        <p class="subtitle">Scraping Google Maps berdasarkan kategori dan wilayah Indonesia.</p>
+      </div>
+
+      <div class="content">
+        <div class="panel">
+          <p class="panel-title">Pilih Kategori</p>
+          <div class="chip-grid" id="categoryButtons">
+            <button type="button" class="chip active" data-category="hunian">
+              <span class="chip-copy">
+                <span class="chip-label">Hunian</span>
+                <span class="chip-note">housing complex, perumahan, cluster, apartment, housing</span>
+              </span>
+              <span>
+                <span class="toggle-pill"></span>
+                <span class="toggle-text">ON</span>
+              </span>
+            </button>
+            <button type="button" class="chip active" data-category="kids_education">
+              <span class="chip-copy">
+                <span class="chip-label">Kids Education</span>
+                <span class="chip-note">kids education, bimba, preschool, day care, TK, Kelompok bermain, paud</span>
+              </span>
+              <span>
+                <span class="toggle-pill"></span>
+                <span class="toggle-text">ON</span>
+              </span>
+            </button>
+            <button type="button" class="chip active" data-category="affiliate">
+              <span class="chip-copy">
+                <span class="chip-label">Affiliate</span>
+                <span class="chip-note">taman, rumah sakit, mcdonald's, KFC, Burger king, playground</span>
+              </span>
+              <span>
+                <span class="toggle-pill"></span>
+                <span class="toggle-text">ON</span>
+              </span>
+            </button>
+            <button type="button" class="chip" data-category="others">
+              <span class="chip-copy">
+                <span class="chip-label">Lainnya</span>
+                <span class="chip-note">Opsional, isi keyword sendiri di bawah ini</span>
+              </span>
+              <span>
+                <span class="toggle-pill"></span>
+                <span class="toggle-text">OFF</span>
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <p class="panel-title">Keyword Lainnya</p>
+          <label for="otherKeywords">Pisahkan dengan koma atau baris baru</label>
+          <textarea id="otherKeywords" placeholder="Contoh: montessori, gym anak, tempat les" disabled></textarea>
+        </div>
+
+        <div class="panel">
+          <p class="panel-title">Filter Area</p>
+          <div class="grid-3">
+            <div>
+              <label for="citySelect">Kota</label>
+              <select id="citySelect">
+                <option value="">Pilih kota</option>
+              </select>
+            </div>
+            <div>
+              <label for="districtSelect">Kecamatan</label>
+              <select id="districtSelect" disabled>
+                <option value="">Pilih kecamatan</option>
+              </select>
+            </div>
+            <div>
+              <label for="villageSelect">Kelurahan</label>
+              <select id="villageSelect" disabled>
+                <option value="">Pilih kelurahan</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <p class="panel-title">Aksi</p>
+          <div class="actions">
+            <button id="searchButton" class="button primary" disabled>Cari</button>
+            <button id="downloadExcelButton" class="button secondary" disabled>Download Excel</button>
+            <button id="syncMapButton" class="button secondary" disabled>Tampilkan di Peta</button>
+            <input type="text" id="filenameInput" placeholder="Prefix file excel, contoh: jabodetabek_april" />
+          </div>
+        </div>
+
+        <div class="panel status-box">
+          <p class="panel-title">Status</p>
+          <div class="status-row">
+            <span id="message" class="message">Mengecek tab Google Maps...</span>
+            <span id="progressLabel">0%</span>
+          </div>
+          <div class="progress-track">
+            <div id="progressBar" class="progress-bar"></div>
+          </div>
+        </div>
+
+        <div class="summary" id="summaryCards">
+          <div class="summary-card"><strong id="countTotal">0</strong><span>Total POI</span></div>
+          <div class="summary-card"><strong id="countHunian">0</strong><span>Hunian</span></div>
+          <div class="summary-card"><strong id="countKids">0</strong><span>Kids Education</span></div>
+          <div class="summary-card"><strong id="countAffiliate">0</strong><span>Affiliate</span></div>
+          <div class="summary-card"><strong id="countOthers">0</strong><span>Lainnya</span></div>
+        </div>
+
+        <div class="panel">
+          <p class="panel-title">Hasil Ringkas</p>
+          <div id="resultsCompact"></div>
+          </div>
+        </div>
+
+        <div class="footer">
+          <a href="https://wa.me/6289523091068" target="_blank" rel="noreferrer">made by Iqbal A Kamil</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="xlsx.full.min.js"></script>
+  <script src="category-config.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+.vercel/
+.env
+.env.*
+!.env.example
+node_modules/
+npm-debug.log*
+*.log
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store
+Thumbs.db
+
+# Local backups and generated archives
+_backup_before_restore/
+*.zip
+*.7z
+*.rar
+
+# Local development/build caches
+.cache/
+.tmp/
+_*/
