@@ -68,10 +68,14 @@ if not exist "%REPO_DIR%.git" (
 
 cd /d "%REPO_DIR%"
 set "SAFE_REPO_DIR=%REPO_DIR:~0,-1%"
+set "LOG_FILE=%REPO_DIR%launcher.log"
+> "%LOG_FILE%" echo [%date% %time%] Smart Finder launcher started.
 if exist ".git" (
   echo [INFO] Mengecek update dari GitHub...
-  git -c "safe.directory=%SAFE_REPO_DIR%" pull --ff-only
+  >> "%LOG_FILE%" echo [%date% %time%] Checking GitHub updates.
+  git -c "safe.directory=%SAFE_REPO_DIR%" pull --ff-only >> "%LOG_FILE%" 2>&1
   if errorlevel 1 (
+    >> "%LOG_FILE%" echo [%date% %time%] ERROR: GitHub update failed.
     echo [ERROR] Update gagal. Periksa koneksi atau autentikasi GitHub.
     pause
     exit /b 1
@@ -85,8 +89,10 @@ if not exist "package.json" (
 )
 
 echo [INFO] Memastikan dependency Node.js tersedia...
-call npm install --no-audit --no-fund
+>> "%LOG_FILE%" echo [%date% %time%] Installing Node.js dependencies.
+call npm install --no-audit --no-fund >> "%LOG_FILE%" 2>&1
 if errorlevel 1 (
+  >> "%LOG_FILE%" echo [%date% %time%] ERROR: npm install failed.
   echo [ERROR] Instalasi dependency Node.js gagal.
   pause
   exit /b 1
@@ -94,11 +100,16 @@ if errorlevel 1 (
 
 if not exist "node_modules\playwright\.local-chromium" (
   echo [INFO] Menyiapkan browser Playwright...
-  call npx playwright install chromium
-  if errorlevel 1 echo [WARNING] Browser Playwright gagal disiapkan. Coba jalankan ulang launcher.
+  >> "%LOG_FILE%" echo [%date% %time%] Installing Playwright Chromium.
+  call npx playwright install chromium >> "%LOG_FILE%" 2>&1
+  if errorlevel 1 (
+    >> "%LOG_FILE%" echo [%date% %time%] WARNING: Playwright Chromium installation failed.
+    echo [WARNING] Browser Playwright gagal disiapkan. Coba jalankan ulang launcher.
+  )
 )
 
 echo [INFO] Menjalankan Smart Finder...
-call node launch.js
+>> "%LOG_FILE%" echo [%date% %time%] Starting Node.js application.
+call node launch.js >> "%LOG_FILE%" 2>&1
 
 endlocal

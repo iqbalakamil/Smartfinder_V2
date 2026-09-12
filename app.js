@@ -268,6 +268,23 @@ function appendActivityLog(message, emphasis = "") {
   }
 }
 
+async function loadLauncherLog() {
+  if (!activityLogEl) return;
+  try {
+    const response = await fetch(`${API_BASE}/api/launcher-log`, { cache: "no-store" });
+    if (!response.ok) return;
+    const logText = await response.text();
+    const lines = logText.split(/\r?\n/).filter(Boolean).slice(-20);
+    if (!lines.length) return;
+    lines.forEach((line) => {
+      const emphasis = /ERROR|WARNING/i.test(line) ? "error" : "";
+      appendActivityLog(`Launcher: ${line}`, emphasis);
+    });
+  } catch {
+    // Server log is optional; the main app remains usable if it is unavailable.
+  }
+}
+
 function setLoadingState(active, panels = { map: true, analysis: true, table: true }) {
   if (active) {
     loadingStartedAt = Date.now();
@@ -6357,4 +6374,5 @@ window.addEventListener('map-style-loaded', () => {
 });
 
 syncActionButtons();
+loadLauncherLog();
 startHotmapPolling();

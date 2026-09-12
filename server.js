@@ -276,6 +276,22 @@ function sendJson(res, statusCode, payload) {
   res.end(JSON.stringify(payload));
 }
 
+function handleLauncherLog(req, res) {
+  const logPath = path.join(PUBLIC_DIR, "launcher.log");
+  fs.readFile(logPath, "utf8", (error, content) => {
+    if (error && error.code !== "ENOENT") {
+      sendJson(res, 500, { error: "Log launcher tidak dapat dibaca." });
+      return;
+    }
+    res.writeHead(200, {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+      "Access-Control-Allow-Origin": "*",
+    });
+    res.end((content || "").slice(-30000));
+  });
+}
+
 function sendNoContent(res, statusCode = 204) {
   res.writeHead(statusCode, {
     "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
@@ -7794,6 +7810,11 @@ function handleRequest(req, res) {
         "/api/unified-analysis",
       ],
     });
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/launcher-log") {
+    handleLauncherLog(req, res);
     return;
   }
 
