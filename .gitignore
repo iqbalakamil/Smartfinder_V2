@@ -2,6 +2,12 @@
 .env
 .env.*
 !.env.example
+*cookie*
+*token*
+*secret*
+*password*
+*.pem
+*.key
 node_modules/
 npm-debug.log*
 *.log
