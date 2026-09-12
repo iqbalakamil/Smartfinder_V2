@@ -6456,7 +6456,7 @@ async function handlePois(req, res) {
     const fallbackUsed = !googleHousingPois.length;
     const poisToReturn = fallbackUsed
       ? buildSyntheticPoiFallback(lat, lon, areaCoverage, crawlPlan)
-      : googleHousingPoisWithinRadius;
+      : googleHousingPois;
     syncBackendHotmapPois(googleHousingPoisInRadius);
 
     const payload = {
@@ -6468,6 +6468,8 @@ async function handlePois(req, res) {
         googleMapsWithCoords: googleHousingPoisWithCoords.length,
         googleMapsWithinRadius: googleHousingPoisWithinRadius.length,
         googleMapsOutsideRadius: googleHousingPoisOutsideRadius,
+        radiusFilterApplied: false,
+        radiusFilterNote: "Cakupan pencarian dibatasi oleh polygon kelurahan Dukcapil; hasil POI tidak dibuang saat koordinat hasil crawl belum tersedia.",
         googleMapsCoordSources: googleHousingPoisWithCoords.reduce((accumulator, item) => {
           const key = item.tags?.coord_source || "unknown";
           accumulator[key] = (accumulator[key] || 0) + 1;
