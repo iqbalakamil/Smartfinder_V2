@@ -300,6 +300,14 @@ async function scrapeGoogleMapsResults(options = {}) {
     const isMapsHref = (href = "") => /google\.com\/maps|maps\.google\.com/i.test(href);
     const isLikelyPlaceHref = (href = "") => /\/maps\/(place|search|dir)\//i.test(href) || href.includes("8m2!3d") || href.includes("@") || /[?&]cid=/i.test(href);
 
+    const coordinateAnchor = candidates.find((anchor) => {
+      const href = anchor.href || "";
+      return /(?:8m2!3d|!3d-?\d|@-?\d|[?&](?:q|ll)=)/i.test(href);
+    });
+    if (coordinateAnchor) {
+      return coordinateAnchor;
+    }
+
     return candidates.find((anchor) => {
       const href = anchor.href || "";
       const text = (anchor.textContent || anchor.getAttribute("aria-label") || "").trim();
@@ -503,6 +511,7 @@ function mapResultToPoi(row, task) {
       rating: row.rating || "",
       review_count: reviewCount,
       search_area_label: buildLocationLabel(task.area || {}),
+      search_area_village: task.area?.village || "",
       search_area_subdistrict: task.area?.subdistrict || "",
       search_area_city: task.area?.city || "",
     },

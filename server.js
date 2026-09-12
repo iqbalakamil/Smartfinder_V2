@@ -65,7 +65,7 @@ async function launchConfiguredBrowser(launchOptions = {}) {
 
 const DEFAULT_PORT = Number(process.env.PORT || 3000);
 const HOST = "127.0.0.1";
-const POI_CACHE_VERSION = "v4-google-crawl-kelurahan-radius";
+const POI_CACHE_VERSION = "v5-google-crawl-kelurahan-coordinates";
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 15000);
 const LITELLM_BASE_URL = "https://litellm.koboi2026.biz.id/v1";
 const LITELLM_MODEL = "gpt-4o-mini";
@@ -1215,6 +1215,8 @@ async function enrichMissingGoogleMapsCoordinates(items, location = {}) {
       [
         item.name,
         item.tags?.address,
+        item.tags?.search_area_village,
+        item.tags?.search_area_label,
         location.village,
         location.subdistrict,
         location.district,
@@ -1223,6 +1225,8 @@ async function enrichMissingGoogleMapsCoordinates(items, location = {}) {
       ].filter(Boolean).join(", "),
       [
         item.tags?.address,
+        item.tags?.search_area_village,
+        item.tags?.search_area_label,
         location.village,
         location.subdistrict,
         location.city,
@@ -1230,6 +1234,8 @@ async function enrichMissingGoogleMapsCoordinates(items, location = {}) {
       ].filter(Boolean).join(", "),
       [
         item.name,
+        item.tags?.search_area_village,
+        item.tags?.search_area_label,
         location.subdistrict,
         location.city,
         location.province,
@@ -6436,7 +6442,7 @@ async function handlePois(req, res) {
       withTimeout(
         (async () => {
           const googleHousingPois = await fetchGoogleHousingPois(lat, lon, radius, searchLocation).catch(() => []);
-          await enrichMissingGoogleMapsCoordinates(googleHousingPois, location).catch(() => {});
+          await enrichMissingGoogleMapsCoordinates(googleHousingPois, searchLocation).catch(() => {});
           return googleHousingPois;
         })(),
         POI_GOOGLE_HOUSING_TIMEOUT_MS,
