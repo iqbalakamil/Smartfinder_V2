@@ -164,13 +164,17 @@ exit /b 0
 
 :openChrome
 set "CHROME_EXE="
+for /f "delims=" %%C in ('where chrome.exe 2^>nul') do if not defined CHROME_EXE set "CHROME_EXE=%%C"
 if exist "%ProgramFiles%\Google\Chrome\Application\chrome.exe" set "CHROME_EXE=%ProgramFiles%\Google\Chrome\Application\chrome.exe"
 if not defined CHROME_EXE if exist "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe" set "CHROME_EXE=%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"
+if not defined CHROME_EXE if exist "%ProgramW6432%\Google\Chrome\Application\chrome.exe" set "CHROME_EXE=%ProgramW6432%\Google\Chrome\Application\chrome.exe"
 if not defined CHROME_EXE if exist "%LocalAppData%\Google\Chrome\Application\chrome.exe" set "CHROME_EXE=%LocalAppData%\Google\Chrome\Application\chrome.exe"
+if not defined CHROME_EXE if exist "C:\Program Files\Google\Chrome\Application\chrome.exe" set "CHROME_EXE=C:\Program Files\Google\Chrome\Application\chrome.exe"
+if not defined CHROME_EXE if exist "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" set "CHROME_EXE=C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
 if defined CHROME_EXE (
-  start "" "%CHROME_EXE%" "%~1"
+  start "" "%CHROME_EXE%" --new-window "%~1"
 ) else (
-  echo [WARNING] Google Chrome tidak ditemukan. Membuka browser default...
-  start "" "%~1"
+  echo [ERROR] Google Chrome tidak ditemukan di laptop ini.
+  echo [INFO] Silakan install Google Chrome, lalu jalankan launcher kembali.
 )
 exit /b 0
