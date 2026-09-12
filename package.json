@@ -2,14 +2,58 @@
   "name": "smartkidz-ruko-dashboard",
   "version": "1.0.0",
   "private": true,
+  "main": "electron-main.js",
   "scripts": {
     "start": "node server.js",
-    "launch": "node launch.js"
+    "launch": "node launch.js",
+    "desktop:dev": "electron .",
+    "desktop:build": "electron-builder --win nsis portable"
   },
   "dependencies": {
     "@sparticuz/chromium": "^133.0.0",
     "dotenv": "^17.4.2",
     "playwright": "^1.59.1",
     "playwright-core": "^1.59.1"
+  },
+  "devDependencies": {
+    "electron": "^38.1.0",
+    "electron-builder": "^26.0.12",
+    "electron-updater": "^6.6.2"
+  },
+  "build": {
+    "appId": "com.iqbalakamil.smartfinder",
+    "productName": "Smart Finder",
+    "artifactName": "Smart-Finder-${version}-${os}-${arch}.${ext}",
+    "icon": "Smart Finder.ico",
+    "asar": true,
+    "files": [
+      "**/*",
+      "!**/*.log",
+      "!**/.env*",
+      "!**/node_modules/.cache{,/**/*}",
+      "!**/riset-ai{,/**/*}",
+      "!**/UPDATE_AND_RUN.bat"
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "iqbalakamil",
+      "repo": "Smartfinder",
+      "private": true,
+      "releaseType": "release"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "Smart Finder.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Smart Finder"
+    }
   }
 }
