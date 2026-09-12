@@ -8,6 +8,7 @@
 *password*
 *.pem
 *.key
+!get_ig_cookie.py
 node_modules/
 npm-debug.log*
 *.log
