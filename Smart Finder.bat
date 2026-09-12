@@ -1,11 +1,7 @@
 @echo off
-if /i not "%~1"=="--hidden" if exist "%~dp0Smart Finder.vbs" (
-  wscript.exe //nologo "%~dp0Smart Finder.vbs"
-  exit /b 0
-)
-if /i "%~1"=="--hidden" shift
 setlocal EnableExtensions EnableDelayedExpansion
 title SMART FINDER - GitHub Launcher
+mode con: cols=110 lines=32 >nul 2>&1
 
 set "REPO_URL=https://github.com/iqbalakamil/Smartfinder.git"
 set "REPO_NAME=Smartfinder"
@@ -74,7 +70,7 @@ set "LOG_FILE=%REPO_DIR%launcher.log"
 if exist ".git" (
   echo [INFO] Mengecek update dari GitHub...
   >> "%LOG_FILE%" echo [%date% %time%] Checking GitHub updates.
-  git -c "safe.directory=%SAFE_REPO_DIR%" pull --ff-only >> "%LOG_FILE%" 2>&1
+  git -c "safe.directory=%SAFE_REPO_DIR%" pull --ff-only
   if errorlevel 1 (
     >> "%LOG_FILE%" echo [%date% %time%] ERROR: GitHub update failed.
     echo [ERROR] Update gagal. Periksa koneksi atau autentikasi GitHub.
@@ -91,7 +87,7 @@ if not exist "package.json" (
 
 echo [INFO] Memastikan dependency Node.js tersedia...
 >> "%LOG_FILE%" echo [%date% %time%] Installing Node.js dependencies.
-call npm install --no-audit --no-fund >> "%LOG_FILE%" 2>&1
+call npm install --no-audit --no-fund
 if errorlevel 1 (
   >> "%LOG_FILE%" echo [%date% %time%] ERROR: npm install failed.
   echo [ERROR] Instalasi dependency Node.js gagal.
@@ -102,7 +98,7 @@ if errorlevel 1 (
 if not exist "node_modules\playwright\.local-chromium" (
   echo [INFO] Menyiapkan browser Playwright...
   >> "%LOG_FILE%" echo [%date% %time%] Installing Playwright Chromium.
-  call npx playwright install chromium >> "%LOG_FILE%" 2>&1
+  call npx playwright install chromium
   if errorlevel 1 (
     >> "%LOG_FILE%" echo [%date% %time%] WARNING: Playwright Chromium installation failed.
     echo [WARNING] Browser Playwright gagal disiapkan. Coba jalankan ulang launcher.
@@ -111,6 +107,6 @@ if not exist "node_modules\playwright\.local-chromium" (
 
 echo [INFO] Menjalankan Smart Finder...
 >> "%LOG_FILE%" echo [%date% %time%] Starting Node.js application.
-call node launch.js >> "%LOG_FILE%" 2>&1
+call node launch.js
 
 endlocal
