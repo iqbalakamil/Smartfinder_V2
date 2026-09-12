@@ -8092,9 +8092,10 @@ function startServer(port, attempt = 0, onListening = null) {
   });
 
   server.listen(resolvedPort, HOST, () => {
-    console.log(`Smartkidz dashboard berjalan di http://${HOST}:${resolvedPort}`);
+    const actualPort = server.address()?.port || resolvedPort;
+    console.log(`Smartkidz dashboard berjalan di http://${HOST}:${actualPort}`);
     if (typeof onListening === "function") {
-      onListening(resolvedPort);
+      onListening(actualPort);
     }
   });
 }

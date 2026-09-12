@@ -12,6 +12,8 @@
 *.lnk
 node_modules/
 dist/
+dist-*/
+electron-builder.portable.final.yml
 npm-debug.log*
 *.log
 __pycache__/

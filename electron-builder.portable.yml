@@ -1,0 +1,17 @@
+appId: com.iqbalakamil.smartfinder
+productName: Smart Finder
+artifactName: Smart-Finder-${version}-${os}-${arch}.${ext}
+icon: Smart Finder.ico
+asar: true
+directories:
+  output: dist-portable
+files:
+  - '**/*'
+  - '!**/*.log'
+  - '!**/.env*'
+  - '!**/node_modules/.cache{,/**/*}'
+  - '!**/riset-ai{,/**/*}'
+  - '!**/UPDATE_AND_RUN.bat'
+win:
+  target: portable
+  icon: Smart Finder.ico

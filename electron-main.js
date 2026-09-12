@@ -23,13 +23,29 @@ function createWindow(port) {
   });
 
   mainWindow.once("ready-to-show", () => mainWindow.show());
+  mainWindow.webContents.on("did-finish-load", () => {
+    if (mainWindow && !mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+  });
+  mainWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
+    dialog.showErrorBox(
+      "Smart Finder gagal memuat halaman",
+      `${errorDescription} (${errorCode})\n\n${validatedURL}`,
+    );
+  });
+  mainWindow.webContents.on("render-process-gone", (_event, details) => {
+    dialog.showErrorBox("Smart Finder renderer berhenti", details.reason || "Unknown renderer error");
+  });
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) {
       shell.openExternal(url);
     }
     return { action: "deny" };
   });
-  mainWindow.loadURL(`http://127.0.0.1:${port}`);
+  mainWindow.loadURL(`http://127.0.0.1:${port}`).catch((error) => {
+    dialog.showErrorBox("Smart Finder gagal dibuka", error.stack || String(error));
+  });
   mainWindow.on("closed", () => {
     mainWindow = null;
     app.quit();

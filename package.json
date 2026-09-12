@@ -42,10 +42,7 @@
       "releaseType": "release"
     },
     "win": {
-      "target": [
-        "nsis",
-        "portable"
-      ],
+      "target": "portable",
       "icon": "Smart Finder.ico"
     },
     "nsis": {
