@@ -69,7 +69,8 @@ if not exist "%REPO_DIR%.git" (
 cd /d "%REPO_DIR%"
 set "SAFE_REPO_DIR=%REPO_DIR:~0,-1%"
 set "LOG_FILE=%REPO_DIR%launcher.log"
-> "%LOG_FILE%" echo [%date% %time%] Smart Finder launcher started.
+>> "%LOG_FILE%" echo.
+>> "%LOG_FILE%" echo [%date% %time%] Smart Finder launcher started.
 if exist ".git" (
   echo [INFO] Mengecek update dari GitHub...
   >> "%LOG_FILE%" echo [%date% %time%] Checking GitHub updates.
