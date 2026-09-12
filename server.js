@@ -65,7 +65,7 @@ async function launchConfiguredBrowser(launchOptions = {}) {
 
 const DEFAULT_PORT = Number(process.env.PORT || 3000);
 const HOST = "127.0.0.1";
-const POI_CACHE_VERSION = "v3-google-crawl-real-names";
+const POI_CACHE_VERSION = "v4-google-crawl-kelurahan-radius";
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 15000);
 const LITELLM_BASE_URL = "https://litellm.koboi2026.biz.id/v1";
 const LITELLM_MODEL = "gpt-4o-mini";
@@ -750,7 +750,132 @@ async function reverseGeocodePoint(lat, lon) {
   return extractLocationContext(payload.address || {});
 }
 
+function pointInsideRing(lon, lat, ring = []) {
+  let inside = false;
+  for (let index = 0, previous = ring.length - 1; index < ring.length; previous = index++) {
+    const currentPoint = ring[index];
+    const previousPoint = ring[previous];
+    if (!currentPoint || !previousPoint) continue;
+    const [currentLon, currentLat] = currentPoint;
+    const [previousLon, previousLat] = previousPoint;
+    const crosses = ((currentLat > lat) !== (previousLat > lat)) &&
+      (lon < ((previousLon - currentLon) * (lat - currentLat)) / (previousLat - currentLat || Number.EPSILON) + currentLon);
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+
+function distanceToSegmentMeters(latitude, longitude, firstPoint, secondPoint) {
+  const firstLon = Number(firstPoint?.[0]);
+  const firstLat = Number(firstPoint?.[1]);
+  const secondLon = Number(secondPoint?.[0]);
+  const secondLat = Number(secondPoint?.[1]);
+  if (![firstLon, firstLat, secondLon, secondLat].every(Number.isFinite)) return Infinity;
+
+  const latitudeScale = 111320;
+  const longitudeScale = 111320 * Math.cos(toRadians(latitude));
+  const px = (longitude - firstLon) * longitudeScale;
+  const py = (latitude - firstLat) * latitudeScale;
+  const sx = (secondLon - firstLon) * longitudeScale;
+  const sy = (secondLat - firstLat) * latitudeScale;
+  const segmentLengthSquared = sx * sx + sy * sy;
+  const projection = segmentLengthSquared ? Math.max(0, Math.min(1, (px * sx + py * sy) / segmentLengthSquared)) : 0;
+  const closestLon = firstLon + ((secondLon - firstLon) * projection);
+  const closestLat = firstLat + ((secondLat - firstLat) * projection);
+  return calculateDistanceMeters(latitude, longitude, closestLat, closestLon);
+}
+
+function geometryIntersectsRadius(geometry, latitude, longitude, radiusMeters) {
+  const rings = Array.isArray(geometry?.rings) ? geometry.rings : [];
+  return rings.some((ring) => {
+    if (!Array.isArray(ring) || ring.length < 3) return false;
+    if (pointInsideRing(longitude, latitude, ring)) return true;
+    for (let index = 0; index < ring.length; index += 1) {
+      const current = ring[index];
+      const next = ring[(index + 1) % ring.length];
+      if (calculateDistanceMeters(latitude, longitude, Number(current?.[1]), Number(current?.[0])) <= radiusMeters) return true;
+      if (distanceToSegmentMeters(latitude, longitude, current, next) <= radiusMeters) return true;
+    }
+    return false;
+  });
+}
+
+function buildDukcapilKelurahanRadiusQueryUrl({ latitude, longitude, radiusMeters, offset = 0 }) {
+  const latitudeDelta = radiusMeters / 111320;
+  const longitudeDelta = radiusMeters / (111320 * Math.max(0.2, Math.cos(toRadians(latitude))));
+  const target = new URL(
+    `${DUKCAPIL_KELURAHAN_SERVICE}/FeatureServer/${DUKCAPIL_KELURAHAN_LAYER_ID}/query`,
+    `${DUKCAPIL_ARCGIS_BASE_URL}/`
+  );
+  target.searchParams.set("where", "1=1");
+  target.searchParams.set("outFields", "nama_kel,nama_kec,nama_kab,nama_prop,jumlah_penduduk,jumlah_kk,u0,u5,u10,pria,wanita,lhr_2020,lhr_2021,lhr_2022,lhr_2023,lhr_2024");
+  target.searchParams.set("returnGeometry", "true");
+  target.searchParams.set("geometry", `${longitude - longitudeDelta},${latitude - latitudeDelta},${longitude + longitudeDelta},${latitude + latitudeDelta}`);
+  target.searchParams.set("geometryType", "esriGeometryEnvelope");
+  target.searchParams.set("spatialRel", "esriSpatialRelIntersects");
+  target.searchParams.set("inSR", "4326");
+  target.searchParams.set("outSR", "4326");
+  target.searchParams.set("resultRecordCount", "2000");
+  target.searchParams.set("resultOffset", String(offset));
+  target.searchParams.set("returnExceededLimitFeatures", "true");
+  target.searchParams.set("f", "json");
+  return target;
+}
+
+async function discoverDukcapilKelurahanCoverage(lat, lon, radius, seedLocation = {}) {
+  const matches = [];
+  let offset = 0;
+  let hasMore = true;
+
+  while (hasMore && offset <= 10000) {
+    const queryUrl = buildDukcapilKelurahanRadiusQueryUrl({ latitude: lat, longitude: lon, radiusMeters: radius, offset });
+    const payload = await fetchJsonWithRetryStructured(queryUrl.toString(), {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "SmartkidzDashboard/3.0 Dukcapil kelurahan radius coverage",
+      },
+    }, DUKCAPIL_REQUEST_TIMEOUT_MS);
+    if (payload?.error) throw new Error(payload.error.message || "Dukcapil kelurahan query gagal");
+
+    const features = Array.isArray(payload?.features) ? payload.features : [];
+    features.forEach((feature) => {
+      if (!geometryIntersectsRadius(feature?.geometry, lat, lon, radius)) return;
+      const attributes = feature.attributes || {};
+      const village = attributes.nama_kel || attributes.nama_desa || "";
+      const area = {
+        village,
+        subdistrict: attributes.nama_kec || "",
+        district: attributes.nama_kec || "",
+        city: attributes.nama_kab || "",
+        province: attributes.nama_prop || seedLocation.province || "",
+        population: toInteger(attributes.jumlah_penduduk),
+        age_0_14: sumNumbers([attributes.u0, attributes.u5, attributes.u10]),
+        estimated_early_childhood: Math.round((toFiniteNumber(attributes.u0) || 0) * 0.6 + (toFiniteNumber(attributes.u5) || 0) * 0.6),
+        coverage_source: "dukcapil-kelurahan-polygon",
+      };
+      const key = [area.village, area.subdistrict, area.city, area.province].map(normalizeAreaText).join("|");
+      if (area.village && !matches.some((item) => item.key === key)) matches.push({ key, area });
+    });
+
+    hasMore = Boolean(payload?.exceededTransferLimit) && features.length > 0;
+    offset += features.length;
+    if (!features.length) break;
+  }
+
+  return matches.map((item) => item.area);
+}
+
 async function discoverAreaCoverage(lat, lon, radius, seedLocation = {}) {
+  try {
+    const kelurahanAreas = await discoverDukcapilKelurahanCoverage(lat, lon, radius, seedLocation);
+    if (kelurahanAreas.length) {
+      console.log(`DUKCAPIL: ${kelurahanAreas.length} kelurahan beririsan dengan radius ${radius} meter.`);
+      return kelurahanAreas;
+    }
+  } catch (error) {
+    console.warn(`DUKCAPIL: Gagal menentukan cakupan polygon kelurahan: ${error.message}`);
+  }
+
   const sampleDistance = Math.max(600, Math.min(radius * 0.72, 2400));
   const samplePoints = [
     { lat, lon },
@@ -775,13 +900,13 @@ async function discoverAreaCoverage(lat, lon, radius, seedLocation = {}) {
       city: area.city || "",
       province: area.province || seedLocation.province || "",
     };
-    const key = [normalizedArea.subdistrict || normalizedArea.district, normalizedArea.city].filter(Boolean).join("|").toLowerCase();
+    const key = [normalizedArea.village, normalizedArea.subdistrict || normalizedArea.district, normalizedArea.city].filter(Boolean).join("|").toLowerCase();
     if (key && !unique.has(key)) {
       unique.set(key, normalizedArea);
     }
   });
 
-  return Array.from(unique.values()).slice(0, 4);
+  return Array.from(unique.values());
 }
 
 function buildBackendCrawlPlan(searchAreas = [], seedLocation = {}) {
@@ -794,14 +919,14 @@ function buildBackendCrawlPlan(searchAreas = [], seedLocation = {}) {
 
   const plan = [];
   for (const area of areas) {
-    const areaLabel = [area.subdistrict || area.district, area.city].filter(Boolean).join(", ");
+    const areaLabel = [area.village, area.subdistrict || area.district, area.city].filter(Boolean).join(", ");
     for (const category of categories) {
       for (const keyword of category.keywords) {
         plan.push({
           category: category.label,
           keyword,
-          area: areaLabel || [seedLocation.subdistrict || seedLocation.district, seedLocation.city].filter(Boolean).join(", "),
-          query: [keyword, areaLabel || [seedLocation.subdistrict || seedLocation.district, seedLocation.city].filter(Boolean).join(", ")].filter(Boolean).join(", "),
+          area: areaLabel || [seedLocation.village, seedLocation.subdistrict || seedLocation.district, seedLocation.city].filter(Boolean).join(", "),
+          query: [keyword, areaLabel || [seedLocation.village, seedLocation.subdistrict || seedLocation.district, seedLocation.city].filter(Boolean).join(", ")].filter(Boolean).join(", "),
         });
       }
     }
@@ -6323,10 +6448,15 @@ async function handlePois(req, res) {
     const crawlDebug = googleHousingPois.debug || null;
     const googleHousingPoisWithCoords = googleHousingPois.filter((item) => item.lat && item.lon);
     const googleHousingPoisInRadius = googleHousingPoisWithCoords.filter((item) => calculateDistanceMeters(lat, lon, item.lat, item.lon) <= radius);
+    const googleHousingPoisOutsideRadius = googleHousingPoisWithCoords.filter((item) => calculateDistanceMeters(lat, lon, item.lat, item.lon) > radius).length;
+    const googleHousingPoisWithinRadius = googleHousingPois.filter((item) => {
+      if (!item.lat || !item.lon) return true;
+      return calculateDistanceMeters(lat, lon, item.lat, item.lon) <= radius;
+    });
     const fallbackUsed = !googleHousingPois.length;
     const poisToReturn = fallbackUsed
       ? buildSyntheticPoiFallback(lat, lon, areaCoverage, crawlPlan)
-      : googleHousingPois;
+      : googleHousingPoisWithinRadius;
     syncBackendHotmapPois(googleHousingPoisInRadius);
 
     const payload = {
@@ -6336,6 +6466,8 @@ async function handlePois(req, res) {
         usedGoogleMapsCrawler: true,
         googleMapsTotal: googleHousingPois.length,
         googleMapsWithCoords: googleHousingPoisWithCoords.length,
+        googleMapsWithinRadius: googleHousingPoisWithinRadius.length,
+        googleMapsOutsideRadius: googleHousingPoisOutsideRadius,
         googleMapsCoordSources: googleHousingPoisWithCoords.reduce((accumulator, item) => {
           const key = item.tags?.coord_source || "unknown";
           accumulator[key] = (accumulator[key] || 0) + 1;
@@ -6351,7 +6483,7 @@ async function handlePois(req, res) {
         areaCoverage,
         crawlPlan,
         crawlDebug,
-        crawlScope: "all-radius-districts-all-keywords",
+        crawlScope: "all-radius-kelurahan-all-keywords",
         externalResearch: { summary: "", sources: [], metricHighlights: [] },
         sourceMode: fallbackUsed ? "google-maps-crawl-fallback" : "google-maps-crawl-only",
         fallbackUsed,

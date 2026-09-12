@@ -97,7 +97,8 @@ function buildSearchAreas(location = {}) {
   };
 
   const unique = new Map();
-  [...explicitAreas, fallbackArea].forEach((area) => {
+  const areasToUse = explicitAreas.length ? explicitAreas : [fallbackArea];
+  areasToUse.forEach((area) => {
     const key = [area.village, area.subdistrict, area.district, area.city, area.province].filter(Boolean).join("|").toLowerCase();
     if (key && !unique.has(key)) {
       unique.set(key, area);

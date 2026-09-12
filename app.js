@@ -3933,8 +3933,8 @@ async function analyzeLocation(lat, lon, radius) {
 
     appendActivityLog(`POI berhasil dimuat: ${pois.length} item dalam radius ${effectiveRadius} meter. Sumber aktif: ${[...new Set(pois.map((poi) => getPoiSourceLabel(poi.source)))].join(", ") || "-"}.`, "success");
     if (areaCoverage.length) {
-      appendActivityLog(`Cakupan area 3 km meliputi: ${areaCoverage.map((area) => area.subdistrict || area.district || area.city).filter(Boolean).join(", ")}. Crawl POI dijalankan per kecamatan untuk tiap kategori.`, "success");
-      districtNameEl.textContent = areaCoverage.map((area) => area.subdistrict || area.district || area.city).filter(Boolean).slice(0, 3).join(", ");
+      appendActivityLog(`Cakupan radius 3 km meliputi ${areaCoverage.length} kelurahan: ${areaCoverage.map((area) => area.village || area.subdistrict || area.district || area.city).filter(Boolean).join(", ")}. Crawl POI dijalankan per kelurahan untuk tiap kategori.`, "success");
+      districtNameEl.textContent = areaCoverage.map((area) => area.village || area.subdistrict || area.district || area.city).filter(Boolean).slice(0, 3).join(", ");
     }
     if (crawlPlan.length) {
       appendActivityLog(`Rencana crawl backend: ${crawlPlan.length} query kategori-area.`, "success");
