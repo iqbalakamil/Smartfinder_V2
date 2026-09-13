@@ -9,6 +9,7 @@ let serverPort;
 function checkForUpdates() {
   if (!app.isPackaged) return Promise.resolve();
 
+  autoUpdater.logger = console;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.on("update-downloaded", async () => {

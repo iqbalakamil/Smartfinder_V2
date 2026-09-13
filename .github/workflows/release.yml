@@ -17,6 +17,20 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Bundle Python runtime for Instagram features
+        shell: pwsh
+        run: |
+          $runtime = Join-Path $env:GITHUB_WORKSPACE "runtime\python"
+          New-Item -ItemType Directory -Force -Path $runtime | Out-Null
+          $pythonRoot = python -c "import sys; print(sys.prefix)"
+          Copy-Item (Join-Path $pythonRoot "python.exe") $runtime -Force
+          Get-ChildItem $pythonRoot -Filter "python*.dll" | Copy-Item -Destination $runtime -Force
+          Copy-Item (Join-Path $pythonRoot "DLLs") $runtime -Recurse -Force
+          Copy-Item (Join-Path $pythonRoot "Lib") $runtime -Recurse -Force
+          python -m pip install --disable-pip-version-check --no-cache-dir --target (Join-Path $runtime "Lib\site-packages") requests selenium
       - run: npm ci
       - name: Set release version
         shell: pwsh

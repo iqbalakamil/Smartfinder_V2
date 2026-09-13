@@ -27,11 +27,16 @@
     "artifactName": "Smart-Finder-${version}-${os}-${arch}.${ext}",
     "icon": "Smart Finder.ico",
     "asar": true,
+    "asarUnpack": [
+      "**/*.py",
+      "runtime/python/**"
+    ],
     "files": [
       "**/*",
       "!**/*.log",
       "!**/.env*",
       "!**/node_modules/.cache{,/**/*}",
+      "!runtime/python/__pycache__{,/**/*}",
       "!**/riset-ai{,/**/*}",
       "!**/UPDATE_AND_RUN.bat"
     ],
@@ -43,7 +48,7 @@
       "releaseType": "release"
     },
     "win": {
-      "target": "portable",
+      "target": ["nsis", "portable"],
       "icon": "Smart Finder.ico"
     },
     "nsis": {

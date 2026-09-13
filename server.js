@@ -7181,7 +7181,26 @@ async function searchInstagramLocationsByMode(lat, lng, cookie, mode, radiusKm, 
   return fetchInstagramVenuesAt(lat, lng, cookie);
 }
 
+function getExternalPythonScript(filename) {
+  const unpackedRoot = process.resourcesPath
+    ? path.join(process.resourcesPath, "app.asar.unpacked")
+    : __dirname;
+  const unpackedPath = path.join(unpackedRoot, filename);
+  return fs.existsSync(unpackedPath) ? unpackedPath : path.join(__dirname, filename);
+}
+
 function findPythonCommand() {
+  const bundledPython = process.platform === "win32"
+    ? path.join(process.resourcesPath || __dirname, "app.asar.unpacked", "runtime", "python", "python.exe")
+    : path.join(process.resourcesPath || __dirname, "app.asar.unpacked", "runtime", "python", "python");
+  if (fs.existsSync(bundledPython)) {
+    return {
+      command: bundledPython,
+      args: [],
+      pythonPath: path.join(path.dirname(bundledPython), "Lib", "site-packages"),
+    };
+  }
+
   const candidates = [
     { command: "py", args: ["-3"] },
     { command: "python", args: [] },
@@ -7204,7 +7223,7 @@ function findPythonCommand() {
 function runInstagramSearchViaPython(lat, lng, cookie, mode, radiusKm, stepM) {
   return new Promise((resolve, reject) => {
     const pythonCmd = findPythonCommand();
-    const runnerScript = path.join(__dirname, "instagram_locations_runner.py");
+    const runnerScript = getExternalPythonScript("instagram_locations_runner.py");
     const args = [
       runnerScript,
       "--lat", String(lat),
@@ -7220,7 +7239,12 @@ function runInstagramSearchViaPython(lat, lng, cookie, mode, radiusKm, stepM) {
       maxBuffer: 10 * 1024 * 1024,
       // PYTHONIOENCODING=utf-8: paksa stdout Python pakai UTF-8 di Windows
       // agar karakter non-cp1252 (emoji, Greek, dll) tidak crash
-      env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" },
+      env: {
+        ...process.env,
+        PYTHONIOENCODING: "utf-8",
+        PYTHONUTF8: "1",
+        ...(pythonCmd.pythonPath ? { PYTHONPATH: pythonCmd.pythonPath } : {}),
+      },
     }, (error, stdout, stderr) => {
       const stdoutStr = String(stdout || "").trim();
       const stderrStr = String(stderr || "").trim();
@@ -7865,11 +7889,19 @@ function handleCctvData(req, res, url) {
 
 function handleGetInstagramCookie(req, res) {
   try {
-    const pythonScript = path.join(__dirname, "get_ig_cookie.py");
+    const pythonScript = getExternalPythonScript("get_ig_cookie.py");
     const pythonCmd = findPythonCommand();
-    console.log("[Instagram Cookie] Spawning Selenium browser automation using:", pythonCmd);
+    console.log("[Instagram Cookie] Spawning Selenium browser automation using:", pythonCmd.command);
 
-    execFile(pythonCmd, [pythonScript], { timeout: 300000 }, (error, stdout, stderr) => {
+    execFile(pythonCmd.command, [...pythonCmd.args, pythonScript], {
+      timeout: 300000,
+      env: {
+        ...process.env,
+        PYTHONIOENCODING: "utf-8",
+        PYTHONUTF8: "1",
+        ...(pythonCmd.pythonPath ? { PYTHONPATH: pythonCmd.pythonPath } : {}),
+      },
+    }, (error, stdout, stderr) => {
       const stdoutStr = (stdout || "").trim();
       const stderrStr = (stderr || "").trim();
 
@@ -7902,18 +7934,6 @@ function handleGetInstagramCookie(req, res) {
       sendJson(res, 500, { success: false, error: "Gagal mengambil cookie dari browser. Pastikan sudah login di Chrome lalu coba lagi." });
     });
 
-    function findPythonCommand() {
-      const candidates = ["python", "python3"];
-      for (const cmd of candidates) {
-        try {
-          const resolved = require("child_process").execSync(cmd + " --version", { encoding: "utf8", timeout: 5000 }).trim();
-          if (resolved) {
-            return cmd;
-          }
-        } catch {}
-      }
-      return "python";
-    }
   } catch (error) {
     sendJson(res, 500, { success: false, error: error.message });
   }
