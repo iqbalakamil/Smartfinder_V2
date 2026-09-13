@@ -11,6 +11,7 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+      issues: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,6 +37,23 @@ jobs:
           name: electron-builder-log-${{ github.run_number }}
           path: electron-builder.log
           if-no-files-found: warn
+      - name: Publish builder failure diagnostic
+        if: failure()
+        uses: actions/github-script@v7
+        env:
+          BUILDER_LOG: electron-builder.log
+        with:
+          script: |
+            const fs = require('fs');
+            const log = fs.existsSync(process.env.BUILDER_LOG)
+              ? fs.readFileSync(process.env.BUILDER_LOG, 'utf8')
+              : 'builder log tidak ditemukan';
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Build diagnostic run ${context.runNumber}`,
+              body: `Diagnostic otomatis untuk run ${context.runNumber}.\\n\\n\\`\\`\\`text\\n${log.slice(-60000)}\\n\\`\\`\\``
+            });
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
