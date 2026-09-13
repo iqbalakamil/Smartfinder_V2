@@ -28,17 +28,24 @@
     "icon": "Smart Finder.ico",
     "asar": true,
     "asarUnpack": [
-      "**/*.py",
-      "runtime/python/**"
+      "**/*.py"
     ],
     "files": [
       "**/*",
       "!**/*.log",
       "!**/.env*",
       "!**/node_modules/.cache{,/**/*}",
+      "!runtime/python{,/**/*}",
       "!runtime/python/__pycache__{,/**/*}",
       "!**/riset-ai{,/**/*}",
       "!**/UPDATE_AND_RUN.bat"
+    ],
+    "extraResources": [
+      {
+        "from": "runtime/python",
+        "to": "runtime/python",
+        "filter": ["**/*"]
+      }
     ],
     "publish": {
       "provider": "github",

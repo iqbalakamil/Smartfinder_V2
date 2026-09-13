@@ -7190,10 +7190,15 @@ function getExternalPythonScript(filename) {
 }
 
 function findPythonCommand() {
-  const bundledPython = process.platform === "win32"
-    ? path.join(process.resourcesPath || __dirname, "app.asar.unpacked", "runtime", "python", "python.exe")
-    : path.join(process.resourcesPath || __dirname, "app.asar.unpacked", "runtime", "python", "python");
-  if (fs.existsSync(bundledPython)) {
+  const pythonFilename = process.platform === "win32" ? "python.exe" : "python";
+  const bundledPythonCandidates = process.resourcesPath
+    ? [
+        path.join(process.resourcesPath, "runtime", "python", pythonFilename),
+        path.join(process.resourcesPath, "app.asar.unpacked", "runtime", "python", pythonFilename),
+      ]
+    : [path.join(__dirname, "runtime", "python", pythonFilename)];
+  const bundledPython = bundledPythonCandidates.find((candidate) => fs.existsSync(candidate));
+  if (bundledPython) {
     return {
       command: bundledPython,
       args: [],
