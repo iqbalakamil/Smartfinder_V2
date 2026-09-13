@@ -25,11 +25,13 @@ jobs:
         run: |
           $runtime = Join-Path $env:GITHUB_WORKSPACE "runtime\python"
           New-Item -ItemType Directory -Force -Path $runtime | Out-Null
-          $pythonRoot = python -c "import sys; print(sys.prefix)"
-          Copy-Item (Join-Path $pythonRoot "python.exe") $runtime -Force
-          Get-ChildItem $pythonRoot -Filter "python*.dll" | Copy-Item -Destination $runtime -Force
-          Copy-Item (Join-Path $pythonRoot "DLLs") $runtime -Recurse -Force
-          Copy-Item (Join-Path $pythonRoot "Lib") $runtime -Recurse -Force
+          $archive = Join-Path $env:RUNNER_TEMP "python-embed.zip"
+          Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip" -OutFile $archive
+          Expand-Archive -Path $archive -DestinationPath $runtime -Force
+          $pth = Get-ChildItem $runtime -Filter "*_pth" | Select-Object -First 1
+          Add-Content -Path $pth.FullName -Value "Lib\site-packages"
+          Add-Content -Path $pth.FullName -Value "import site"
+          New-Item -ItemType Directory -Force -Path (Join-Path $runtime "Lib\site-packages") | Out-Null
           python -m pip install --disable-pip-version-check --no-cache-dir --target (Join-Path $runtime "Lib\site-packages") requests selenium
       - run: npm ci
       - name: Set release version
