@@ -34,7 +34,22 @@ jobs:
       - run: npm ci
       - name: Set release version
         shell: pwsh
-        run: npm version "1.1.${{ github.run_number }}" --no-git-tag-version
-      - run: npm run desktop:release
+        run: |
+          $version = "1.1.${{ github.run_number }}"
+          npm version $version --no-git-tag-version
+          "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - run: npm run desktop:build
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ env.RELEASE_VERSION }}"
+          name: "Smart Finder ${{ env.RELEASE_VERSION }}"
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/Smart-Finder-${{ env.RELEASE_VERSION }}-Setup-x64.exe
+            dist/Smart-Finder-${{ env.RELEASE_VERSION }}-Setup-x64.exe.blockmap
+            dist/Smart-Finder-${{ env.RELEASE_VERSION }}-Portable-x64.exe
+            dist/latest.yml
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
