@@ -47,11 +47,15 @@
       "icon": "Smart Finder.ico"
     },
     "nsis": {
+      "artifactName": "Smart-Finder-${version}-Setup-${arch}.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Smart Finder"
+    },
+    "portable": {
+      "artifactName": "Smart-Finder-${version}-Portable-${arch}.${ext}"
     }
   }
 }
