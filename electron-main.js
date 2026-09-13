@@ -1,9 +1,35 @@
 const { app, BrowserWindow, dialog, shell } = require("electron");
 const path = require("path");
 const { startServer } = require("./server");
+const { autoUpdater } = require("electron-updater");
 
 let mainWindow;
 let serverPort;
+
+function checkForUpdates() {
+  if (!app.isPackaged) return Promise.resolve();
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on("update-downloaded", async () => {
+    const result = await dialog.showMessageBox({
+      type: "info",
+      buttons: ["Restart sekarang", "Nanti"],
+      defaultId: 0,
+      cancelId: 1,
+      title: "Update Smart Finder tersedia",
+      message: "Update sudah diunduh. Restart aplikasi untuk menerapkannya?",
+    });
+    if (result.response === 0) autoUpdater.quitAndInstall();
+  });
+
+  return Promise.race([
+    autoUpdater.checkForUpdates().catch((error) => {
+      console.warn("Smart Finder update check failed:", error.message);
+    }),
+    new Promise((resolve) => setTimeout(resolve, 10000)),
+  ]);
+}
 
 function createWindow(port) {
   serverPort = port;
@@ -56,7 +82,7 @@ function startLocalServer() {
   startServer(0, 0, (port) => createWindow(port));
 }
 
-app.whenReady().then(startLocalServer).catch((error) => {
+app.whenReady().then(checkForUpdates).then(startLocalServer).catch((error) => {
   dialog.showErrorBox("Smart Finder gagal dibuka", error.stack || String(error));
   app.quit();
 });
