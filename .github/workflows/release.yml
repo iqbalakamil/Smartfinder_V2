@@ -64,7 +64,6 @@ jobs:
           files: |
             dist/Smart-Finder-${{ env.RELEASE_VERSION }}-Setup-x64.exe
             dist/Smart-Finder-${{ env.RELEASE_VERSION }}-Setup-x64.exe.blockmap
-            dist/Smart-Finder-${{ env.RELEASE_VERSION }}-Portable-x64.exe
             dist/latest.yml
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

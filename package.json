@@ -7,8 +7,8 @@
     "start": "node server.js",
     "launch": "node launch.js",
     "desktop:dev": "electron .",
-    "desktop:build": "electron-builder --win nsis portable",
-    "desktop:release": "electron-builder --win nsis portable --publish always"
+    "desktop:build": "electron-builder --win nsis --publish never",
+    "desktop:release": "electron-builder --win nsis --publish always"
   },
   "dependencies": {
     "@sparticuz/chromium": "^133.0.0",
@@ -48,7 +48,7 @@
       "releaseType": "release"
     },
     "win": {
-      "target": ["nsis", "portable"],
+      "target": "nsis",
       "icon": "Smart Finder.ico"
     },
     "nsis": {
