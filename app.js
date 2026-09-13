@@ -499,7 +499,7 @@ function parseCoordinatesFromPoiLinks(poi) {
 
 function normalizePoiForMap(poi) {
   const lat = Number(poi?.lat ?? poi?.latitude);
-  const lon = Number(poi?.lon ?? poi?.longitude);
+  const lon = Number(poi?.lon ?? poi?.lng ?? poi?.longitude);
   if (Number.isFinite(lat) && Number.isFinite(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
     return { ...poi, lat, lon };
   }
@@ -823,12 +823,16 @@ function renderMapPois(lat, lon, radius, pois) {
 
 function updateMap(lat, lon, radius, pois) {
   currentMapContext = { lat, lon, radius };
-  latestBasePois = Array.isArray(pois) ? pois : [];
+  // Normalisasi dahulu karena beberapa sumber backend memakai latitude/longitude
+  // atau lng. Pengecekan koordinat mentah sebelumnya membuat layer tetap OFF
+  // walaupun daftar POI sudah tampil di CMD.
+  latestBasePois = Array.isArray(pois) ? dedupeMapPois(pois) : [];
+  const mapPois = dedupeMapPois([...latestBasePois, ...latestHotmapPois]);
   // POI hasil analisa harus langsung terlihat setelah input lokasi diproses.
-  if (latestBasePois.some((poi) => Number.isFinite(Number(poi.lat)) && Number.isFinite(Number(poi.lon)))) {
+  if (mapPois.some((poi) => Number.isFinite(Number(poi.lat)) && Number.isFinite(Number(poi.lon)))) {
     setPoiLayerVisible(true);
   }
-  renderMapPois(lat, lon, radius, dedupeMapPois([...latestBasePois, ...latestHotmapPois]));
+  renderMapPois(lat, lon, radius, mapPois);
 }
 
 // setStyle() menghapus seluruh source/layer custom MapLibre. Bangun kembali
