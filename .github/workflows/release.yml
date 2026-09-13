@@ -40,7 +40,18 @@ jobs:
           $version = "1.1.${{ github.run_number }}"
           npm version $version --no-git-tag-version
           "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-      - run: npm run desktop:build
+      - name: Build desktop installer
+        shell: pwsh
+        run: |
+          npm run desktop:build 2>&1 | Tee-Object electron-builder.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload builder log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-builder-log-${{ github.run_number }}
+          path: electron-builder.log
+          if-no-files-found: warn
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
