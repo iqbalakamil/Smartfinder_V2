@@ -111,7 +111,7 @@ let backendHotmapMeta = {
 };
 const researchSearchCache = new Map();
 const POI_EXTERNAL_RESEARCH_TIMEOUT_MS = Number(process.env.POI_EXTERNAL_RESEARCH_TIMEOUT_MS || 12000);
-const POI_GOOGLE_HOUSING_TIMEOUT_MS = Number(process.env.POI_GOOGLE_HOUSING_TIMEOUT_MS || 180000);
+const POI_GOOGLE_HOUSING_TIMEOUT_MS = Number(process.env.POI_GOOGLE_HOUSING_TIMEOUT_MS || 90000);
 const FAST_MODE = String(process.env.AI_FAST_MODE || "true").toLowerCase() !== "false";
 const FAST_EXTERNAL_QUERY_LIMIT = FAST_MODE ? 6 : 999;
 const FAST_POI_QUERY_LIMIT = FAST_MODE ? 8 : 999;
@@ -1234,10 +1234,13 @@ async function geocodeAddressWithPhoton(addressText) {
 async function enrichMissingGoogleMapsCoordinates(items, location = {}) {
   const targets = items
     .filter((item) => item.source === "google-maps-crawl" && (!item.lat || !item.lon))
-    .slice(0, 120);
+    .slice(0, 80);
 
-  for (const item of targets) {
-    const addressCandidates = [
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(8, targets.length) }, async () => {
+    while (nextIndex < targets.length) {
+      const item = targets[nextIndex++];
+      const addressCandidates = [
       [
         item.name,
         item.tags?.address,
@@ -1266,29 +1269,28 @@ async function enrichMissingGoogleMapsCoordinates(items, location = {}) {
         location.city,
         location.province,
       ].filter(Boolean).join(", "),
-    ].filter(Boolean);
+      ].filter(Boolean);
 
-    let coordinates = { lat: null, lon: null, source: "" };
-    for (const addressText of addressCandidates) {
-      coordinates = await geocodeAddress(addressText).catch(() => ({ lat: null, lon: null, source: "" }));
-      if (coordinates.lat && coordinates.lon) {
-        break;
+      let coordinates = { lat: null, lon: null, source: "" };
+      for (const addressText of addressCandidates) {
+        coordinates = await geocodeAddress(addressText).catch(() => ({ lat: null, lon: null, source: "" }));
+        if (coordinates.lat && coordinates.lon) break;
+        coordinates = await geocodeAddressWithPhoton(addressText).catch(() => ({ lat: null, lon: null, source: "" }));
+        if (coordinates.lat && coordinates.lon) break;
       }
-      coordinates = await geocodeAddressWithPhoton(addressText).catch(() => ({ lat: null, lon: null, source: "" }));
+
       if (coordinates.lat && coordinates.lon) {
-        break;
+        item.lat = coordinates.lat;
+        item.lon = coordinates.lon;
+        item.tags = {
+          ...(item.tags || {}),
+          coord_source: coordinates.source || "osm-geocoder",
+        };
       }
     }
+  });
 
-    if (coordinates.lat && coordinates.lon) {
-      item.lat = coordinates.lat;
-      item.lon = coordinates.lon;
-      item.tags = {
-        ...(item.tags || {}),
-        coord_source: coordinates.source || "osm-geocoder",
-      };
-    }
-  }
+  await Promise.all(workers);
 
   return items;
 }
@@ -6428,12 +6430,14 @@ async function handleReverseGeocode(req, res) {
 }
 
 async function handlePois(req, res) {
+  const requestStartedAt = Date.now();
   try {
     const requestContext = await parseBody(req);
     const lat = Number(requestContext.lat);
     const lon = Number(requestContext.lon);
     const radius = 3000;
     const location = requestContext.location || {};
+    console.log(`POI_REQUEST_START lat=${lat} lon=${lon} radius=3000`);
     const cacheKey = JSON.stringify({
       version: POI_CACHE_VERSION,
       lat: Number(lat).toFixed(4),
@@ -6457,6 +6461,7 @@ async function handlePois(req, res) {
       areaCoverage,
     };
     const crawlPlan = buildBackendCrawlPlan(searchLocation.searchAreas, location);
+    console.log(`POI_AREA_SCOPE kelurahan=${areaCoverage.length} queries=${crawlPlan.length}`);
 
     const cached = poiCache.get(cacheKey);
     if (cached && !cached.fallbackUsed && Date.now() - cached.createdAt < 1000 * 60 * 30) {
@@ -6562,8 +6567,10 @@ async function handlePois(req, res) {
       poiCache.delete(cacheKey);
     }
 
+    console.log(`POI_REQUEST_DONE ms=${Date.now() - requestStartedAt} google=${googleHousingPois.length} overpass=${overpassPoisInRadius.length} returned=${poisToReturn.length} fallback=${fallbackUsed}`);
     sendJson(res, 200, payload);
   } catch (error) {
+    console.error(`POI_REQUEST_ERROR ms=${Date.now() - requestStartedAt} message=${error.message || error}`);
     sendJson(res, 500, { error: error.message || "Gagal memproses POI." });
   }
 }

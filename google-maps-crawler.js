@@ -199,8 +199,8 @@ async function resolveCoordinatesFromPlacePage(page, href) {
   }
 
   try {
-    await page.goto(href, { waitUntil: "domcontentloaded", timeout: 45000 });
-    await page.waitForTimeout(1800);
+    await page.goto(href, { waitUntil: "domcontentloaded", timeout: 10000 });
+    await page.waitForTimeout(500);
 
     const candidates = await page.evaluate(() => {
       const values = [];
@@ -578,7 +578,9 @@ async function crawlGoogleMapsPois(location = {}) {
         while (nextTaskIndex < tasks.length) {
           const task = tasks[nextTaskIndex];
           nextTaskIndex += 1;
+          console.log(`GOOGLE_MAPS_TASK_START ${nextTaskIndex}/${tasks.length} ${task.mode} ${task.area?.village || ""}`);
           const rows = await crawlQuery(page, task.query).catch(() => []);
+          console.log(`GOOGLE_MAPS_TASK_DONE ${nextTaskIndex}/${tasks.length} rows=${rows.length} ${task.mode} ${task.area?.village || ""}`);
           for (const row of rows) {
             if (!shouldKeepRow(row, task)) {
               continue;
