@@ -27,7 +27,7 @@ const POPULAR_TIMES_DELAY_MS = Number(process.env.POPULAR_TIMES_DELAY_MS || 1500
 const MIN_REVIEW_COUNT = 0;
 const MAX_POI_PER_CATEGORY = 100;
 const MAX_CRAWL_PAGES = process.env.VERCEL ? 1 : 4;
-const KEYWORDS_PER_CATEGORY = 1;
+const KEYWORDS_PER_CATEGORY = 2;
 
 const CATEGORY_CONFIG = {
   hunian: {

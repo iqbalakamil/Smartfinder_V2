@@ -65,7 +65,7 @@ async function launchConfiguredBrowser(launchOptions = {}) {
 
 const DEFAULT_PORT = Number(process.env.PORT || 3000);
 const HOST = "127.0.0.1";
-const POI_CACHE_VERSION = "v8-google-crawl-kelurahan-radius-final-filter";
+const POI_CACHE_VERSION = "v9-google-overpass-radius-pois";
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 15000);
 const LITELLM_BASE_URL = "https://litellm.koboi2026.biz.id/v1";
 const LITELLM_MODEL = "gpt-4o-mini";
@@ -6471,11 +6471,25 @@ async function handlePois(req, res) {
     // input. Ini mencegah POI di bagian kelurahan yang berada di luar lingkaran
     // ikut tampil di peta.
     const googleHousingPoisWithinSelectedAreas = googleHousingPoisInRadius;
-    const fallbackUsed = googleHousingPois.length === 0;
+    const overpassPois = await withTimeout(
+      fetchOverpassPois(lat, lon, radius).catch(() => []),
+      20000,
+      "Overpass radius POI"
+    ).catch(() => []);
+    const overpassPoisInRadius = overpassPois.filter((item) =>
+      Number.isFinite(Number(item.lat)) &&
+      Number.isFinite(Number(item.lon)) &&
+      calculateDistanceMeters(lat, lon, item.lat, item.lon) <= radius
+    );
+    const realPoisInRadius = dedupePois([
+      ...googleHousingPoisWithinSelectedAreas,
+      ...overpassPoisInRadius,
+    ]);
+    const fallbackUsed = googleHousingPois.length === 0 && overpassPoisInRadius.length === 0;
     const poisToReturn = fallbackUsed
       ? buildSyntheticPoiFallback(lat, lon, areaCoverage, crawlPlan)
-      : googleHousingPoisWithinSelectedAreas;
-    syncBackendHotmapPois(googleHousingPoisWithinSelectedAreas);
+      : realPoisInRadius;
+    syncBackendHotmapPois(realPoisInRadius);
 
     const payload = {
       items: dedupePois([...poisToReturn]),
@@ -6488,6 +6502,9 @@ async function handlePois(req, res) {
         googleMapsInSelectedKelurahan: googleHousingPoisWithCoords.length,
         googleMapsOutsideRadius: googleHousingPoisOutsideRadius,
         googleMapsWithoutCoords: googleHousingPoisWithoutCoords,
+        overpassTotal: overpassPois.length,
+        overpassInRadius: overpassPoisInRadius.length,
+        realPoisInRadius: realPoisInRadius.length,
         radiusFilterApplied: true,
         radiusFilterNote: "Radius 3 km dipakai untuk memilih kelurahan dari polygon Dukcapil; POI dicari berdasarkan kelurahan tersebut lalu difilter ulang agar titik akhir tetap berada di dalam radius.",
         googleMapsCoordSources: googleHousingPoisWithCoords.reduce((accumulator, item) => {
@@ -6507,7 +6524,7 @@ async function handlePois(req, res) {
         crawlDebug,
         crawlScope: "all-radius-kelurahan-all-keywords",
         externalResearch: { summary: "", sources: [], metricHighlights: [] },
-        sourceMode: fallbackUsed ? "google-maps-crawl-fallback" : "google-maps-crawl-only",
+        sourceMode: fallbackUsed ? "google-maps-crawl-fallback" : "google-maps-crawl-overpass",
         fallbackUsed,
         degradedSources: {
           googleHousingTimedOut: googleHousingPipelineResult.status === "rejected",

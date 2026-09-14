@@ -746,10 +746,10 @@ function renderMapPois(lat, lon, radius, pois) {
   
   // Siapkan GeoJSON features untuk POI markers
   const withCoordinates = pois.filter((poi) => Number.isFinite(Number(poi.lat)) && Number.isFinite(Number(poi.lon)));
-  const preferredHotmap = withCoordinates.filter((poi) => ["hotmap-v2-extension", "google-maps-crawl"].includes(poi.source));
-  const markerCandidates = preferredHotmap.length
-    ? preferredHotmap
-    : withCoordinates;
+  // Tampilkan seluruh POI berkordinat valid dari Google, Overpass, dan sumber
+  // hotmap yang sudah difilter backend; jangan menyembunyikan Overpass hanya
+  // karena ada satu hasil Google.
+  const markerCandidates = withCoordinates;
   
   console.log('RENDER_MAP_POIS: markerCandidates with coords:', markerCandidates.length);
   
