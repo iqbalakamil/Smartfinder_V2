@@ -77,6 +77,15 @@ if exist ".git" (
   echo [OK] Update GitHub selesai.
 )
 
+set "GITHUB_VERSION="
+set "GITHUB_COMMIT="
+for /f "delims=" %%V in ('git -c "safe.directory=%SAFE_REPO_DIR%" describe --tags --always --abbrev=0 2^>nul') do set "GITHUB_VERSION=%%V"
+for /f "delims=" %%H in ('git -c "safe.directory=%SAFE_REPO_DIR%" rev-parse --short HEAD 2^>nul') do set "GITHUB_COMMIT=%%H"
+if not defined GITHUB_VERSION set "GITHUB_VERSION=tanpa-tag"
+if not defined GITHUB_COMMIT set "GITHUB_COMMIT=tidak-diketahui"
+echo [INFO] Versi GitHub aktif: %GITHUB_VERSION% ^| commit %GITHUB_COMMIT%
+>> "%LOG_FILE%" echo [%date% %time%] GitHub version %GITHUB_VERSION% ^| commit %GITHUB_COMMIT%.
+
 if not exist "package.json" (
   echo [ERROR] package.json tidak ditemukan di folder aplikasi.
   pause
