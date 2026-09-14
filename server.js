@@ -65,7 +65,7 @@ async function launchConfiguredBrowser(launchOptions = {}) {
 
 const DEFAULT_PORT = Number(process.env.PORT || 3000);
 const HOST = "127.0.0.1";
-const POI_CACHE_VERSION = "v11-google-overpass-residential-classification";
+const POI_CACHE_VERSION = "v12-partial-google-overpass-poi-crawl";
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 15000);
 const LITELLM_BASE_URL = "https://litellm.koboi2026.biz.id/v1";
 const LITELLM_MODEL = "gpt-4o-mini";
@@ -692,20 +692,10 @@ function buildOverpassQuery(lat, lon, radius) {
       node(around:${radius},${lat},${lon})[leisure];
       way(around:${radius},${lat},${lon})[leisure];
       relation(around:${radius},${lat},${lon})[leisure];
-      node(around:${radius},${lat},${lon})[building];
-      way(around:${radius},${lat},${lon})[building];
-      relation(around:${radius},${lat},${lon})[building];
-      node(around:${radius},${lat},${lon})[landuse];
-      way(around:${radius},${lat},${lon})[landuse];
-      relation(around:${radius},${lat},${lon})[landuse];
-      node(around:${radius},${lat},${lon})[residential];
-      way(around:${radius},${lat},${lon})[residential];
-      relation(around:${radius},${lat},${lon})[residential];
-      node(around:${radius},${lat},${lon})[place~"suburb|quarter|neighbourhood"];
-      way(around:${radius},${lat},${lon})[place~"suburb|quarter|neighbourhood"];
-      relation(around:${radius},${lat},${lon})[place~"suburb|quarter|neighbourhood"];
-      node(around:${radius},${lat},${lon})[highway];
-      way(around:${radius},${lat},${lon})[highway];
+      nwr(around:${radius},${lat},${lon})[landuse="residential"];
+      nwr(around:${radius},${lat},${lon})[residential];
+      nwr(around:${radius},${lat},${lon})[place~"suburb|quarter|neighbourhood"];
+      nwr(around:${radius},${lat},${lon})[name];
     );
     out center tags;
   `;

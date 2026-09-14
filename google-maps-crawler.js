@@ -27,7 +27,10 @@ const POPULAR_TIMES_DELAY_MS = Number(process.env.POPULAR_TIMES_DELAY_MS || 1500
 const MIN_REVIEW_COUNT = 0;
 const MAX_POI_PER_CATEGORY = 100;
 const MAX_CRAWL_PAGES = process.env.VERCEL ? 1 : 8;
-const KEYWORDS_PER_CATEGORY = 2;
+// Satu keyword inti per kategori dijalankan untuk setiap kelurahan. Cakupan
+// kelurahan tetap lengkap, tetapi crawler tidak membuat ratusan query yang
+// akhirnya timeout dan membuang seluruh hasil parsial.
+const KEYWORDS_PER_CATEGORY = 1;
 
 const CATEGORY_CONFIG = {
   hunian: {
@@ -62,6 +65,7 @@ const QUERY_POST_LOAD_DELAY_MS = VERCEL_MODE ? 900 : 1000;
 const MAX_SCROLL_ROUNDS = VERCEL_MODE ? 4 : 6;
 const SCROLL_DELAY_MS = VERCEL_MODE ? 300 : 350;
 const MAX_CRAWL_TASKS = VERCEL_MODE ? 3 : 999;
+const CRAWL_DEADLINE_MS = Number(process.env.POI_CRAWL_DEADLINE_MS || 75000);
 
 async function launchConfiguredBrowser(launchOptions = {}) {
   if (chromium) {
@@ -552,6 +556,7 @@ async function crawlGoogleMapsPois(location = {}) {
   }
 
   let context = null;
+  const crawlDeadline = Date.now() + CRAWL_DEADLINE_MS;
 
   try {
     context = await browser.newContext({
@@ -575,7 +580,7 @@ async function crawlGoogleMapsPois(location = {}) {
     const workers = Array.from({ length: workerCount }, async () => {
       const page = await pageFactory();
       try {
-        while (nextTaskIndex < tasks.length) {
+        while (nextTaskIndex < tasks.length && Date.now() < crawlDeadline) {
           const task = tasks[nextTaskIndex];
           nextTaskIndex += 1;
           console.log(`GOOGLE_MAPS_TASK_START ${nextTaskIndex}/${tasks.length} ${task.mode} ${task.area?.village || ""}`);
@@ -609,6 +614,10 @@ async function crawlGoogleMapsPois(location = {}) {
     });
 
     await Promise.all(workers);
+
+    if (Date.now() >= crawlDeadline && nextTaskIndex < tasks.length) {
+      console.log(`GOOGLE_MAPS_CRAWL_PARTIAL completed=${all.length} remaining_tasks=${tasks.length - nextTaskIndex}`);
+    }
 
     const deduped = new Map();
     for (const item of all) {
