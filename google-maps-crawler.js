@@ -177,6 +177,16 @@ function parseCoordinatesFromHref(href) {
     }
   }
 
+  // Koordinat @ pada URL hasil pencarian adalah viewport dan bisa menunjuk
+  // ke pusat area, bukan tempatnya. Untuk URL halaman tempat langsung,
+  // @ biasanya merupakan posisi tempat dan boleh dipakai sebagai cadangan.
+  if (/\/maps\/place\//i.test(value)) {
+    const placeViewport = value.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)(?:,|[/?#]|$)/i);
+    if (placeViewport) {
+      return { lat: Number(placeViewport[1]), lon: Number(placeViewport[2]) };
+    }
+  }
+
   return {
     lat: null,
     lon: null,

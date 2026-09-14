@@ -424,7 +424,6 @@ function parseCoordinatesFromGoogleMapsLink(value) {
 
   const fallbackPatterns = [
     { regex: /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/i, source: "google-place-link" },
-    { regex: /@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?),/i, source: "google-at-link" },
     { regex: /ll=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/i, source: "google-ll-link" },
     { regex: /q=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/i, source: "google-query-link" },
   ];
@@ -436,6 +435,17 @@ function parseCoordinatesFromGoogleMapsLink(value) {
         lat: Number(match[1]),
         lon: Number(match[2]),
         source: pattern.source,
+      };
+    }
+  }
+
+  if (/\/maps\/place\//i.test(raw)) {
+    const placeViewport = raw.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)(?:,|[/?#]|$)/i);
+    if (placeViewport) {
+      return {
+        lat: Number(placeViewport[1]),
+        lon: Number(placeViewport[2]),
+        source: "google-place-viewport",
       };
     }
   }
