@@ -21,13 +21,13 @@ if (SERVERLESS_CHROMIUM_ENABLED) {
 const EXTENSION_CATEGORY_CONFIG = require("./hotspot map V.2/category-config.js");
 const { scrapePopularTimes, calculateFootTrafficScore, batchScrapePopularTimes } = require("./crawlers/popularTimesScraper");
 
-const POPULAR_TIMES_ENABLED = String(process.env.POPULAR_TIMES_ENABLED || "true").toLowerCase() !== "false";
+const POPULAR_TIMES_ENABLED = String(process.env.POPULAR_TIMES_ENABLED || "false").toLowerCase() !== "false";
 const POPULAR_TIMES_MAX_POIS = Number(process.env.POPULAR_TIMES_MAX_POIS || 15);
 const POPULAR_TIMES_DELAY_MS = Number(process.env.POPULAR_TIMES_DELAY_MS || 1500);
 const MIN_REVIEW_COUNT = 0;
 const MAX_POI_PER_CATEGORY = 100;
-const MAX_CRAWL_PAGES = process.env.VERCEL ? 1 : 2;
-const KEYWORDS_PER_CATEGORY = process.env.VERCEL ? 1 : 2;
+const MAX_CRAWL_PAGES = process.env.VERCEL ? 1 : 4;
+const KEYWORDS_PER_CATEGORY = 1;
 
 const CATEGORY_CONFIG = {
   hunian: {
@@ -58,10 +58,10 @@ const CATEGORY_CONFIG = {
 
 const VERCEL_MODE = Boolean(process.env.VERCEL);
 const SEARCH_READY_TIMEOUT_MS = VERCEL_MODE ? 15000 : 25000;
-const QUERY_POST_LOAD_DELAY_MS = VERCEL_MODE ? 2000 : 2500;
+const QUERY_POST_LOAD_DELAY_MS = VERCEL_MODE ? 1600 : 1800;
 const MAX_SCROLL_ROUNDS = VERCEL_MODE ? 6 : 12;
 const SCROLL_DELAY_MS = VERCEL_MODE ? 500 : 700;
-const MAX_CRAWL_TASKS = VERCEL_MODE ? 3 : 12;
+const MAX_CRAWL_TASKS = VERCEL_MODE ? 3 : 999;
 
 async function launchConfiguredBrowser(launchOptions = {}) {
   if (chromium) {
