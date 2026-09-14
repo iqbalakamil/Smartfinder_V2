@@ -1010,6 +1010,22 @@ function classifyPoi(tags = {}) {
   const place = tags.place;
   const categoryHint = tags.category_hint;
   const types = Array.isArray(tags.google_types) ? tags.google_types : [];
+  const placeText = [
+    tags.name,
+    tags.brand,
+    tags.operator,
+    tags.description,
+    tags.landuse,
+    tags.residential,
+    tags.building,
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  // Banyak cluster/perumahan di OSM hanya ditandai building=yes atau place
+  // tanpa tipe hunian yang lengkap. Kenali nama hunian agar tidak hilang dari
+  // kategori perumahan di dashboard.
+  if (/(perumahan|permukiman|cluster|komplek|kompleks|residence|residencia|apartment|apartemen|housing|townhouse|villa|estate|grand city|harapan baru)/i.test(placeText)) {
+    return { signal: "positive", category: "residential", label: "Perumahan / Hunian" };
+  }
 
   if (
     categoryHint === "residential" ||
