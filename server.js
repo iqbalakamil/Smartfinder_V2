@@ -6448,7 +6448,7 @@ async function handlePois(req, res) {
       return;
     }
 
-    const [googleHousingPipelineResult] = await Promise.allSettled([
+    const [googleHousingPipelineResult, overpassPipelineResult] = await Promise.allSettled([
       withTimeout(
         (async () => {
           const googleHousingPois = await fetchGoogleHousingPois(lat, lon, radius, searchLocation).catch(() => []);
@@ -6457,6 +6457,11 @@ async function handlePois(req, res) {
         })(),
         POI_GOOGLE_HOUSING_TIMEOUT_MS,
         "Google housing pipeline"
+      ),
+      withTimeout(
+        fetchOverpassPois(lat, lon, radius),
+        20000,
+        "Overpass radius POI"
       ),
     ]);
 
@@ -6471,11 +6476,9 @@ async function handlePois(req, res) {
     // input. Ini mencegah POI di bagian kelurahan yang berada di luar lingkaran
     // ikut tampil di peta.
     const googleHousingPoisWithinSelectedAreas = googleHousingPoisInRadius;
-    const overpassPois = await withTimeout(
-      fetchOverpassPois(lat, lon, radius).catch(() => []),
-      20000,
-      "Overpass radius POI"
-    ).catch(() => []);
+    const overpassPois = overpassPipelineResult.status === "fulfilled"
+      ? overpassPipelineResult.value
+      : [];
     const overpassPoisInRadius = overpassPois.filter((item) =>
       Number.isFinite(Number(item.lat)) &&
       Number.isFinite(Number(item.lon)) &&
@@ -6486,9 +6489,9 @@ async function handlePois(req, res) {
       ...overpassPoisInRadius,
     ]);
     const fallbackUsed = googleHousingPois.length === 0 && overpassPoisInRadius.length === 0;
-    const poisToReturn = fallbackUsed
-      ? buildSyntheticPoiFallback(lat, lon, areaCoverage, crawlPlan)
-      : realPoisInRadius;
+    // Jangan pernah mengembalikan titik sintetis. Jika sumber nyata gagal,
+    // dashboard menampilkan hasil kosong/parsial agar tidak menyesatkan.
+    const poisToReturn = realPoisInRadius;
     syncBackendHotmapPois(realPoisInRadius);
 
     const payload = {
