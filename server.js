@@ -65,7 +65,7 @@ async function launchConfiguredBrowser(launchOptions = {}) {
 
 const DEFAULT_PORT = Number(process.env.PORT || 3000);
 const HOST = "127.0.0.1";
-const POI_CACHE_VERSION = "v7-google-crawl-kelurahan-all-valid-pois";
+const POI_CACHE_VERSION = "v8-google-crawl-kelurahan-radius-final-filter";
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 15000);
 const LITELLM_BASE_URL = "https://litellm.koboi2026.biz.id/v1";
 const LITELLM_MODEL = "gpt-4o-mini";
@@ -6456,11 +6456,11 @@ async function handlePois(req, res) {
     const googleHousingPoisInRadius = googleHousingPoisWithCoords.filter((item) => calculateDistanceMeters(lat, lon, item.lat, item.lon) <= radius);
     const googleHousingPoisOutsideRadius = googleHousingPoisWithCoords.filter((item) => calculateDistanceMeters(lat, lon, item.lat, item.lon) > radius).length;
     const googleHousingPoisWithoutCoords = googleHousingPois.length - googleHousingPoisWithCoords.length;
-    // Radius 3 km dipakai untuk memilih polygon kelurahan Dukcapil. Setelah
-    // kelurahan terpilih, seluruh hasil POI berkoordinat valid dari pencarian
-    // kelurahan tersebut ditampilkan; POI tanpa koordinat tetap dibuang agar
-    // tidak muncul sebagai titik yang salah di peta.
-    const googleHousingPoisWithinSelectedAreas = googleHousingPoisWithCoords;
+    // Kelurahan Dukcapil dipakai sebagai cakupan pencarian Google Maps, tetapi
+    // hasil akhirnya tetap wajib berada di lingkaran radius dari koordinat
+    // input. Ini mencegah POI di bagian kelurahan yang berada di luar lingkaran
+    // ikut tampil di peta.
+    const googleHousingPoisWithinSelectedAreas = googleHousingPoisInRadius;
     const fallbackUsed = googleHousingPois.length === 0;
     const poisToReturn = fallbackUsed
       ? buildSyntheticPoiFallback(lat, lon, areaCoverage, crawlPlan)
@@ -6475,11 +6475,11 @@ async function handlePois(req, res) {
         googleMapsTotal: googleHousingPois.length,
         googleMapsWithCoords: googleHousingPoisWithCoords.length,
         googleMapsWithinRadius: googleHousingPoisInRadius.length,
-        googleMapsInSelectedKelurahan: googleHousingPoisWithinSelectedAreas.length,
+        googleMapsInSelectedKelurahan: googleHousingPoisWithCoords.length,
         googleMapsOutsideRadius: googleHousingPoisOutsideRadius,
         googleMapsWithoutCoords: googleHousingPoisWithoutCoords,
-        radiusFilterApplied: false,
-        radiusFilterNote: "Radius 3 km dipakai untuk memilih kelurahan dari polygon Dukcapil; POI kemudian dicari dan ditampilkan berdasarkan kelurahan terpilih.",
+        radiusFilterApplied: true,
+        radiusFilterNote: "Radius 3 km dipakai untuk memilih kelurahan dari polygon Dukcapil; POI dicari berdasarkan kelurahan tersebut lalu difilter ulang agar titik akhir tetap berada di dalam radius.",
         googleMapsCoordSources: googleHousingPoisWithCoords.reduce((accumulator, item) => {
           const key = item.tags?.coord_source || "unknown";
           accumulator[key] = (accumulator[key] || 0) + 1;
