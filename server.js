@@ -65,7 +65,7 @@ async function launchConfiguredBrowser(launchOptions = {}) {
 
 const DEFAULT_PORT = Number(process.env.PORT || 3000);
 const HOST = "127.0.0.1";
-const POI_CACHE_VERSION = "v5-google-crawl-kelurahan-coordinates";
+const POI_CACHE_VERSION = "v6-google-crawl-kelurahan-strict-radius";
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 15000);
 const LITELLM_BASE_URL = "https://litellm.koboi2026.biz.id/v1";
 const LITELLM_MODEL = "gpt-4o-mini";
@@ -6452,17 +6452,21 @@ async function handlePois(req, res) {
 
     const googleHousingPois = googleHousingPipelineResult.status === "fulfilled" ? googleHousingPipelineResult.value : [];
     const crawlDebug = googleHousingPois.debug || null;
-    const googleHousingPoisWithCoords = googleHousingPois.filter((item) => item.lat && item.lon);
+    const googleHousingPoisWithCoords = googleHousingPois.filter((item) => Number.isFinite(Number(item.lat)) && Number.isFinite(Number(item.lon)));
     const googleHousingPoisInRadius = googleHousingPoisWithCoords.filter((item) => calculateDistanceMeters(lat, lon, item.lat, item.lon) <= radius);
     const googleHousingPoisOutsideRadius = googleHousingPoisWithCoords.filter((item) => calculateDistanceMeters(lat, lon, item.lat, item.lon) > radius).length;
-    const googleHousingPoisWithinRadius = googleHousingPois.filter((item) => {
-      if (!item.lat || !item.lon) return true;
-      return calculateDistanceMeters(lat, lon, item.lat, item.lon) <= radius;
-    });
-    const fallbackUsed = !googleHousingPois.length;
+    const googleHousingPoisWithoutCoords = googleHousingPois.length - googleHousingPoisWithCoords.length;
+    // Hanya POI yang koordinatnya terverifikasi dan benar-benar berada di
+    // radius dari titik input yang boleh dikirim ke peta/dashboard. Hasil
+    // tanpa koordinat tidak boleh dianggap berada di dalam radius.
+    const googleHousingPoisWithinRadius = googleHousingPoisInRadius;
+    // Jangan membuat titik sintetis hanya karena semua hasil crawler berada di
+    // luar radius atau tidak mempunyai koordinat. Itu akan menampilkan POI
+    // seolah-olah berada dekat titik input padahal lokasinya belum terverifikasi.
+    const fallbackUsed = googleHousingPois.length === 0;
     const poisToReturn = fallbackUsed
       ? buildSyntheticPoiFallback(lat, lon, areaCoverage, crawlPlan)
-      : googleHousingPois;
+      : googleHousingPoisWithinRadius;
     syncBackendHotmapPois(googleHousingPoisInRadius);
 
     const payload = {
@@ -6474,8 +6478,9 @@ async function handlePois(req, res) {
         googleMapsWithCoords: googleHousingPoisWithCoords.length,
         googleMapsWithinRadius: googleHousingPoisWithinRadius.length,
         googleMapsOutsideRadius: googleHousingPoisOutsideRadius,
-        radiusFilterApplied: false,
-        radiusFilterNote: "Cakupan pencarian dibatasi oleh polygon kelurahan Dukcapil; hasil POI tidak dibuang saat koordinat hasil crawl belum tersedia.",
+        googleMapsWithoutCoords: googleHousingPoisWithoutCoords,
+        radiusFilterApplied: true,
+        radiusFilterNote: "POI dicari berdasarkan kelurahan yang beririsan dengan polygon Dukcapil, lalu difilter ulang memakai jarak geodesik dari koordinat input.",
         googleMapsCoordSources: googleHousingPoisWithCoords.reduce((accumulator, item) => {
           const key = item.tags?.coord_source || "unknown";
           accumulator[key] = (accumulator[key] || 0) + 1;
