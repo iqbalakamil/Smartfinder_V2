@@ -1835,6 +1835,71 @@ a {
   border: 1px solid rgba(217, 119, 6, 0.12);
 }
 
+/* Deep research report cards: dark dashboard treatment */
+.analysis-drawer-body .pp-section,
+.analysis-drawer-body .feasibility-overall-score,
+.analysis-drawer-body .research-link-card,
+.analysis-drawer-body .pp-metric-card {
+  background: #111827 !important;
+  color: #f8fafc !important;
+  border-color: rgba(56, 189, 248, 0.24) !important;
+}
+
+.analysis-drawer-body .pp-section h4,
+.analysis-drawer-body .pp-section h5,
+.analysis-drawer-body .metric-label,
+.analysis-drawer-body .metric-sublabel,
+.analysis-drawer-body .pp-section p,
+.analysis-drawer-body .pp-section td,
+.analysis-drawer-body .pp-section th,
+.analysis-drawer-body .research-link-meta {
+  color: #e5e7eb !important;
+}
+
+.analysis-drawer-body .pp-section a,
+.analysis-drawer-body .research-link-card a {
+  color: #67e8f9 !important;
+}
+
+.analysis-drawer-body .narrative-table,
+.analysis-drawer-body .narrative-table td,
+.analysis-drawer-body .narrative-table th {
+  border-color: rgba(148, 163, 184, 0.25) !important;
+}
+
+.analysis-drawer-body .deep-research-pipeline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.analysis-drawer-body .deep-research-step {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px;
+  background: #0b1220;
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 10px;
+}
+
+.analysis-drawer-body .deep-research-step-status {
+  color: #67e8f9;
+  font-weight: 800;
+}
+
+.analysis-drawer-body .deep-research-step strong,
+.analysis-drawer-body .deep-research-step small {
+  display: block;
+  color: #f8fafc;
+}
+
+.analysis-drawer-body .deep-research-step small {
+  margin-top: 3px;
+  color: #94a3b8;
+  line-height: 1.35;
+}
+
 .pp-section h4 {
   margin: 0 0 8px;
   font-size: 0.88rem;

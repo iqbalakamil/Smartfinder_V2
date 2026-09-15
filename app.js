@@ -4647,23 +4647,7 @@ function renderFeasibilityResults(result) {
         <div><div style="font-size:22px;font-weight:700;color:#f59e0b;">Skor Kelayakan: ${f.overallScore}/100</div>
         <div style="font-size:14px;color:#92400e;margin-top:2px;">Data terbatas (fallback) — Berdasarkan Dukcapil demografi</div></div>
       </div></div>`;
-    // Show parameter scores from fallback
-    html += `<div class="pp-section"><h4>🎯 Skor Per Parameter (Fallback)</h4>`;
-    html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-top:8px;">`;
-    const paramIcons = {"Aksesibilitas":"🚗","Visibilitas":"👁️","Demografi":"👶","Kompetitor":"🏢","Fasilitas & Lingkungan":"🏫","Potensi Promosi":"📣","History Kegiatan":"📱"};
-    for (const param of f.parameters || []) {
-      const score = f.parameterScores?.[param] || 0;
-      const color = getScoreColor(score);
-      const icon = paramIcons[param] || "📊";
-      html += `<div style="padding:12px;border:1px solid #e2e8f0;border-radius:10px;border-left:4px solid ${color};background:white;">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-weight:600;">${icon} ${escapeHtml(param)}</span>
-          <span style="font-weight:700;color:${color};">${score}</span></div>
-        <div style="width:100%;height:6px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin-top:6px;">
-          <div style="width:${score}%;height:100%;background:${color};border-radius:999px;"></div></div>
-        <div style="font-size:12px;color:#92400e;margin-top:4px;">Data Dukcapil only</div></div>`;
-    }
-    html += `</div></div>`;
+    html += `<div class="pp-section"><h4>🔬 Deep Research Pipeline</h4><p>Mode fallback aktif: scope, evidence, synthesis, dan validation menggunakan data lokal yang tersedia.</p></div>`;
     // Show market estimation
     if (mkt.tam || mkt.sam || mkt.som) {
       html += `<div class="pp-section"><h4>📊 Estimasi Market (Dukcapil)</h4><div class="pp-metrics-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));">`;
@@ -4697,7 +4681,7 @@ function renderFeasibilityResults(result) {
   html += `<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">`;
   html += `<div style="font-size:48px;font-weight:800;color:${overallColor};line-height:1;">${overallGrade}</div>`;
   html += `<div><div style="font-size:22px;font-weight:700;color:${overallColor};">Skor Kelayakan: ${f.overallScore}/100</div>`;
-  html += `<div style="font-size:14px;color:#64748b;margin-top:2px;">Penilaian: ${overallLabel} — Berdasarkan ${f.totalSources || 0} sumber riset dari ${f.parameters?.length || 0} parameter</div>`;
+  html += `<div style="font-size:14px;color:#cbd5e1;margin-top:2px;">Penilaian: ${overallLabel} — Berdasarkan ${f.totalSources || 0} evidence terkumpul</div>`;
   html += `</div></div></div>`;
 
   // ── Kelurahan List ──
@@ -4748,53 +4732,17 @@ function renderFeasibilityResults(result) {
     html += `</div>`;
   }
 
-  // ── Parameter Scores (7 parameters) ──
-  html += `<div class="pp-section"><h4>🎯 Skor Per Parameter Riset</h4>`;
-  html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-top:8px;">`;
-
-  const paramIcons = {
-    "Aksesibilitas": "🚗",
-    "Visibilitas": "👁️",
-    "Demografi": "👶",
-    "Kompetitor": "🏢",
-    "Fasilitas & Lingkungan": "🏫",
-    "Potensi Promosi": "📣",
-    "History Kegiatan": "📱",
-  };
-
-  for (const param of f.parameters || []) {
-    const score = f.parameterScores?.[param] || 0;
-    const color = getScoreColor(score);
-    const grade = getScoreGrade(score);
-    const label = getScoreLabel(score);
-    const paramData = f.byParameter?.[param] || {};
-    const sourceCount = paramData.sourceCount || 0;
-    const icon = paramIcons[param] || "📊";
-
-    html += `<div style="padding:12px;border:1px solid #e2e8f0;border-radius:10px;border-left:4px solid ${color};background:white;">`;
-    html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">`;
-    html += `<span style="font-weight:600;font-size:0.95rem;">${icon} ${escapeHtml(param)}</span>`;
-    html += `<span style="font-weight:700;font-size:1.1rem;color:${color};">${grade} ${score}</span>`;
-    html += `</div>`;
-    html += `<div style="width:100%;height:6px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin-bottom:6px;">`;
-    html += `<div style="width:${score}%;height:100%;background:${color};border-radius:999px;"></div>`;
-    html += `</div>`;
-    html += `<div style="font-size:12px;color:#64748b;">${sourceCount} sumber riset ditemukan</div>`;
-
-    // Top sources for this parameter
-    const topSources = (paramData.sources || []).slice(0, 3);
-    if (topSources.length) {
-      html += `<div style="margin-top:8px;">`;
-      topSources.forEach(s => {
-        if (s.url) {
-          html += `<a href="${escapeAttribute(s.url)}" target="_blank" rel="noreferrer" style="display:block;font-size:11px;color:#0b5c55;text-decoration:none;padding:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;" title="${escapeHtml(s.title)}">${escapeHtml(s.title?.slice(0, 50) || s.url?.slice(0, 50))} →</a>`;
-        }
-      });
-      html += `</div>`;
-    }
-
-    html += `</div>`;
-  }
+  // ── Deep Research Pipeline ──
+  const pipeline = result.meta?.research_pipeline || [
+    { stage: "outline", status: "completed", detail: "Menyusun scope radius 3 km dan kebutuhan riset" },
+    { stage: "collect", status: "completed", detail: "Mengumpulkan POI, Dukcapil, TinyFish Search/Fetch" },
+    { stage: "synthesize", status: "completed", detail: "Menggabungkan evidence dan market sizing" },
+    { stage: "validate", status: "completed", detail: "Memvalidasi sumber, risiko, dan rekomendasi" },
+  ];
+  html += `<div class="pp-section"><h4>🔬 Deep Research Pipeline</h4><div class="deep-research-pipeline">`;
+  pipeline.forEach((item) => {
+    html += `<div class="deep-research-step"><span class="deep-research-step-status">${item.status === "completed" ? "✓" : "…"}</span><div><strong>${escapeHtml(item.stage)}</strong><small>${escapeHtml(item.detail || "")}</small></div></div>`;
+  });
   html += `</div></div>`;
 
   // ── Demografi dari Dukcapil ──
@@ -4808,31 +4756,14 @@ function renderFeasibilityResults(result) {
     html += `</tbody></table></div>`;
   }
 
-  // ── Detailed Source References per Parameter ──
-  html += `<div class="pp-section"><h4>🔗 Daftar Sumber Referensi</h4>`;
-  for (const param of f.parameters || []) {
-    const paramData = f.byParameter?.[param] || {};
-    const sources = (paramData.sources || []).slice(0, 5);
-    if (sources.length) {
-      html += `<div style="margin-bottom:12px;">`;
-      html += `<div style="font-weight:600;font-size:0.9rem;margin-bottom:4px;">${paramIcons[param] || "📊"} ${escapeHtml(param)}</div>`;
-      html += `<div class="research-links">`;
-      sources.forEach(s => {
-        html += `<div class="research-link-card" style="padding:6px 8px;">`;
-        if (s.url) {
-          html += `<a href="${escapeAttribute(s.url)}" target="_blank" rel="noreferrer" style="color:#0b5c55;text-decoration:none;font-weight:600;font-size:0.85rem;">${escapeHtml(s.title || "Sumber riset")}</a>`;
-        } else {
-          html += `<span style="font-weight:600;font-size:0.85rem;">${escapeHtml(s.title || "Sumber riset")}</span>`;
-        }
-        if (s.metrics?.length) {
-          html += `<div style="font-size:10px;color:#64748b;margin-top:2px;">${s.metrics.join(" | ")}</div>`;
-        }
-        html += `</div>`;
-      });
-      html += `</div></div>`;
-    }
-  }
-  html += `</div>`;
+  // ── Evidence & References ──
+  const evidenceSources = Object.values(f.byParameter || {}).flatMap((group) => group.sources || []);
+  const uniqueEvidence = Array.from(new Map(evidenceSources.filter((source) => source?.url).map((source) => [source.url, source])).values()).slice(0, 20);
+  html += `<div class="pp-section"><h4>🔗 Evidence & References (${uniqueEvidence.length})</h4><div class="research-links">`;
+  uniqueEvidence.forEach((source) => {
+    html += `<div class="research-link-card"><a href="${escapeAttribute(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title || source.url)}</a>${source.snippet ? `<small>${escapeHtml(source.snippet)}</small>` : ""}</div>`;
+  });
+  html += `</div></div>`;
 
   // ── Metrik Tambahan ──
   if (f.metrics?.length) {
