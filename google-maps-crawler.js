@@ -116,14 +116,20 @@ function buildQueries(location = {}) {
   const areas = buildSearchAreas(location);
   return areas.flatMap((area) => {
     const locationLabel = buildLocationLabel(area);
-    return Object.entries(CATEGORY_CONFIG).flatMap(([mode, config]) =>
-      config.keywords.slice(0, KEYWORDS_PER_CATEGORY).map((keyword) => ({
+    return Object.entries(CATEGORY_CONFIG).flatMap(([mode, config]) => {
+      // Hunian memakai seluruh variasi keyword agar cluster/perumahan/apartment
+      // yang memakai penamaan berbeda tetap terdeteksi. Kategori lain tetap
+      // dibatasi satu keyword untuk menjaga waktu crawl.
+      const keywords = mode === "hunian"
+        ? config.keywords
+        : config.keywords.slice(0, KEYWORDS_PER_CATEGORY);
+      return keywords.map((keyword) => ({
         mode,
         keyword,
         area,
-        query: [keyword, locationLabel].filter(Boolean).join(" "),
-      })),
-    );
+        query: [keyword, locationLabel].filter(Boolean).join(", "),
+      }));
+    });
   });
 }
 
