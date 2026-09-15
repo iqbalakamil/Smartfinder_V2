@@ -93,6 +93,9 @@ const RESULTS_PER_PAGE = 8;
 let latestStructuredAnalysis = null;
 let latestAnalysisContext = null;
 let latestAnalysisFallbackContext = null;
+// Hasil studi kelayakan terakhir. Harus dideklarasikan sebelum submit handler
+// agar response backend dapat disimpan lalu dirender ke drawer Analisa/News.
+let latestFeasibilityResult = null;
 let shortlistReady = false;
 
 // === MAPLIBRE GL JS MAP INSTANCE ===

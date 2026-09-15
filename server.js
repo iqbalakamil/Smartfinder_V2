@@ -7736,6 +7736,12 @@ async function handleFeasibilityStudy(req, res) {
       meta: {
         generated_at: new Date().toISOString(),
         elapsed_ms: elapsed,
+        research_pipeline: [
+          { stage: "scope", status: resolvedAreaCoverage.length ? "completed" : "partial", detail: "Radius 3 km dan kelurahan" },
+          { stage: "evidence", status: feasibilityResult?._fallback ? "partial" : "completed", detail: "POI, TinyFish Search/Fetch, SPP, social media, berita" },
+          { stage: "synthesis", status: feasibilityResult ? "completed" : "failed", detail: "Skor parameter dan TAM/SAM/SOM" },
+          { stage: "decision", status: recommendation ? "completed" : "partial", detail: recommendation || "Belum ada rekomendasi" },
+        ],
         analysis_steps: analysisSteps,
         tinyfish_api_key_present: Boolean(TINYFISH_API_KEY),
         lat: latitude,
