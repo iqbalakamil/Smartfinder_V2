@@ -154,7 +154,8 @@ function shouldKeepRow(row, task) {
 }
 
 function parseCoordinatesFromHref(href) {
-  const value = String(href || "");
+  let value = String(href || "");
+  try { value = decodeURIComponent(value); } catch {}
   const headerLatMatch = value.match(/8m2!3d(-?\d+(?:\.\d+)?)/i);
   const headerLonMatch = value.match(/!4d(-?\d+(?:\.\d+)?)(?:!|$)/i);
   if (headerLatMatch && headerLonMatch) {
@@ -166,17 +167,19 @@ function parseCoordinatesFromHref(href) {
 
   const patterns = [
     /!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/i,
+    /!2d(-?\d+(?:\.\d+)?)!3d(-?\d+(?:\.\d+)?)/i,
     /ll=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/i,
     /q=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/i,
     /destination=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/i,
+    /@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/i,
   ];
 
   for (const pattern of patterns) {
     const match = value.match(pattern);
     if (match) {
       return {
-        lat: Number(match[1]),
-        lon: Number(match[2]),
+        lat: /!2d/i.test(pattern.source) ? Number(match[2]) : Number(match[1]),
+        lon: /!2d/i.test(pattern.source) ? Number(match[1]) : Number(match[2]),
       };
     }
   }
@@ -501,7 +504,11 @@ async function crawlQuery(page, query) {
 
 function mapResultToPoi(row, task) {
   const config = CATEGORY_CONFIG[task.mode];
-  const coordinates = parseCoordinatesFromHref(row.href);
+  // Google sering menaruh koordinat aktual pada headerLinkRaw, sementara href
+  // hanya berisi URL redirect/pencarian. Prioritaskan link header agar POI
+  // yang sudah ditemukan tidak hilang sebelum dikirim ke peta.
+  const coordinateHref = row.headerLinkRaw || row.href;
+  const coordinates = parseCoordinatesFromHref(coordinateHref);
   const reviewCount = parseReviewCount(row.reviewCount);
   return {
     name: row.title || config.fallbackName,
@@ -512,7 +519,7 @@ function mapResultToPoi(row, task) {
       address: row.address || "",
       phone: normalizePhone(row.phone),
       website: row.companyUrl || "",
-      maps_link: row.href || "",
+      maps_link: row.href || row.headerLinkRaw || "",
       header_link_raw: row.headerLinkRaw || row.href || "",
       coord_source: coordinates.lat && coordinates.lon ? "google-header-link" : "",
       keyword: task.keyword,

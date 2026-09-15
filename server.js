@@ -5171,7 +5171,7 @@ function buildRecommendationSummaryStructured(decision) {
   return "Area masih layak dipertimbangkan, tetapi keputusan akhir membutuhkan data demand mikro yang lebih kuat.";
 }
 
-async function buildStructuredAnalysisResult({ latitude, longitude, businessInput, reverseGeocodeResult, poisPayload, demographyPayload, webEvidence, locationContext, tinyfishSppResult = null }) {
+async function buildStructuredAnalysisResult({ latitude, longitude, businessInput, reverseGeocodeResult, poisPayload, demographyPayload, webEvidence, locationContext, tinyfishSppResult = null, tinyfishResearch = {} }) {
   const pois = normalizeStructuredPois(poisPayload.items || [], latitude, longitude);
   const placesPayload = {
     source: poisPayload?.source || "main-server-poi",
@@ -5179,9 +5179,26 @@ async function buildStructuredAnalysisResult({ latitude, longitude, businessInpu
     reasoning: poisPayload?.reasoning || (pois.length ? "POI gabungan dari backend utama dalam radius 3 KM." : "POI belum tersedia."),
   };
   const aiEnrichment = buildFallbackStructuredAiEnrichment({
-    competitorResearch: { summary: "", sources: [] },
-    externalResearch: { summary: "", sources: [] },
-    poiOsint: { summary: "", sources: [] },
+    competitorResearch: {
+      summary: tinyfishResearch.spp?.summary || "",
+      sources: tinyfishResearch.spp?.sources_with_spp || [],
+    },
+    externalResearch: {
+      summary: tinyfishResearch.purchasingPower?.summary || "",
+      sources: tinyfishResearch.purchasingPower?.sources || [],
+      metricHighlights: tinyfishResearch.purchasingPower?.metrics?.map((item) => item.text || item) || [],
+    },
+    poiOsint: {
+      summary: [tinyfishResearch.socialMedia?.summary, tinyfishResearch.news?.summary].filter(Boolean).join(" | "),
+      sources: [
+        ...(tinyfishResearch.socialMedia?.sources || []),
+        ...(tinyfishResearch.news?.sources || []),
+      ],
+      examples: [
+        ...(tinyfishResearch.socialMedia?.events || []),
+        ...(tinyfishResearch.news?.events || []),
+      ].map((item) => item.text || item.title || item),
+    },
   });
   const poiSummary = buildPoiSummaryStructured(pois, placesPayload);
   const competitorMap = buildCompetitorMapStructured(pois, Boolean(pois.length), aiEnrichment.competitor_intel);
@@ -6003,6 +6020,12 @@ async function handleUnifiedAnalysis(req, res) {
           ],
           locationContext,
           tinyfishSppResult,
+          tinyfishResearch: {
+            spp: tinyfishSppResult,
+            purchasingPower: tinyfishPurchasingPower,
+            socialMedia: tinyfishSocialMedia,
+            news: tinyfishNews,
+          },
         });
         analysisSteps.push(tinyfishSppResult ? "layer2_structured_with_tinyfish_spp" : "layer2_structured_default");
       } catch (e) {
@@ -7633,6 +7656,38 @@ async function handleFeasibilityStudy(req, res) {
       feasibilityResult.parameterScores.Demografi = 50;
       feasibilityResult.overallScore = 37;
     }
+
+    // Evidence lokal tetap ditampilkan jika TinyFish tidak menemukan sumber
+    // untuk salah satu parameter. Ini bukan AI-generated claim: setiap item
+    // diberi label sumber lokal dan ditautkan ke POI/layanan data terkait.
+    const competitorPois = crawledPois.filter((p) => ["education", "paud", "tk", "school", "daycare"].includes(String(p.category || "").toLowerCase()));
+    const familyPois = crawledPois.filter((p) => ["family-services", "affiliate", "residential"].includes(String(p.category || "").toLowerCase()));
+    const mapsQuery = (text) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${text} ${latitude},${longitude}`)}`;
+    const localSources = {
+      "Aksesibilitas": [{ title: "POI lokal sebagai indikator akses area", url: mapsQuery("akses jalan transportasi dan fasilitas"), snippet: `${crawledPois.length} POI lokal terpetakan dalam hasil crawl radius 3 km.`, score: 12, sourceType: "local-poi" }],
+      "Visibilitas": [{ title: "Sebaran POI Google Maps di area target", url: mapsQuery("komersial dan pendidikan"), snippet: `${crawledPois.length} titik lokal tersedia untuk membaca koridor aktivitas dan visibilitas.`, score: 12, sourceType: "local-poi" }],
+      "Demografi": [{ title: "Dukcapil ArcGIS — demografi radius 3 km", url: `${DUKCAPIL_ARCGIS_BASE_URL}/${DUKCAPIL_KELURAHAN_SERVICE}/FeatureServer/${DUKCAPIL_KELURAHAN_LAYER_ID}`, snippet: demographyPayload?.formatted_text || `${demographyPayload?.population || 0} penduduk dan ${demographyPayload?.early_childhood_population || 0} estimasi anak usia dini.`, score: 25, sourceType: "dukcapil" }],
+      "Kompetitor": [{ title: "POI pendidikan dari Google Maps", url: mapsQuery("PAUD TK preschool daycare"), snippet: `${competitorPois.length} POI pendidikan/kompetitor ditemukan dari input crawl.`, score: 18, sourceType: "local-poi" }],
+      "Fasilitas & Lingkungan": [{ title: "POI fasilitas dan hunian sekitar", url: mapsQuery("fasilitas umum dan perumahan"), snippet: `${familyPois.length} POI hunian/fasilitas keluarga tersedia sebagai evidence lokal.`, score: 12, sourceType: "local-poi" }],
+      "Potensi Promosi": [{ title: "POI affiliate dan hunian sebagai kanal promosi", url: mapsQuery("komunitas keluarga dan perumahan"), snippet: `${familyPois.length} POI affiliate/hunian tersedia untuk daftar kandidat promosi lokal.`, score: 12, sourceType: "local-poi" }],
+      "History Kegiatan": [{ title: "Live Feed TinyFish dan jejak digital area", url: mapsQuery("event keluarga pendidikan"), snippet: "Sumber media sosial/berita akan ditambahkan jika berhasil diambil; tautan ini adalah titik verifikasi lokal.", score: 8, sourceType: "local-verification" }],
+    };
+    const parameters = feasibilityResult.parameters || Object.keys(localSources);
+    feasibilityResult.byParameter = feasibilityResult.byParameter || {};
+    feasibilityResult.parameterScores = feasibilityResult.parameterScores || {};
+    parameters.forEach((parameter) => {
+      const group = feasibilityResult.byParameter[parameter] || { sources: [], sourceCount: 0, score: 30 };
+      group.sources = Array.isArray(group.sources) ? group.sources : [];
+      const existingUrls = new Set(group.sources.map((source) => source.url).filter(Boolean));
+      (localSources[parameter] || []).forEach((source) => {
+        if (!existingUrls.has(source.url)) group.sources.push(source);
+      });
+      group.sourceCount = group.sources.length;
+      group.score = Math.max(Number(group.score || 0), Number(feasibilityResult.parameterScores[parameter] || 0));
+      feasibilityResult.byParameter[parameter] = group;
+      feasibilityResult.parameterScores[parameter] = group.score;
+    });
+    feasibilityResult.totalSources = Object.values(feasibilityResult.byParameter).reduce((sum, group) => sum + (group.sources?.length || 0), 0);
 
     // Step 4: Build market estimation
     const competitorCount = crawledPois.filter(p => p.category === "education" || p.category === "paud" || p.category === "tk" || p.category === "residential").length;
