@@ -494,9 +494,10 @@ function extractEventDetails(text) {
 // ============================================================
 
 async function runSearchQueries(queries, options = {}) {
-  const allSources = [];
-
-  for (const item of queries) {
+  // Run independent queries concurrently. Sequential calls made the
+  // purchasing-power branch exceed the 35s unified-analysis guard even when
+  // TinyFish Search itself was healthy.
+  const batches = await Promise.all(queries.map(async (item) => {
     try {
       const opts = {
         location: options.location || "Indonesia",
@@ -504,24 +505,22 @@ async function runSearchQueries(queries, options = {}) {
         purpose: item.purpose || `Mencari data ${item.kind}`,
       };
       if (item.recency_minutes) opts.recency_minutes = item.recency_minutes;
-
       const searchResult = await tinyfishSearch(item.query, opts);
       const results = Array.isArray(searchResult?.results) ? searchResult.results : [];
-
-      for (const result of results) {
-        allSources.push({
-          kind: item.kind,
-          platform: item.platform || "",
-          title: result.title || "",
-          url: result.url || "",
-          snippet: result.snippet || "",
-          siteName: result.site_name || "",
-        });
-      }
+      return results.map((result) => ({
+        kind: item.kind,
+        platform: item.platform || "",
+        title: result.title || "",
+        url: result.url || "",
+        snippet: result.snippet || "",
+        siteName: result.site_name || "",
+      }));
     } catch (error) {
       console.warn(`TinyFish Search gagal [${item.kind}]:`, error.message);
+      return [];
     }
-  }
+  }));
+  const allSources = batches.flat();
 
   // Deduplicate by URL
   const seen = new Set();
@@ -700,8 +699,9 @@ async function runNewsResearch(loc = {}, options = {}) {
   // News result in the dashboard needs a cited AI synthesis, so explicitly
   // opt into Research API when the caller requests it.
   if (options.researchApi) {
-    const area = getAreaLabel(loc) || loc.city || "Indonesia";
-    const report = await tinyfishResearch(
+    try {
+      const area = getAreaLabel(loc) || loc.city || "Indonesia";
+      const report = await tinyfishResearch(
       `Riset berita lokal terbaru di ${area} untuk menilai peluang bisnis pendidikan anak usia dini. ` +
       `Cari berita dan agenda publik 12 bulan terakhir tentang anak, keluarga, parenting, pendidikan, ` +
       `festival, lomba, komunitas, dan kegiatan sekolah. Prioritaskan media Indonesia yang kredibel. ` +
@@ -709,7 +709,7 @@ async function runNewsResearch(loc = {}, options = {}) {
       `URL citation untuk setiap klaim. Bedakan fakta, inferensi, dan keterbatasan data.`,
       { mode: options.mode || "deep", outputLanguage: "id", recencyMinutes: 525600, timeoutMs: options.timeoutMs }
     );
-    return {
+      return {
       ok: true,
       researchDepth: "deep",
       provider: report.provider,
@@ -730,7 +730,13 @@ async function runNewsResearch(loc = {}, options = {}) {
       })).filter((source) => source.url),
       searchQueries: 1,
       apiKeyPresent: Boolean(TINYFISH_API_KEY),
-    };
+      };
+    } catch (error) {
+      // Research API is a gated beta. Accounts without the entitlement must
+      // still receive News from the free Search + Fetch pipeline.
+      if (!/403|forbidden|not available|research api/i.test(error.message || "")) throw error;
+      console.warn("[TinyFish] Research API tidak tersedia; News memakai Search + Fetch fallback.");
+    }
   }
   const queries = buildNewsQueries(loc, { deep });
   const allSources = await runSearchQueries(queries, { location: loc.city || "Indonesia" });

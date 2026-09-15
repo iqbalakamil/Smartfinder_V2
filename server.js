@@ -72,6 +72,7 @@ const POI_CACHE_VERSION = "v12-partial-google-overpass-poi-crawl";
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 15000);
 const LITELLM_BASE_URL = "https://litellm.koboi2026.biz.id/v1";
 const LITELLM_MODEL = "gpt-4o-mini";
+const LITELLM_TIMEOUT_MS = Number(process.env.LITELLM_TIMEOUT_MS || 45000);
 const LITELLM_API_KEY = "sk-_Z_ulx9659ZNl8su3Ufflw";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
@@ -3843,9 +3844,12 @@ function generateLocalReasoningFromPrompt(prompt) {
 async function invokeReasoningModel(prompt) {
   // Try calling LiteLLM API first for actual AI reasoning
   if (LITELLM_API_KEY && LITELLM_BASE_URL) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), LITELLM_TIMEOUT_MS);
     try {
       const response = await fetch(`${LITELLM_BASE_URL}/chat/completions`, {
         method: "POST",
+        signal: controller.signal,
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${LITELLM_API_KEY}`,
@@ -3877,6 +3881,8 @@ async function invokeReasoningModel(prompt) {
       // If LLM fails, fall through to local reasoning
     } catch (error) {
       // Fall through to local reasoning
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
