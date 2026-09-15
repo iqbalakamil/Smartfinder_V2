@@ -7537,6 +7537,9 @@ async function handleFeasibilityStudy(req, res) {
 
     const startTime = Date.now();
     const analysisSteps = [];
+    // Declare before the TinyFish fallback block: a failed web research must
+    // never prevent the Dukcapil fallback from being returned.
+    let demographyPayload = null;
 
     // Step 1: Discover area coverage (kelurahan within 3km radius)
     let resolvedLocationContext = { ...locationContext };
@@ -7568,12 +7571,24 @@ async function handleFeasibilityStudy(req, res) {
 
     // Step 2: Run TinyFish feasibility study research
     let feasibilityResult = null;
+    let intelligenceResult = null;
     try {
-      feasibilityResult = await withTimeout(
+      const competitorNames = crawledPois
+        .filter(p => ["education", "paud", "tk", "school", "daycare"].includes(String(p.category || "").toLowerCase()))
+        .map(p => p.name)
+        .filter(Boolean)
+        .slice(0, 5);
+      const researchBundle = await withTimeout(Promise.all([
         runFeasibilityStudyResearch(resolvedLocationContext, businessInput, { deep: true }),
+        runCompetitorSppResearch(resolvedLocationContext, competitorNames, { deep: true })
+          .catch(error => ({ ok: false, error: error.message, summary: "Riset SPP gagal." })),
+        runFullResearch(resolvedLocationContext, { deep: true }),
+      ]),
         60000,
         "TinyFish Feasibility Study"
       );
+      feasibilityResult = researchBundle[0];
+      intelligenceResult = { spp: researchBundle[1], digital: researchBundle[2] };
       analysisSteps.push(`feasibility_research_ok:sources=${feasibilityResult?.totalSources || 0}`);
       console.log(`[Feasibility] Riset selesai: ${feasibilityResult?.totalSources || 0} sumber, skor: ${feasibilityResult?.overallScore || 0}`);
     } catch (e) {
@@ -7588,10 +7603,10 @@ async function handleFeasibilityStudy(req, res) {
         totalMetrics: 0,
         parameters: ["Aksesibilitas", "Visibilitas", "Demografi", "Kompetitor", "Fasilitas & Lingkungan", "Potensi Promosi", "History Kegiatan"],
         parameterScores: {
-          "Aksesibilitas": 35, "Visibilitas": 35, "Demografi": demographyPayload?.population ? 50 : 30,
+          "Aksesibilitas": 35, "Visibilitas": 35, "Demografi": 30,
           "Kompetitor": 30, "Fasilitas & Lingkungan": 30, "Potensi Promosi": 30, "History Kegiatan": 30,
         },
-        overallScore: demographyPayload?.population ? 37 : 31,
+        overallScore: 31,
         byParameter: {},
         metrics: [],
         searchQueries: 0,
@@ -7602,7 +7617,6 @@ async function handleFeasibilityStudy(req, res) {
     }
 
     // Step 3: Get Dukcapil demography
-    let demographyPayload = null;
     try {
       demographyPayload = await withTimeout(
         fetchDemographyWithinRadiusStructured({ latitude, longitude, radiusMeters: 3000, locationContext: resolvedLocationContext }),
@@ -7613,6 +7627,11 @@ async function handleFeasibilityStudy(req, res) {
     } catch (e) {
       console.warn("[Feasibility] Dukcapil fetch gagal:", e.message);
       analysisSteps.push(`dukcapil_error:${e.message}`);
+    }
+
+    if (feasibilityResult?._fallback && demographyPayload?.population) {
+      feasibilityResult.parameterScores.Demografi = 50;
+      feasibilityResult.overallScore = 37;
     }
 
     // Step 4: Build market estimation
@@ -7630,6 +7649,12 @@ async function handleFeasibilityStudy(req, res) {
 
     const marketSize = tam ? Math.round(tam * 0.10 * avgPrice) : null;
     const projectedRevenue = som ? som * avgPrice * 12 : null;
+    const marketSharePct = tam && som ? Number(((som / tam) * 100).toFixed(2)) : null;
+    const score = Number(feasibilityResult?.overallScore || 0);
+    const recommendation = score >= 70 ? "LAYAK" : score >= 55 ? "LAYAK BERSYARAT" : "TIDAK LAYAK";
+    const alternativeRecommendation = recommendation === "TIDAK LAYAK"
+      ? "Prioritaskan titik yang lebih dekat ke cluster/perumahan terbuka kelas menengah, sekolah/PAUD, dan koridor angkutan umum; validasi kandidat dengan radius 3 km yang sama."
+      : "Pertahankan lokasi sebagai kandidat utama dan validasi biaya sewa, parkir, serta jam puncak sebelum membuka cabang.";
 
     const elapsed = Date.now() - startTime;
 
@@ -7663,7 +7688,7 @@ async function handleFeasibilityStudy(req, res) {
         population: demographyPayload?.population || null,
         age_0_14: demographyPayload?.age_0_14 || null,
         earlyChildhood: demographyPayload?.early_childhood_population || null,
-        estimated: demographyPayload?.estimated || true,
+        estimated: demographyPayload?.estimated ?? true,
         source: demographyPayload?.source || "estimate",
         formattedText: demographyPayload?.formatted_text || null,
       },
@@ -7676,7 +7701,23 @@ async function handleFeasibilityStudy(req, res) {
         marketSize,
         avgPrice,
         projectedRevenue,
+        marketSharePct,
         competitorCount,
+      },
+
+      intelligence: {
+        spp: intelligenceResult?.spp || null,
+        socialMedia: intelligenceResult?.digital?.socialMedia || null,
+        news: intelligenceResult?.digital?.news || null,
+        recommendation,
+        alternativeRecommendation,
+        digitalFootprintReferences: [
+          ...(intelligenceResult?.digital?.socialMedia?.events || []),
+          ...(intelligenceResult?.digital?.socialMedia?.sources || []),
+          ...(intelligenceResult?.digital?.news?.events || []),
+          ...(intelligenceResult?.digital?.news?.sources || []),
+          ...(intelligenceResult?.spp?.sources_with_spp || []),
+        ].filter(item => item && item.url).slice(0, 40),
       },
 
       // Feasibility research results

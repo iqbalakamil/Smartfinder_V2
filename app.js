@@ -4572,6 +4572,33 @@ function renderFeasibilityInputSummary(input) {
   feasibilityInputTable.innerHTML = html;
 }
 
+function renderIntelligenceFeed(result) {
+  const feed = document.getElementById("news-feed-list");
+  if (!feed) return;
+  const intelligence = result?.intelligence || {};
+  const items = [];
+  const addSources = (tag, list, limit = 8) => (Array.isArray(list) ? list : []).slice(0, limit).forEach((item) => {
+    if (!item?.url) return;
+    items.push({
+      tag,
+      title: item.title || item.source || "Sumber intelligence",
+      text: item.snippet || item.text || "Sumber web terverifikasi dari TinyFish.",
+      url: item.url,
+    });
+  });
+  addSources("MEDIA SOSIAL LOKAL", intelligence.socialMedia?.sources);
+  addSources("BERITA & AKTIVITAS", intelligence.news?.sources);
+  addSources("SPP KOMPETITOR", intelligence.spp?.sources_with_spp);
+  addSources("JEJAK DIGITAL", result?.feasibility?.byParameter?.["History Kegiatan"]?.sources);
+
+  const score = result?.feasibility?.overallScore;
+  const summary = intelligence.recommendation
+    ? `<article class="news-item"><span class="news-tag">REKOMENDASI AI</span><h4>${escapeHtml(intelligence.recommendation)}</h4><p>Skor kelayakan ${escapeHtml(String(score ?? "-"))}/100. ${escapeHtml(intelligence.alternativeRecommendation || "")}</p><span class="news-time">Studi terakhir: ${escapeHtml(new Date().toLocaleString("id-ID"))}</span></article>`
+    : "";
+  const sourceCards = items.length ? items.map(item => `<article class="news-item"><span class="news-tag">${escapeHtml(item.tag)}</span><h4><a href="${escapeAttribute(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)} ↗</a></h4><p>${escapeHtml(item.text)}</p><span class="news-time"><a href="${escapeAttribute(item.url)}" target="_blank" rel="noopener noreferrer">Buka sumber</a></span></article>`).join("") : `<article class="news-item"><p>Belum ada sumber digital yang berhasil dikumpulkan. Jalankan studi ulang saat koneksi TinyFish tersedia.</p></article>`;
+  feed.innerHTML = summary + sourceCards;
+}
+
 function renderFeasibilityResults(result) {
   if (!feasibilityResultsEl) return;
   if (!result || !result.feasibility) {
@@ -4666,6 +4693,7 @@ function renderFeasibilityResults(result) {
     { label: "TAM (Anak Usia Dini)", value: formatNumber(mkt.tam), color: "#1d4ed8" },
     { label: "SAM (Target 15%)", value: formatNumber(mkt.sam), color: "#2563eb" },
     { label: "SOM (Target 5%)", value: formatNumber(mkt.som), color: "#3b82f6" },
+    { label: "Market Share SOM/TAM", value: mkt.marketSharePct != null ? `${mkt.marketSharePct}%` : "-", color: "#0891b2" },
     { label: "Market Size", value: formatCurrency(mkt.marketSize), color: "#0f766e" },
     { label: "Harga Jual", value: formatCurrency(mkt.avgPrice) + "/bln", color: "#7c3aed" },
     { label: "Proyeksi Revenue/Tahun", value: formatCurrency(mkt.projectedRevenue), color: "#16a34a" },
@@ -4677,6 +4705,24 @@ function renderFeasibilityResults(result) {
   });
   html += `</div>`;
   html += `</div>`;
+
+  // ── Decision & SPP intelligence ──
+  const intelligence = result.intelligence || {};
+  if (intelligence.recommendation) {
+    const isGood = intelligence.recommendation !== "TIDAK LAYAK";
+    html += `<div class="pp-section" style="border-left:5px solid ${isGood ? "#16a34a" : "#dc2626"};background:${isGood ? "#f0fdf4" : "#fef2f2"};">`;
+    html += `<h4>${isGood ? "✅" : "⚠️"} Rekomendasi Pembukaan Cabang: ${escapeHtml(intelligence.recommendation)}</h4>`;
+    html += `<p style="margin:6px 0 0;">${escapeHtml(intelligence.alternativeRecommendation || "")}</p></div>`;
+  }
+  const spp = intelligence.spp || {};
+  if (spp.avg_spp || (spp.sources_with_spp || []).length) {
+    html += `<div class="pp-section"><h4>💰 Rata-rata SPP Kompetitor di Radius Riset</h4>`;
+    html += `<p style="margin:4px 0 10px;">${spp.avg_spp ? `${formatCurrency(spp.avg_spp)}/bulan (median ${formatCurrency(spp.median_spp)}, rentang ${formatCurrency(spp.min_spp)}–${formatCurrency(spp.max_spp)})` : "Belum ada angka SPP yang dapat diekstrak."}</p>`;
+    (spp.sources_with_spp || []).slice(0, 6).forEach(source => {
+      if (source.url) html += `<a href="${escapeAttribute(source.url)}" target="_blank" rel="noopener noreferrer" style="display:block;font-size:12px;margin:3px 0;color:#0b5c55;">${escapeHtml(source.title || "Sumber SPP")} ↗</a>`;
+    });
+    html += `</div>`;
+  }
 
   // ── Parameter Scores (7 parameters) ──
   html += `<div class="pp-section"><h4>🎯 Skor Per Parameter Riset</h4>`;
@@ -4822,6 +4868,7 @@ async function runFeasibilityStudy(lat, lon, businessInput) {
     latestFeasibilityResult = data;
     renderFeasibilityInputSummary(data.input || {});
     renderFeasibilityResults(data);
+    renderIntelligenceFeed(data);
 
     const elapsed = data.meta?.elapsed_ms || 0;
     feasibilityStatusEl.textContent = `Skor: ${data.feasibility?.overallScore || 0}/100 (${(elapsed / 1000).toFixed(1)}s)`;
