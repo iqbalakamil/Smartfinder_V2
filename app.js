@@ -1,6 +1,8 @@
 const DEFAULT_CENTER = { lat: -6.171296275285527, lon: 106.68302278968127 };
+// Launcher dapat memilih port dinamis ketika 3000 sedang digunakan. Gunakan
+// origin halaman aktif supaya request POI/AI selalu menuju server yang benar.
 const API_BASE = window.__POI_API_BASE__ || (
-  window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+  window.location.protocol === "file:"
     ? "http://127.0.0.1:3000"
     : window.location.origin
 );
