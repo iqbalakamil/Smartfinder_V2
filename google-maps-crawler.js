@@ -508,7 +508,12 @@ function mapResultToPoi(row, task) {
   // hanya berisi URL redirect/pencarian. Prioritaskan link header agar POI
   // yang sudah ditemukan tidak hilang sebelum dikirim ke peta.
   const coordinateHref = row.headerLinkRaw || row.href;
-  const coordinates = parseCoordinatesFromHref(coordinateHref);
+  const parsedCoordinates = parseCoordinatesFromHref(coordinateHref);
+  const directLat = Number(row.lat ?? row.latitude ?? row.coordinates?.lat ?? row.position?.lat);
+  const directLon = Number(row.lon ?? row.lng ?? row.longitude ?? row.coordinates?.lon ?? row.coordinates?.lng ?? row.position?.lon ?? row.position?.lng);
+  const coordinates = Number.isFinite(directLat) && Number.isFinite(directLon)
+    ? { lat: directLat, lon: directLon, source: "google-result-fields" }
+    : parsedCoordinates;
   const reviewCount = parseReviewCount(row.reviewCount);
   return {
     name: row.title || config.fallbackName,
@@ -599,8 +604,8 @@ async function crawlGoogleMapsPois(location = {}) {
             }
 
             const poi = mapResultToPoi(row, task);
-            if ((!poi.lat || !poi.lon) && row.href && !VERCEL_MODE) {
-              const resolved = await resolveCoordinatesFromPlacePage(page, row.href).catch(() => ({ lat: null, lon: null, resolvedHref: "" }));
+            if ((!poi.lat || !poi.lon) && (row.headerLinkRaw || row.href) && !VERCEL_MODE) {
+              const resolved = await resolveCoordinatesFromPlacePage(page, row.headerLinkRaw || row.href).catch(() => ({ lat: null, lon: null, resolvedHref: "" }));
               if (resolved.lat && resolved.lon) {
                 poi.lat = resolved.lat;
                 poi.lon = resolved.lon;

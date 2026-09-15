@@ -94,6 +94,23 @@ if not exist "package.json" (
   exit /b 1
 )
 
+findstr /b /c:"TINYFISH_API_KEY=" ".env" >nul 2>&1
+if errorlevel 1 (
+  echo.
+  echo [INFO] File .env belum ada di laptop ini.
+  echo [INFO] API key tidak disimpan di GitHub. Masukkan API key TinyFish sekarang.
+  set "TF_KEY="
+  set /p "TF_KEY=TinyFish API key (kosongkan untuk lanjut tanpa AI): "
+  if defined TF_KEY (
+    > ".env" echo TINYFISH_API_KEY=!TF_KEY!
+    >> ".env" echo PORT=3000
+    >> ".env" echo TINYFISH_REQUEST_TIMEOUT_MS=900000
+    echo [OK] Konfigurasi TinyFish disimpan lokal di .env.
+  ) else (
+    echo [WARNING] Tanpa API key, studi AI akan memakai fallback lokal.
+  )
+)
+
 echo [INFO] Memastikan dependency Node.js tersedia...
 >> "%LOG_FILE%" echo [%date% %time%] Installing Node.js dependencies.
 call npm install --no-audit --no-fund
