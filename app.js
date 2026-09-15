@@ -2652,15 +2652,30 @@ function renderDeepResearch(result) {
 }
 
 function parseCoordinates(rawValue) {
-  const normalized = String(rawValue || "").trim();
-  const match = normalized.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+  const raw = String(rawValue || "").trim();
+  if (!raw) {
+    throw new Error("Masukkan koordinat atau tautan Google Maps terlebih dahulu.");
+  }
+
+  // Menerima format ketik biasa, hasil copy Google Maps (@lat,lon atau q=lat,lon),
+  // dan URL share Maps. Ini mencegah input POI gagal hanya karena format paste berbeda.
+  const decoded = (() => {
+    try { return decodeURIComponent(raw.replace(/\+/g, " ")); } catch { return raw; }
+  })();
+  const patterns = [
+    /@\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/i,
+    /(?:[?&](?:q|query|ll|center)=)\s*(-?\d+(?:\.\d+)?)\s*(?:,|%2C)\s*(-?\d+(?:\.\d+)?)/i,
+    /!3d\s*(-?\d+(?:\.\d+)?)\s*!4d\s*(-?\d+(?:\.\d+)?)/i,
+    /^\s*(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)\s*$/,
+  ];
+  const match = patterns.map((pattern) => decoded.match(pattern)).find(Boolean);
   if (!match) {
-    throw new Error("Format koordinat harus seperti Google Maps: latitude, longitude");
+    throw new Error("Format koordinat belum dikenali. Gunakan latitude, longitude atau tempel tautan Google Maps.");
   }
 
   const lat = Number(match[1]);
   const lon = Number(match[2]);
-  if (Number.isNaN(lat) || Number.isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
     throw new Error("Nilai koordinat tidak valid.");
   }
 
@@ -3899,7 +3914,7 @@ async function runUnifiedAnalysis() {
       failResearchWorkflow(6);
       setStatus(`Error: ${data.error}`, true);
       appendActivityLog(`Error: ${data.error}`, "error");
-      return;
+      return false;
     }
 
     latestUnifiedResult = data;
@@ -3929,10 +3944,12 @@ async function runUnifiedAnalysis() {
     const elapsed = data.meta?.elapsed_ms || 0;
     setStatus(`Analisa area selesai dalam ${(elapsed / 1000).toFixed(1)} detik.`);
     appendActivityLog(`Analisa area gabungan selesai: layer ${activeLayer}.`, "success");
+    return true;
   } catch (error) {
     failResearchWorkflow(6);
     setStatus(`Error: ${error.message}`, true);
     appendActivityLog(`Error: ${error.message}`, "error");
+    return false;
   } finally {
     unifiedLoadingEl.classList.add("hidden");
     unifiedAnalysisBtn.disabled = false;
@@ -4175,6 +4192,7 @@ async function analyzeLocation(lat, lon, radius) {
   } catch (error) {
     console.error(error);
     if (error.name === "AbortError") {
+      failResearchWorkflow(researchWorkflowState.current || 1);
       setStatus("Proses dibatalkan oleh pengguna.", true);
       appendActivityLog("Proses dibatalkan oleh pengguna.", "error");
       return;
@@ -4990,6 +5008,7 @@ async function runFeasibilityStudy(lat, lon, businessInput) {
 
     const data = await response.json();
     if (data.error) {
+      failResearchWorkflow(15);
       feasibilityStatusEl.textContent = "Error";
       feasibilityResultsEl.innerHTML = `<p style="color:#dc2626;">Gagal: ${escapeHtml(data.error)}</p>`;
       appendActivityLog(`Error studi kelayakan: ${data.error}`, "error");
@@ -5025,6 +5044,8 @@ form.addEventListener("submit", async (event) => {
 
   try {
     const { lat, lon } = parseCoordinates(coordinatesInput.value);
+    coordinatesInput.setCustomValidity("");
+    coordinatesInput.value = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
     startResearchWorkflow();
 
     // Pindahkan peta langsung ke koordinat yang dimasukkan
@@ -5043,7 +5064,11 @@ form.addEventListener("submit", async (event) => {
     activityLogEl.innerHTML = "";
     await analyzeLocation(lat, lon, radius);
     if (latestAnalysisContext && latestAnalysisFallbackContext) {
-      await runUnifiedAnalysis();
+      const unifiedComplete = await runUnifiedAnalysis();
+      if (!unifiedComplete) {
+        setResearchLoading(false);
+        return;
+      }
     }
 
     // Run feasibility study if business inputs are provided
@@ -5057,6 +5082,7 @@ form.addEventListener("submit", async (event) => {
       completeResearchWorkflow();
     }
   } catch (error) {
+    failResearchWorkflow(researchWorkflowState.current || 1);
     console.error(error);
     setStatus(error.message || "Terjadi kegagalan saat analisa lokasi.", true);
     appendActivityLog(error.message || "Terjadi kegagalan saat analisa lokasi.", "error");
@@ -6181,21 +6207,28 @@ if (cekCoordinatesBtn) {
   cekCoordinatesBtn.addEventListener("click", () => {
     try {
       const { lat, lon } = parseCoordinates(coordinatesInput.value);
+      // Simpan dalam format konsisten agar tombol Analisa memakai titik yang sama.
+      coordinatesInput.value = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+      coordinatesInput.setCustomValidity("");
       ensureMapLayers();
       const mbMap = getMaplibreMap();
-      if (mbMap) {
-        mbMap.setCenter([lon, lat]);
-        mbMap.setZoom(15);
-        if (window.updateRadiusCircle) {
-          window.updateRadiusCircle(lat, lon, 3);
-        } else {
-          addRadiusCircleLocal(lat, lon, 3);
-        }
+      if (!mbMap) {
+        setStatus("Peta masih dimuat. Koordinat sudah valid; tunggu sebentar lalu klik Cek lagi.", true);
+        return;
+      }
+      mbMap.setCenter([lon, lat]);
+      mbMap.setZoom(15);
+      if (window.updateRadiusCircle) {
+        window.updateRadiusCircle(lat, lon, 3);
+      } else {
+        addRadiusCircleLocal(lat, lon, 3);
       }
       setStatus(`Peta dipindah ke ${lat.toFixed(5)}, ${lon.toFixed(5)}.`);
       appendActivityLog(`Peta dipindah ke koordinat ${lat.toFixed(5)}, ${lon.toFixed(5)}.`, "success");
     } catch (error) {
-      setStatus("Format koordinat tidak valid. Gunakan: -6.171, 106.683", true);
+      coordinatesInput.setCustomValidity(error.message || "Koordinat tidak valid.");
+      coordinatesInput.reportValidity();
+      setStatus(error.message || "Format koordinat tidak valid.", true);
     }
   });
 }
