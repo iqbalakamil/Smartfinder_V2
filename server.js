@@ -1300,7 +1300,15 @@ function buildGoogleHousingQueries(location = {}) {
   for (const areaItem of areas) {
     const localityBits = [areaItem.subdistrict, areaItem.district, areaItem.city].filter(Boolean).join(", ");
     const area = localityBits || "Jakarta Barat";
-    for (const query of [`housing complex, ${area}`, `perumahan, ${area}`, `residence, ${area}`]) {
+    const housingKeywords = EXTENSION_CATEGORY_CONFIG.hunian?.keywords || [
+      "housing complex",
+      "perumahan",
+      "cluster",
+      "apartment",
+      "housing",
+    ];
+    for (const keyword of housingKeywords) {
+      const query = `${keyword}, ${area}`;
       const key = query.toLowerCase();
       if (!seen.has(key)) {
         seen.add(key);
