@@ -317,6 +317,24 @@ function setLoadingState(active, panels = { map: true, analysis: true, table: tr
   }
 }
 
+function setResearchLoading(active, phase = "Menyiapkan riset AI area...") {
+  const feed = document.getElementById("news-feed-list");
+  if (active) {
+    if (feasibilityStatusEl) {
+      feasibilityStatusEl.textContent = "Riset AI berjalan...";
+      feasibilityStatusEl.classList.add("is-loading");
+    }
+    if (feasibilityResultsEl) {
+      feasibilityResultsEl.innerHTML = `<div class="research-loading-card"><span class="research-spinner"></span><div><strong>Riset Studi Kelayakan sedang berjalan</strong><p>${escapeHtml(phase)}</p><small>POI sudah selesai. Sistem sedang menyelesaikan Dukcapil, TinyFish, SPP, media sosial, berita, dan rekomendasi.</small></div></div>`;
+    }
+    if (feed) {
+      feed.innerHTML = `<article class="news-item research-loading-card"><span class="research-spinner"></span><div><h4>News & Intelligence Live Feed sedang dikumpulkan</h4><p>${escapeHtml(phase)}</p><small>Feed akan diperbarui otomatis setelah seluruh batch riset selesai. Sumber yang tersedia sebagian tetap akan ditampilkan.</small></div></article>`;
+    }
+    return;
+  }
+  feasibilityStatusEl?.classList.remove("is-loading");
+}
+
 function syncActionButtons() {
   const submitButton = form.querySelector('button[type="submit"]');
   submitButton.disabled = isProcessing;
@@ -3972,6 +3990,8 @@ async function analyzeLocation(lat, lon, radius) {
     renderResearchSources(poiPayload.meta.externalResearch || {});
     renderPoiBreakdowns(pois);
     updateMap(lat, lon, effectiveRadius, pois);
+    setResearchLoading(true, "POI selesai. Menjalankan pipeline riset area dan intelligence feed...");
+    appendActivityLog("POI selesai. Loading Studi Kelayakan dan News & Intelligence Live Feed diaktifkan.", "success");
 
     // Heatmap foot traffic now only shown on foot-traffic-dashboard.html
     // Main map keeps POIs clickable without heatmap overlay
@@ -4043,6 +4063,7 @@ async function analyzeLocation(lat, lon, radius) {
       return;
     }
     resetAiAnalysisPanel("Data untuk analisa area belum siap karena proses crawl Google Maps gagal.");
+    setResearchLoading(false);
     setStatus(error.message || "Crawl lokasi gagal. Hasil analisa area belum bisa dijalankan.", true);
     appendActivityLog(error.message || "Terjadi kegagalan saat analisa lokasi.", "error");
   } finally {
@@ -4884,6 +4905,7 @@ async function runFeasibilityStudy(lat, lon, businessInput) {
     appendActivityLog(`Error studi kelayakan: ${error.message}`, "error");
   } finally {
     feasibilityLoadingEl.classList.add("hidden");
+    setResearchLoading(false);
   }
 }
 
@@ -4919,6 +4941,8 @@ form.addEventListener("submit", async (event) => {
     const sellingPrice = document.getElementById("selling-price")?.value || "";
     if (businessType || businessDetail) {
       await runFeasibilityStudy(lat, lon, { businessType, businessDetail, sellingPrice });
+    } else {
+      setResearchLoading(false);
     }
   } catch (error) {
     console.error(error);

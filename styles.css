@@ -2932,6 +2932,39 @@ tr:hover td {
   border-color: #00f0ff;
 }
 
+.research-loading-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 74px;
+  color: #dbeafe;
+}
+
+.research-loading-card p,
+.research-loading-card small {
+  display: block;
+  margin-top: 5px;
+  color: #94a3b8;
+}
+
+.research-spinner {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  border: 3px solid rgba(0, 240, 255, 0.25);
+  border-top-color: #00f0ff;
+  border-radius: 50%;
+  animation: researchSpin 0.8s linear infinite;
+}
+
+.analysis-status-banner.is-loading {
+  color: #00f0ff;
+  animation: researchPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes researchSpin { to { transform: rotate(360deg); } }
+@keyframes researchPulse { 50% { opacity: 0.55; } }
+
 .news-tag {
   font-size: 10px;
   font-weight: 800;
