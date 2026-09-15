@@ -4684,6 +4684,24 @@ function renderFeasibilityResults(result) {
   html += `<div style="font-size:14px;color:#cbd5e1;margin-top:2px;">Penilaian: ${overallLabel} — Berdasarkan ${f.totalSources || 0} evidence terkumpul</div>`;
   html += `</div></div></div>`;
 
+  // Laporan asli dari TinyFish Research API (SSE final_result).
+  const researchReport = f.researchReport || "";
+  const researchCitations = Array.isArray(f.researchCitations) ? f.researchCitations : [];
+  if (researchReport) {
+    const reportHtml = escapeHtml(researchReport)
+      .replace(/^#{1,6}\s(.+)$/gm, "<h5>$1</h5>")
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\n{2,}/g, "</p><p>")
+      .replace(/\n/g, "<br>");
+    html += `<div class="pp-section deep-research-report"><h4>🤖 Laporan TinyFish Research API</h4>
+      <div class="research-provider-badge">Provider: TinyFish Research API • Mode: deep • Run: ${escapeHtml(f.researchRunId || "selesai")}</div>
+      <div class="research-report-body"><p>${reportHtml}</p></div>
+      <div class="research-citations"><strong>Citations (${researchCitations.length})</strong>${researchCitations.slice(0, 30).map(source => {
+        const url = source.url || source.link;
+        return url ? `<a href="${escapeAttribute(url)}" target="_blank" rel="noopener noreferrer">🔗 ${escapeHtml(source.title || url)}</a>` : "";
+      }).join("")}</div></div>`;
+  }
+
   // ── Kelurahan List ──
   if (loc.kelurahanList?.length) {
     html += `<div class="pp-section"><h4>🗺️ Kelurahan dalam Radius 3 KM</h4>`;

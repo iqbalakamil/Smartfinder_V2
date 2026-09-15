@@ -10,14 +10,100 @@
 const TINYFISH_API_KEY = process.env.TINYFISH_API_KEY || "";
 const TINYFISH_SEARCH_URL = "https://api.search.tinyfish.ai";
 const TINYFISH_FETCH_URL = "https://api.fetch.tinyfish.ai";
+const TINYFISH_RESEARCH_URL = "https://agent.tinyfish.ai/v1/automation/run-research";
 
 const TINYFISH_SEARCH_TIMEOUT_MS = Number(process.env.TINYFISH_SEARCH_TIMEOUT_MS || 25000);
 const TINYFISH_FETCH_TIMEOUT_MS = Number(process.env.TINYFISH_FETCH_TIMEOUT_MS || 45000);
 const TINYFISH_DEEP_MODE = /^(1|true|yes|deep)$/i.test(String(process.env.TINYFISH_DEEP_MODE || ""));
+const TINYFISH_RESEARCH_TIMEOUT_MS = Number(process.env.TINYFISH_RESEARCH_TIMEOUT_MS || 900000);
 
 // ============================================================
 // TinyFish API Wrappers
 // ============================================================
+
+async function tinyfishResearch(query, options = {}) {
+  if (!TINYFISH_API_KEY) throw new Error("TINYFISH_API_KEY belum dikonfigurasi.");
+  const controller = new AbortController();
+  const timeoutMs = options.timeoutMs || TINYFISH_RESEARCH_TIMEOUT_MS;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const payload = {
+    query: String(query || "").slice(0, 2000),
+    mode: options.mode || "deep",
+    stream: true,
+    output_language: options.outputLanguage || "id",
+    weak_sources_enabled: options.weakSourcesEnabled !== false,
+    domain_type: options.domainType || "web",
+  };
+  if (options.recencyMinutes) payload.recency_minutes = Number(options.recencyMinutes);
+  const events = [];
+  let buffer = "";
+  let researchRunId = null;
+  let finalResult = null;
+  let synthesis = "";
+  let plan = null;
+  let stats = null;
+  const consume = (raw) => {
+    const dataLines = String(raw || "").split(/\r?\n/).filter(line => line.startsWith("data:")).map(line => line.slice(5).trim());
+    if (!dataLines.length) return;
+    let parsed;
+    try { parsed = JSON.parse(dataLines.join("\n")); } catch { return; }
+    const event = parsed.event || parsed.type;
+    const data = parsed.data || {};
+    events.push({ event, data });
+    if (event === "created") researchRunId = data.research_run_id || data.researchRunId || researchRunId;
+    if (event === "plan_updated") plan = data;
+    if (event === "synthesis_delta") synthesis += String(data.delta || data.text || data.content || "");
+    if (event === "partial_summary" && !synthesis) synthesis = String(data.summary || data.text || "");
+    if (event === "final_result") {
+      finalResult = data;
+      if (data.result) synthesis = String(data.result);
+    }
+    if (event === "run_stats") stats = data;
+    if (event === "error") throw new Error(data.message || data.error || "TinyFish Research API pipeline error");
+  };
+  try {
+    const response = await fetch(TINYFISH_RESEARCH_URL, {
+      method: "POST",
+      headers: { "X-API-Key": TINYFISH_API_KEY, "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      const message = await response.text().catch(() => "");
+      throw new Error("TinyFish Research API " + response.status + ": " + message.slice(0, 300));
+    }
+    if (!response.body) throw new Error("TinyFish Research API tidak mengembalikan stream.");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const chunks = buffer.split(/\r?\n\r?\n/);
+      buffer = chunks.pop() || "";
+      chunks.forEach(consume);
+    }
+    if (buffer.trim()) consume(buffer);
+    const report = finalResult?.result || synthesis;
+    if (!report) throw new Error("TinyFish Research API selesai tanpa final_result.");
+    return {
+      ok: true, provider: "tinyfish-research-api", usedResearchApi: true,
+      researchRunId, result: report, synthesis, citations: finalResult?.citations || [],
+      terminationReason: finalResult?.termination_reason || "completed", plan, stats,
+      eventCount: events.length, apiKeyPresent: true,
+    };
+  } catch (error) {
+    if (error.name === "AbortError") throw new Error("TinyFish Research API timeout setelah " + Math.round(timeoutMs / 1000) + " detik");
+    throw error;
+  } finally { clearTimeout(timer); }
+}
+
+function buildFeasibilityResearchPrompt(location = {}, business = {}, context = {}) {
+  const area = (context.areaCoverage || []).map(item => item.subdistrict || item.district || item.name).filter(Boolean).slice(0, 12).join(", ") || "belum terpetakan";
+  const poiSummary = context.poiSummary || "belum tersedia";
+  const demo = context.demographySummary || "akan divalidasi backend Dukcapil";
+  return "Riset kelayakan cabang baru di Indonesia. Buat laporan mendalam berbahasa Indonesia, berbasis sumber web terbaru dan sertakan citation URL klik. Jangan mengarang angka; bedakan fakta, inferensi, dan asumsi. Titik: " + context.latitude + ", " + context.longitude + "; radius 3 km. Area/kelurahan: " + area + ". Bisnis: " + (business.businessType || "") + "; detail: " + (business.businessDetail || "") + "; harga jual: " + (business.sellingPrice || "") + ". POI lokal: " + poiSummary + ". Demografi awal: " + demo + ". Fokus calon siswa anak usia dini. Analisis: kesimpulan layak/tidak, calon siswa dan demand, TAM/SAM/SOM, kompetitor dan kisaran SPP, akses/transportasi/visibilitas, perumahan kelas menengah/cluster terbuka, jejak digital media sosial lokal, ulasan pendidikan serupa, kanal promosi, risiko, dan alternatif area bila tidak layak. Gunakan heading: Kesimpulan, Demand, Kompetitor & SPP, Jejak Digital, Lokasi & Promosi, Market Sizing, Risiko & Rekomendasi.";
+}
 
 async function tinyfishSearch(query, options = {}) {
   if (!TINYFISH_API_KEY) {
@@ -1336,6 +1422,8 @@ async function runFeasibilityStudyResearch(locationContext = {}, businessInput =
 module.exports = {
   tinyfishSearch,
   tinyfishFetch,
+  tinyfishResearch,
+  buildFeasibilityResearchPrompt,
   buildPurchasingPowerQueries,
   buildSocialMediaQueries,
   buildNewsQueries,

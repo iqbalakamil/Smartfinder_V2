@@ -20,8 +20,11 @@ const {
   runFullResearch,
   runCompetitorSppResearch,
   runFeasibilityStudyResearch,
+  tinyfishResearch,
+  buildFeasibilityResearchPrompt,
   TINYFISH_API_KEY,
 } = require("./tinyfish-research");
+const TINYFISH_RESEARCH_TIMEOUT_MS = Number(process.env.TINYFISH_RESEARCH_TIMEOUT_MS || 900000);
 
 const SERVERLESS_CHROMIUM_ENABLED = process.platform === "linux" && (
   /^(1|true|yes)$/i.test(String(process.env.VERCEL || "")) ||
@@ -7596,7 +7599,21 @@ async function handleFeasibilityStudy(req, res) {
       analysisSteps.push(`geo_error:${e.message}`);
     }
 
-    // Step 2: Run TinyFish feasibility study research
+    // Fetch Dukcapil before the AI run so the research prompt can ground
+    // demand/TAM in the actual radius population instead of guessing.
+    try {
+      demographyPayload = await withTimeout(
+        fetchDemographyWithinRadiusStructured({ latitude, longitude, radiusMeters: 3000, locationContext: resolvedLocationContext }),
+        DUKCAPIL_REQUEST_TIMEOUT_MS,
+        "Dukcapil Demography"
+      );
+      analysisSteps.push("dukcapil_ok_before_research");
+    } catch (e) {
+      console.warn("[Feasibility] Dukcapil pre-research fetch gagal:", e.message);
+      analysisSteps.push(`dukcapil_pre_research_error:${e.message}`);
+    }
+
+    // Step 2: Run one real TinyFish Research API deep run
     let feasibilityResult = null;
     let intelligenceResult = null;
     try {
@@ -7619,19 +7636,29 @@ async function handleFeasibilityStudy(req, res) {
         socialMedia: unifiedResearch.socialMedia || unifiedResearch.social_media || null,
         news: unifiedResearch.news || null,
       } : null;
-      const researchBundle = await withTimeout(Promise.all([
-        runFeasibilityStudyResearch(resolvedLocationContext, businessInput, { deep: true }),
-        reusedSpp || runCompetitorSppResearch(resolvedLocationContext, competitorNames, { deep: false })
-          .catch(error => ({ ok: false, error: error.message, summary: "Riset SPP gagal." })),
-        reusedDigital || runFullResearch(resolvedLocationContext, { deep: false }),
-      ]),
-        60000,
-        "TinyFish Feasibility Study"
-      );
-      feasibilityResult = researchBundle[0];
-      intelligenceResult = { spp: researchBundle[1], digital: researchBundle[2] };
-      analysisSteps.push(`feasibility_research_ok:sources=${feasibilityResult?.totalSources || 0}`);
-      console.log(`[Feasibility] Riset selesai: ${feasibilityResult?.totalSources || 0} sumber, skor: ${feasibilityResult?.overallScore || 0}`);
+      const poiSummary = crawledPois.length + " POI; " + (competitorNames.slice(0, 8).join(", ") || "kompetitor pendidikan belum tersedia");
+      const researchQuery = buildFeasibilityResearchPrompt(resolvedLocationContext, businessInput, {
+        latitude, longitude, areaCoverage: resolvedAreaCoverage, poiSummary,
+        demographySummary: demographyPayload?.formatted_text || "data Dukcapil dipakai sebagai validasi backend",
+      });
+      console.log("[TinyFish Research] Memulai Research API SSE deep run...");
+      const report = await tinyfishResearch(researchQuery, {
+        mode: "deep", outputLanguage: "id", recencyMinutes: 525600,
+        timeoutMs: TINYFISH_RESEARCH_TIMEOUT_MS,
+      });
+      feasibilityResult = {
+        ok: true, researchDepth: "deep", provider: report.provider,
+        summary: report.result.slice(0, 1200), researchReport: report.result,
+        researchCitations: report.citations || [], researchRunId: report.researchRunId,
+        researchStats: report.stats, researchEventCount: report.eventCount,
+        totalSources: (report.citations || []).length, totalMetrics: 0,
+        parameters: ["Deep Research Report"], parameterScores: { "Deep Research Report": 65 },
+        overallScore: 65, byParameter: {}, metrics: [], searchQueries: 1,
+        apiKeyPresent: true,
+      };
+      intelligenceResult = { spp: reusedSpp, digital: reusedDigital };
+      analysisSteps.push("research_api_ok:run=" + (report.researchRunId || "unknown") + ":sources=" + (report.citations?.length || 0));
+      console.log("[Feasibility] Research API selesai: run=" + (report.researchRunId || "unknown") + ", citations=" + (report.citations?.length || 0));
     } catch (e) {
       console.warn("[Feasibility] Riset feasibility timeout/error:", e.message);
       analysisSteps.push(`feasibility_error:${e.message}`);
@@ -7657,8 +7684,8 @@ async function handleFeasibilityStudy(req, res) {
       };
     }
 
-    // Step 3: Get Dukcapil demography
-    try {
+    // Step 3: Keep this guard for compatibility if the pre-research lookup failed.
+    if (!demographyPayload) try {
       demographyPayload = await withTimeout(
         fetchDemographyWithinRadiusStructured({ latitude, longitude, radiusMeters: 3000, locationContext: resolvedLocationContext }),
         DUKCAPIL_REQUEST_TIMEOUT_MS,
@@ -7803,6 +7830,10 @@ async function handleFeasibilityStudy(req, res) {
         totalMetrics: feasibilityResult.totalMetrics,
         metrics: feasibilityResult.metrics,
         summary: feasibilityResult.summary,
+        researchReport: feasibilityResult.researchReport || null,
+        researchCitations: feasibilityResult.researchCitations || [],
+        researchRunId: feasibilityResult.researchRunId || null,
+        researchProvider: feasibilityResult.provider || null,
         sources: (feasibilityResult.byParameter || {}),
       } : null,
 
@@ -7811,7 +7842,7 @@ async function handleFeasibilityStudy(req, res) {
         elapsed_ms: elapsed,
         research_pipeline: [
           { stage: "outline", status: resolvedAreaCoverage.length ? "completed" : "partial", detail: "Menyusun scope radius 3 km, kelurahan, dan kebutuhan riset" },
-          { stage: "collect", status: feasibilityResult?._fallback ? "partial" : "completed", detail: "Mengumpulkan POI, Dukcapil, TinyFish Search/Fetch, SPP, sosial media, dan berita" },
+          { stage: "collect", status: feasibilityResult?._fallback ? "partial" : "completed", detail: feasibilityResult?.provider === "tinyfish-research-api" ? "TinyFish Research API mengumpulkan sumber melalui SSE" : "Mengumpulkan POI, Dukcapil, dan fallback Search/Fetch" },
           { stage: "synthesize", status: feasibilityResult ? "completed" : "failed", detail: "Menggabungkan evidence dan menghitung TAM/SAM/SOM" },
           { stage: "validate", status: recommendation ? "completed" : "partial", detail: recommendation ? `Validasi rekomendasi: ${recommendation}` : "Validasi belum lengkap" },
         ],

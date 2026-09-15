@@ -1900,6 +1900,20 @@ a {
   line-height: 1.35;
 }
 
+.analysis-drawer-body .deep-research-report {
+  background: #111827 !important;
+  color: #f8fafc !important;
+  border: 1px solid #334155 !important;
+}
+.analysis-drawer-body .deep-research-report h4,
+.analysis-drawer-body .deep-research-report strong { color: #f8fafc !important; }
+.research-provider-badge { color: #93c5fd; font-size: 12px; margin: 6px 0 14px; }
+.research-report-body { color: #e2e8f0; line-height: 1.7; font-size: 14px; }
+.research-report-body h5 { color: #67e8f9; margin: 16px 0 6px; font-size: 15px; }
+.research-report-body p { margin: 0 0 10px; }
+.research-citations { display: grid; gap: 6px; border-top: 1px solid #334155; margin-top: 16px; padding-top: 12px; color: #cbd5e1; font-size: 12px; }
+.research-citations a { color: #7dd3fc; overflow-wrap: anywhere; }
+
 .pp-section h4 {
   margin: 0 0 8px;
   font-size: 0.88rem;
