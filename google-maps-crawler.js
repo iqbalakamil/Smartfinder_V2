@@ -65,7 +65,10 @@ const QUERY_POST_LOAD_DELAY_MS = VERCEL_MODE ? 900 : 1000;
 const MAX_SCROLL_ROUNDS = VERCEL_MODE ? 4 : 6;
 const SCROLL_DELAY_MS = VERCEL_MODE ? 300 : 350;
 const MAX_CRAWL_TASKS = VERCEL_MODE ? 3 : 999;
-const CRAWL_DEADLINE_MS = Number(process.env.POI_CRAWL_DEADLINE_MS || 75000);
+// Lima keyword hunian dijalankan untuk setiap area. Beri waktu cukup agar
+// seluruh task selesai pada desktop/local backend, bukan berhenti di sekitar
+// task 50 saat cakupan area menghasilkan banyak kelurahan.
+const CRAWL_DEADLINE_MS = Number(process.env.POI_CRAWL_DEADLINE_MS || 240000);
 
 async function launchConfiguredBrowser(launchOptions = {}) {
   if (chromium) {
@@ -599,11 +602,12 @@ async function crawlGoogleMapsPois(location = {}) {
       const page = await pageFactory();
       try {
         while (nextTaskIndex < tasks.length && Date.now() < crawlDeadline) {
-          const task = tasks[nextTaskIndex];
+          const taskIndex = nextTaskIndex;
+          const task = tasks[taskIndex];
           nextTaskIndex += 1;
-          console.log(`GOOGLE_MAPS_TASK_START ${nextTaskIndex}/${tasks.length} ${task.mode} ${task.area?.village || ""}`);
+          console.log(`GOOGLE_MAPS_TASK_START ${taskIndex + 1}/${tasks.length} ${task.mode} ${task.area?.village || ""}`);
           const rows = await crawlQuery(page, task.query).catch(() => []);
-          console.log(`GOOGLE_MAPS_TASK_DONE ${nextTaskIndex}/${tasks.length} rows=${rows.length} ${task.mode} ${task.area?.village || ""}`);
+          console.log(`GOOGLE_MAPS_TASK_DONE ${taskIndex + 1}/${tasks.length} rows=${rows.length} ${task.mode} ${task.area?.village || ""}`);
           for (const row of rows) {
             if (!shouldKeepRow(row, task)) {
               continue;

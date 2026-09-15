@@ -118,7 +118,9 @@ let backendHotmapMeta = {
 };
 const researchSearchCache = new Map();
 const POI_EXTERNAL_RESEARCH_TIMEOUT_MS = Number(process.env.POI_EXTERNAL_RESEARCH_TIMEOUT_MS || 12000);
-const POI_GOOGLE_HOUSING_TIMEOUT_MS = Number(process.env.POI_GOOGLE_HOUSING_TIMEOUT_MS || 90000);
+// Harus lebih panjang dari crawler deadline agar endpoint tidak memotong
+// proses sebelum seluruh query POI hunian selesai.
+const POI_GOOGLE_HOUSING_TIMEOUT_MS = Number(process.env.POI_GOOGLE_HOUSING_TIMEOUT_MS || 300000);
 const FAST_MODE = String(process.env.AI_FAST_MODE || "true").toLowerCase() !== "false";
 const FAST_EXTERNAL_QUERY_LIMIT = FAST_MODE ? 6 : 999;
 const FAST_POI_QUERY_LIMIT = FAST_MODE ? 8 : 999;
