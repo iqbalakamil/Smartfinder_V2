@@ -47,8 +47,13 @@ async function tinyfishResearch(query, options = {}) {
     if (!dataLines.length) return;
     let parsed;
     try { parsed = JSON.parse(dataLines.join("\n")); } catch { return; }
+    // Research API events are flat JSON objects (the current docs show
+    // `data: {"event":"created", "research_run_id":"..."}`).  Older
+    // preview responses wrapped the fields in `data`, so accept both forms.
     const event = parsed.event || parsed.type;
-    const data = parsed.data || {};
+    const data = parsed.data && typeof parsed.data === "object"
+      ? { ...parsed, ...parsed.data }
+      : parsed;
     events.push({ event, data });
     if (event === "created") researchRunId = data.research_run_id || data.researchRunId || researchRunId;
     if (event === "plan_updated") plan = data;
@@ -56,7 +61,7 @@ async function tinyfishResearch(query, options = {}) {
     if (event === "partial_summary" && !synthesis) synthesis = String(data.summary || data.text || "");
     if (event === "final_result") {
       finalResult = data;
-      if (data.result) synthesis = String(data.result);
+      if (data.result) synthesis = typeof data.result === "string" ? data.result : JSON.stringify(data.result);
     }
     if (event === "run_stats") stats = data;
     if (event === "error") throw new Error(data.message || data.error || "TinyFish Research API pipeline error");
@@ -88,8 +93,9 @@ async function tinyfishResearch(query, options = {}) {
     if (!report) throw new Error("TinyFish Research API selesai tanpa final_result.");
     return {
       ok: true, provider: "tinyfish-research-api", usedResearchApi: true,
-      researchRunId, result: report, synthesis, citations: finalResult?.citations || [],
-      terminationReason: finalResult?.termination_reason || "completed", plan, stats,
+      researchRunId, result: typeof report === "string" ? report : JSON.stringify(report), synthesis,
+      citations: finalResult?.citations || [],
+      terminationReason: finalResult?.termination_reason || finalResult?.terminationReason || "completed", plan, stats,
       eventCount: events.length, apiKeyPresent: true,
     };
   } catch (error) {
@@ -690,6 +696,42 @@ async function runSocialMediaResearch(loc = {}, options = {}) {
  */
 async function runNewsResearch(loc = {}, options = {}) {
   const deep = Boolean(options.deep || TINYFISH_DEEP_MODE);
+  // Search API only returns ranked snippets and is intentionally free.  The
+  // News result in the dashboard needs a cited AI synthesis, so explicitly
+  // opt into Research API when the caller requests it.
+  if (options.researchApi) {
+    const area = getAreaLabel(loc) || loc.city || "Indonesia";
+    const report = await tinyfishResearch(
+      `Riset berita lokal terbaru di ${area} untuk menilai peluang bisnis pendidikan anak usia dini. ` +
+      `Cari berita dan agenda publik 12 bulan terakhir tentang anak, keluarga, parenting, pendidikan, ` +
+      `festival, lomba, komunitas, dan kegiatan sekolah. Prioritaskan media Indonesia yang kredibel. ` +
+      `Buat sintesis berbahasa Indonesia: headline, tanggal, lokasi, relevansi terhadap demand, dan ` +
+      `URL citation untuk setiap klaim. Bedakan fakta, inferensi, dan keterbatasan data.`,
+      { mode: options.mode || "deep", outputLanguage: "id", recencyMinutes: 525600, timeoutMs: options.timeoutMs }
+    );
+    return {
+      ok: true,
+      researchDepth: "deep",
+      provider: report.provider,
+      usedResearchApi: true,
+      summary: report.result.slice(0, 1600),
+      researchReport: report.result,
+      researchRunId: report.researchRunId,
+      researchCitations: report.citations || [],
+      totalSources: (report.citations || []).length,
+      totalEvents: 0,
+      events: [],
+      portalStats: [],
+      sources: (report.citations || []).map((source) => ({
+        title: source.title || source.name || source.url || "Sumber berita",
+        url: source.url || source.link || "",
+        snippet: source.snippet || source.quote || "",
+        kind: "research_api",
+      })).filter((source) => source.url),
+      searchQueries: 1,
+      apiKeyPresent: Boolean(TINYFISH_API_KEY),
+    };
+  }
   const queries = buildNewsQueries(loc, { deep });
   const allSources = await runSearchQueries(queries, { location: loc.city || "Indonesia" });
 

@@ -104,7 +104,7 @@ if errorlevel 1 (
   if defined TF_KEY (
     > ".env" echo TINYFISH_API_KEY=!TF_KEY!
     >> ".env" echo PORT=3000
-    >> ".env" echo TINYFISH_REQUEST_TIMEOUT_MS=900000
+    >> ".env" echo TINYFISH_RESEARCH_TIMEOUT_MS=900000
     echo [OK] Konfigurasi TinyFish disimpan lokal di .env.
   ) else (
     echo [WARNING] Tanpa API key, studi AI akan memakai fallback lokal.

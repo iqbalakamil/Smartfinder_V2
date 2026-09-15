@@ -3705,6 +3705,9 @@ function renderUnifiedSocialNews(result) {
   if (nw) {
     html += `<div class="pp-section"><h4>📰 Berita (${nw.portalStats?.length || 0} portal)</h4>`;
     if (nw.summary) html += `<p>${escapeHtml(nw.summary)}</p>`;
+    if (nw.usedResearchApi && nw.researchReport) {
+      html += `<div class="pp-section" style="margin-top:10px;background:#f8fafc;"><h4>Sintesis AI Research</h4><div style="white-space:pre-wrap;line-height:1.55;">${escapeHtml(nw.researchReport)}</div></div>`;
+    }
     if (nw.portalStats?.length) {
       html += `<div class="pp-platform-grid">`;
       nw.portalStats.forEach((p) => {

@@ -5960,7 +5960,9 @@ async function handleUnifiedAnalysis(req, res) {
         const [ppResult, smResult, newsResult] = await Promise.all([
           withTimeout(runPurchasingPowerResearch(locationContext, { deep: false }), 35000, "TinyFish PP").catch((e) => { console.warn("[TinyFish] PP gagal:", e.message); return null; }),
           withTimeout(runSocialMediaResearch(locationContext, { deep: false }), 35000, "TinyFish SM").catch((e) => { console.warn("[TinyFish] SM gagal:", e.message); return null; }),
-          withTimeout(runNewsResearch(locationContext, { deep: false }), 35000, "TinyFish News").catch((e) => { console.warn("[TinyFish] News gagal:", e.message); return null; }),
+          // News uses the paid Research API so the dashboard receives an AI
+          // synthesis with citations, not only free search snippets.
+          withTimeout(runNewsResearch(locationContext, { deep: true, researchApi: true, timeoutMs: TINYFISH_RESEARCH_TIMEOUT_MS }), TINYFISH_RESEARCH_TIMEOUT_MS, "TinyFish News Research").catch((e) => { console.warn("[TinyFish] News research gagal:", e.message); return null; }),
         ]);
         console.log("[TinyFish] Selesai. PP:", ppResult?.totalSources || 0, "SM:", smResult?.totalSources || 0, "News:", newsResult?.totalSources || 0);
 
@@ -7510,7 +7512,7 @@ async function handleTinyfishResearch(req, res) {
         break;
       case "news":
         result = await withTimeout(
-          runNewsResearch(locationContext, { deep }),
+          runNewsResearch(locationContext, { deep, researchApi: true, timeoutMs: TINYFISH_RESEARCH_TIMEOUT_MS }),
           timeoutMs,
           "TinyFish news research"
         );
