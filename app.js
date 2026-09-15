@@ -633,9 +633,11 @@ function normalizePoiForMap(poi) {
   };
 }
 
-function dedupeMapPois(items) {
+function dedupeMapPois(items = []) {
+  if (!Array.isArray(items)) return [];
   const map = new Map();
   items.map(normalizePoiForMap).forEach((poi) => {
+    if (!poi) return;
     const key = `${String(poi.name || "").toLowerCase()}|${Number(poi.lat || 0).toFixed(6)}|${Number(poi.lon || 0).toFixed(6)}|${poi.category || ""}|${poi.source || ""}`;
     if (!map.has(key)) {
       map.set(key, poi);
@@ -1663,11 +1665,13 @@ async function getDeepResearchAnalysis(context, signal) {
   };
 }
 
-function summarizePois(pois) {
+function summarizePois(pois = []) {
+  const safePois = Array.isArray(pois) ? pois : [];
   const counts = { total: 0, positive: 0, risk: 0, neutral: 0 };
   const categoryCounts = {};
 
-  pois.forEach((poi) => {
+  safePois.forEach((poi) => {
+    if (!poi) return;
     counts.total += 1;
     if (typeof counts[poi.signal] === "number") {
       counts[poi.signal] += 1;
@@ -1687,32 +1691,38 @@ function summarizePois(pois) {
   };
 }
 
-function getTopPois(pois, signal, limit = 10) {
-  return pois
-    .filter((poi) => poi.signal === signal)
+function getTopPois(pois = [], signal, limit = 10) {
+  const safePois = Array.isArray(pois) ? pois : [];
+  return safePois
+    .filter((poi) => poi && poi.signal === signal)
     .slice(0, limit)
-    .map((poi) => `${poi.name} (${poi.categoryLabel} - ${getPoiSourceLabel(poi.source)})`);
+    .map((poi) => `${poi.name || "POI"} (${poi.categoryLabel || poi.category || ""} - ${getPoiSourceLabel(poi.source)})`);
 }
 
-function getTopPoiEntries(pois, signal, limit = 10) {
-  return pois
-    .filter((poi) => poi.signal === signal)
+function getTopPoiEntries(pois = [], signal, limit = 10) {
+  const safePois = Array.isArray(pois) ? pois : [];
+  return safePois
+    .filter((poi) => poi && poi.signal === signal)
     .slice(0, limit)
     .map((poi) => ({
-      name: poi.name,
-      categoryLabel: poi.categoryLabel,
-      source: poi.source,
+      name: poi.name || "POI",
+      categoryLabel: poi.categoryLabel || poi.category || "",
+      source: poi.source || "",
     }));
 }
 
-function renderPoiLists(supporting, risks, poiItems = []) {
-  supportingPoiEl.innerHTML = supporting.length
-    ? supporting.map((item) => `<li>${escapeHtml(item)}</li>`).join("")
-    : "<li>Belum ada POI pendukung yang menonjol.</li>";
+function renderPoiLists(supporting = [], risks = [], poiItems = []) {
+  if (supportingPoiEl) {
+    supportingPoiEl.innerHTML = supporting.length
+      ? supporting.map((item) => `<li>${escapeHtml(item)}</li>`).join("")
+      : "<li>Belum ada POI pendukung yang menonjol.</li>";
+  }
 
-  riskPoiEl.innerHTML = risks.length
-    ? risks.map((item) => `<li>${escapeHtml(item)}</li>`).join("")
-    : "<li>Tidak ada POI risiko yang dominan dalam hasil saat ini.</li>";
+  if (riskPoiEl) {
+    riskPoiEl.innerHTML = risks.length
+      ? risks.map((item) => `<li>${escapeHtml(item)}</li>`).join("")
+      : "<li>Tidak ada POI risiko yang dominan dalam hasil saat ini.</li>";
+  }
 
   renderPoiEvidencePanel(
     getTopPoiEntries(poiItems, "positive"),
@@ -1764,7 +1774,8 @@ function renderPoiEvidencePanel(supporting = [], risks = [], meta = {}) {
 }
 
 function renderPoiSources(meta = {}, pois = []) {
-  const sourceSet = new Set(pois.map((poi) => poi.source).filter(Boolean));
+  if (!poiSourceBox) return;
+  const sourceSet = new Set((pois || []).map((poi) => poi?.source).filter(Boolean));
   const chips = [];
 
   if (sourceSet.has("google-maps-crawl")) {
@@ -1800,6 +1811,7 @@ function renderPoiSources(meta = {}, pois = []) {
 }
 
 function renderResearchSources(research = {}) {
+  if (!researchSourceBox) return;
   const sources = Array.isArray(research.sources) ? research.sources : [];
   const summary = research.summary || "";
 
@@ -4031,9 +4043,9 @@ async function analyzeLocation(lat, lon, radius) {
       geoData?.display_name ||
       "Nama jalan tidak ditemukan";
 
-    streetNameEl.textContent = streetName;
-    districtNameEl.textContent = districtName;
-    cityNameEl.textContent = cityName;
+    if (streetNameEl) streetNameEl.textContent = streetName;
+    if (districtNameEl) districtNameEl.textContent = districtName;
+    if (cityNameEl) cityNameEl.textContent = cityName;
     appendActivityLog(`Wilayah terdeteksi: ${districtName}, ${cityName}.`, "success");
     advanceResearchWorkflow(3);
     setStatus(`Titik koordinat berada di Kecamatan ${districtName}, ${cityName}.`);
@@ -4042,21 +4054,21 @@ async function analyzeLocation(lat, lon, radius) {
     advanceResearchWorkflow(4);
 
     const poiPayload = await fetchPois(lat, lon, radius, locationContext, controller.signal);
-    const pois = poiPayload.items;
+    const pois = Array.isArray(poiPayload?.items) ? poiPayload.items : [];
     advanceResearchWorkflow(5);
-    latestPoiMeta = poiPayload.meta || {};
-    const effectiveRadius = Number(poiPayload.meta.effectiveRadius || 3000);
-    const areaCoverage = Array.isArray(poiPayload.meta.areaCoverage) ? poiPayload.meta.areaCoverage : [];
-    const crawlPlan = Array.isArray(poiPayload.meta.crawlPlan) ? poiPayload.meta.crawlPlan : [];
+    latestPoiMeta = poiPayload?.meta || {};
+    const effectiveRadius = Number(poiPayload?.meta?.effectiveRadius || 3000);
+    const areaCoverage = Array.isArray(poiPayload?.meta?.areaCoverage) ? poiPayload.meta.areaCoverage : [];
+    const crawlPlan = Array.isArray(poiPayload?.meta?.crawlPlan) ? poiPayload.meta.crawlPlan : [];
     const summary = summarizePois(pois);
     const supporting = getTopPois(pois, "positive");
     const risks = getTopPois(pois, "risk");
-    const googleMapsTotal = Number(poiPayload.meta.googleMapsTotal || 0);
-    const googleMapsWithCoords = Number(poiPayload.meta.googleMapsWithCoords || 0);
+    const googleMapsTotal = Number(poiPayload?.meta?.googleMapsTotal || 0);
+    const googleMapsWithCoords = Number(poiPayload?.meta?.googleMapsWithCoords || 0);
     const googleMapsWithoutCoords = Math.max(0, googleMapsTotal - googleMapsWithCoords);
-    const coordSources = poiPayload.meta.googleMapsCoordSources || {};
-    const backendHotmapInRadius = Number(poiPayload.meta.backendHotmapInRadius || 0);
-    const fallbackUsed = Boolean(poiPayload.meta.fallbackUsed);
+    const coordSources = poiPayload?.meta?.googleMapsCoordSources || {};
+    const backendHotmapInRadius = Number(poiPayload?.meta?.backendHotmapInRadius || 0);
+    const fallbackUsed = Boolean(poiPayload?.meta?.fallbackUsed);
     const coordSourceLabel = Object.entries(coordSources)
       .map(([key, value]) => `${key}:${value}`)
       .join(", ");
@@ -4064,7 +4076,7 @@ async function analyzeLocation(lat, lon, radius) {
     appendActivityLog(`POI berhasil dimuat: ${pois.length} item dalam radius ${effectiveRadius} meter. Sumber aktif: ${[...new Set(pois.map((poi) => getPoiSourceLabel(poi.source)))].join(", ") || "-"}.`, "success");
     if (areaCoverage.length) {
       appendActivityLog(`Cakupan radius 3 km meliputi ${areaCoverage.length} kelurahan: ${areaCoverage.map((area) => area.village || area.subdistrict || area.district || area.city).filter(Boolean).join(", ")}. Crawl POI dijalankan per kelurahan untuk tiap kategori.`, "success");
-      districtNameEl.textContent = areaCoverage.map((area) => area.village || area.subdistrict || area.district || area.city).filter(Boolean).slice(0, 3).join(", ");
+      if (districtNameEl) districtNameEl.textContent = areaCoverage.map((area) => area.village || area.subdistrict || area.district || area.city).filter(Boolean).slice(0, 3).join(", ");
     }
     if (crawlPlan.length) {
       appendActivityLog(`Rencana crawl backend: ${crawlPlan.length} query kategori-area.`, "success");
@@ -4087,9 +4099,9 @@ async function analyzeLocation(lat, lon, radius) {
     if (fallbackUsed) {
       appendActivityLog("Backend POI memakai fallback karena crawl Google Maps tidak berhasil mengembalikan data POI nyata.", "error");
     }
-    poiTotalEl.textContent = String(pois.length);
-    positiveScoreEl.textContent = String(summary.counts.positive);
-    riskScoreEl.textContent = String(summary.counts.risk);
+    if (poiTotalEl) poiTotalEl.textContent = String(pois.length);
+    if (positiveScoreEl) positiveScoreEl.textContent = String(summary.counts.positive);
+    if (riskScoreEl) riskScoreEl.textContent = String(summary.counts.risk);
     renderPoiLists(supporting, risks, pois);
     renderPoiSources(poiPayload.meta, pois);
     renderResearchSources(poiPayload.meta.externalResearch || {});
