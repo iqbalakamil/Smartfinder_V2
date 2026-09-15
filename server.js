@@ -25,6 +25,9 @@ const {
   TINYFISH_API_KEY,
 } = require("./tinyfish-research");
 const TINYFISH_RESEARCH_TIMEOUT_MS = Number(process.env.TINYFISH_RESEARCH_TIMEOUT_MS || 900000);
+// Research API is a gated beta. Search + Fetch is the default flow unless
+// access is explicitly enabled for this account.
+const TINYFISH_RESEARCH_API_ENABLED = /^(1|true|yes)$/i.test(String(process.env.TINYFISH_RESEARCH_API_ENABLED || ""));
 
 const SERVERLESS_CHROMIUM_ENABLED = process.platform === "linux" && (
   /^(1|true|yes)$/i.test(String(process.env.VERCEL || "")) ||
@@ -5968,7 +5971,7 @@ async function handleUnifiedAnalysis(req, res) {
           withTimeout(runSocialMediaResearch(locationContext, { deep: false }), 35000, "TinyFish SM").catch((e) => { console.warn("[TinyFish] SM gagal:", e.message); return null; }),
           // News uses the paid Research API so the dashboard receives an AI
           // synthesis with citations, not only free search snippets.
-          withTimeout(runNewsResearch(locationContext, { deep: true, researchApi: true, timeoutMs: TINYFISH_RESEARCH_TIMEOUT_MS }), TINYFISH_RESEARCH_TIMEOUT_MS, "TinyFish News Research").catch((e) => { console.warn("[TinyFish] News research gagal:", e.message); return null; }),
+          withTimeout(runNewsResearch(locationContext, { deep: true, researchApi: false }), 60000, "TinyFish News Search/Fetch").catch((e) => { console.warn("[TinyFish] News research gagal:", e.message); return null; }),
         ]);
         console.log("[TinyFish] Selesai. PP:", ppResult?.totalSources || 0, "SM:", smResult?.totalSources || 0, "News:", newsResult?.totalSources || 0);
 
@@ -7518,7 +7521,7 @@ async function handleTinyfishResearch(req, res) {
         break;
       case "news":
         result = await withTimeout(
-          runNewsResearch(locationContext, { deep, researchApi: true, timeoutMs: TINYFISH_RESEARCH_TIMEOUT_MS }),
+          runNewsResearch(locationContext, { deep, researchApi: false }),
           timeoutMs,
           "TinyFish news research"
         );
@@ -7630,6 +7633,9 @@ async function handleFeasibilityStudy(req, res) {
         .map(p => p.name)
         .filter(Boolean)
         .slice(0, 5);
+      if (!TINYFISH_RESEARCH_API_ENABLED) {
+        throw new Error("Research API disabled; memakai Search + Fetch fallback");
+      }
       const reusedSpp = unifiedResearch?.spp ? {
         ok: true,
         summary: `SPP dari Unified Research (${unifiedResearch.spp.count || 0} data).`,
@@ -7670,26 +7676,51 @@ async function handleFeasibilityStudy(req, res) {
     } catch (e) {
       console.warn("[Feasibility] Riset feasibility timeout/error:", e.message);
       analysisSteps.push(`feasibility_error:${e.message}`);
-      // Fallback: build minimal result from Dukcapil data
-      feasibilityResult = {
-        ok: true,
-        researchDepth: "fallback",
-        summary: "Riset TinyFish timeout/ gagal. Menggunakan data Dukcapil sebagai fallback.",
-        totalSources: 0,
-        totalMetrics: 0,
-        parameters: ["Aksesibilitas", "Visibilitas", "Demografi", "Kompetitor", "Fasilitas & Lingkungan", "Potensi Promosi", "History Kegiatan"],
-        parameterScores: {
-          "Aksesibilitas": 35, "Visibilitas": 35, "Demografi": 30,
-          "Kompetitor": 30, "Fasilitas & Lingkungan": 30, "Potensi Promosi": 30, "History Kegiatan": 30,
-        },
-        overallScore: 31,
-        byParameter: {},
-        metrics: [],
-        searchQueries: 0,
-        apiKeyPresent: Boolean(TINYFISH_API_KEY),
-        _fallback: true,
-        _error: e.message,
-      };
+      // Research API is an optional/gated TinyFish product. Fall back to the
+      // available Search + Fetch APIs so every feasibility parameter still
+      // gets evidence and a score when the key is valid but Research is not
+      // enabled for the account.
+      try {
+        const searchFallback = await withTimeout(
+          runFeasibilityStudyResearch(resolvedLocationContext, businessInput, { deep: false }),
+          120000,
+          "TinyFish feasibility Search/Fetch fallback"
+        );
+        feasibilityResult = {
+          ...searchFallback,
+          researchDepth: "search-fetch-fallback",
+          provider: "tinyfish-search-fetch",
+          summary: `${searchFallback.summary || "Riset berbasis Search + Fetch selesai."} Research API tidak tersedia pada akun ini; hasil memakai Search + Fetch TinyFish.`,
+          apiKeyPresent: Boolean(TINYFISH_API_KEY),
+          _fallback: true,
+          _error: e.message,
+        };
+        analysisSteps.push(`search_fetch_fallback_ok:sources=${searchFallback.totalSources || 0}`);
+      } catch (fallbackError) {
+        console.warn("[Feasibility] Search/Fetch fallback gagal:", fallbackError.message);
+        analysisSteps.push(`search_fetch_fallback_error:${fallbackError.message}`);
+        // Final fallback: build a local evidence result from POI + Dukcapil.
+        feasibilityResult = {
+          ok: true,
+          researchDepth: "local-fallback",
+          provider: "local-evidence",
+          summary: "Research API dan Search/Fetch tidak tersedia. Hasil memakai POI lokal dan data Dukcapil.",
+          totalSources: 0,
+          totalMetrics: 0,
+          parameters: ["Aksesibilitas", "Visibilitas", "Demografi", "Kompetitor", "Fasilitas & Lingkungan", "Potensi Promosi", "History Kegiatan"],
+          parameterScores: {
+            "Aksesibilitas": 35, "Visibilitas": 35, "Demografi": 30,
+            "Kompetitor": 30, "Fasilitas & Lingkungan": 30, "Potensi Promosi": 30, "History Kegiatan": 30,
+          },
+          overallScore: 31,
+          byParameter: {},
+          metrics: [],
+          searchQueries: 0,
+          apiKeyPresent: Boolean(TINYFISH_API_KEY),
+          _fallback: true,
+          _error: `${e.message}; ${fallbackError.message}`,
+        };
+      }
     }
 
     // Step 3: Keep this guard for compatibility if the pre-research lookup failed.

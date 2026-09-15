@@ -739,7 +739,16 @@ async function runNewsResearch(loc = {}, options = {}) {
     }
   }
   const queries = buildNewsQueries(loc, { deep });
-  const allSources = await runSearchQueries(queries, { location: loc.city || "Indonesia" });
+  let allSources = await runSearchQueries(queries, { location: loc.city || "Indonesia" });
+  // Retry broadly when tightly scoped portal queries return no local result.
+  if (!allSources.length) {
+    const area = getAreaLabel(loc) || loc.city || "Indonesia";
+    allSources = await runSearchQueries([
+      { kind: "local_news_fallback", platform: "Berita Lokal", query: `berita terbaru ${area} kegiatan anak keluarga pendidikan` },
+      { kind: "local_event_fallback", platform: "Berita Lokal", query: `event anak family day parenting ${area}` },
+      { kind: "local_education_fallback", platform: "Berita Lokal", query: `berita pendidikan PAUD TK preschool ${area}` },
+    ], { location: loc.city || "Indonesia" });
+  }
 
   const scored = allSources.map((s) => ({ ...s, score: scoreEventSource(s) }))
     .sort((a, b) => b.score - a.score);
