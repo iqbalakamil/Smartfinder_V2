@@ -5946,7 +5946,7 @@ async function handleUnifiedAnalysis(req, res) {
         // Riset SPP kompetitor (prioritas utama untuk market size)
         console.log("[TinyFish] Memulai riset SPP kompetitor...");
         tinyfishSppResult = await withTimeout(
-          runCompetitorSppResearch(locationContext, competitorNames, { deep: true }),
+          runCompetitorSppResearch(locationContext, competitorNames, { deep: false }),
           45000,
           "TinyFish SPP"
         );
@@ -5955,9 +5955,9 @@ async function handleUnifiedAnalysis(req, res) {
         // Riset paralel: daya beli, sosial media, berita
         console.log("[TinyFish] Memulai riset paralel (PP, SM, News)...");
         const [ppResult, smResult, newsResult] = await Promise.all([
-          withTimeout(runPurchasingPowerResearch(locationContext, { deep: true }), 35000, "TinyFish PP").catch((e) => { console.warn("[TinyFish] PP gagal:", e.message); return null; }),
-          withTimeout(runSocialMediaResearch(locationContext, { deep: true }), 35000, "TinyFish SM").catch((e) => { console.warn("[TinyFish] SM gagal:", e.message); return null; }),
-          withTimeout(runNewsResearch(locationContext, { deep: true }), 35000, "TinyFish News").catch((e) => { console.warn("[TinyFish] News gagal:", e.message); return null; }),
+          withTimeout(runPurchasingPowerResearch(locationContext, { deep: false }), 35000, "TinyFish PP").catch((e) => { console.warn("[TinyFish] PP gagal:", e.message); return null; }),
+          withTimeout(runSocialMediaResearch(locationContext, { deep: false }), 35000, "TinyFish SM").catch((e) => { console.warn("[TinyFish] SM gagal:", e.message); return null; }),
+          withTimeout(runNewsResearch(locationContext, { deep: false }), 35000, "TinyFish News").catch((e) => { console.warn("[TinyFish] News gagal:", e.message); return null; }),
         ]);
         console.log("[TinyFish] Selesai. PP:", ppResult?.totalSources || 0, "SM:", smResult?.totalSources || 0, "News:", newsResult?.totalSources || 0);
 
@@ -7515,7 +7515,10 @@ async function handleTinyfishResearch(req, res) {
       case "full":
       default:
         result = await withTimeout(
-          runFullResearch(locationContext, { deep }),
+          // Keep the broad Unified collection in standard mode. The
+          // feasibility endpoint reuses this evidence instead of searching it
+          // again, keeping one user action below TinyFish's 30 RPM limit.
+          runFullResearch(locationContext, { deep: false }),
           timeoutMs,
           "TinyFish full research"
         );
@@ -7550,6 +7553,7 @@ async function handleFeasibilityStudy(req, res) {
     };
     const areaCoverage = Array.isArray(body.areaCoverage) ? body.areaCoverage : [];
     const crawledPois = Array.isArray(body.crawledPois) ? body.crawledPois : [];
+    const unifiedResearch = body.unifiedResearch || null;
 
     if (Number.isNaN(latitude) || Number.isNaN(longitude)) {
       sendJson(res, 400, { error: "Koordinat tidak valid." });
@@ -7601,11 +7605,25 @@ async function handleFeasibilityStudy(req, res) {
         .map(p => p.name)
         .filter(Boolean)
         .slice(0, 5);
+      const reusedSpp = unifiedResearch?.spp ? {
+        ok: true,
+        summary: `SPP dari Unified Research (${unifiedResearch.spp.count || 0} data).`,
+        avg_spp: unifiedResearch.spp.avg ?? null,
+        min_spp: unifiedResearch.spp.min ?? null,
+        max_spp: unifiedResearch.spp.max ?? null,
+        median_spp: unifiedResearch.spp.avg ?? null,
+        spp_count: unifiedResearch.spp.count || 0,
+        sources_with_spp: unifiedResearch.spp.sources || [],
+      } : null;
+      const reusedDigital = unifiedResearch ? {
+        socialMedia: unifiedResearch.socialMedia || unifiedResearch.social_media || null,
+        news: unifiedResearch.news || null,
+      } : null;
       const researchBundle = await withTimeout(Promise.all([
         runFeasibilityStudyResearch(resolvedLocationContext, businessInput, { deep: true }),
-        runCompetitorSppResearch(resolvedLocationContext, competitorNames, { deep: true })
+        reusedSpp || runCompetitorSppResearch(resolvedLocationContext, competitorNames, { deep: false })
           .catch(error => ({ ok: false, error: error.message, summary: "Riset SPP gagal." })),
-        runFullResearch(resolvedLocationContext, { deep: true }),
+        reusedDigital || runFullResearch(resolvedLocationContext, { deep: false }),
       ]),
         60000,
         "TinyFish Feasibility Study"

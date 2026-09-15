@@ -1182,8 +1182,18 @@ function scoreFeasibilityParameter(parameter, sources) {
 async function runFeasibilityStudyResearch(locationContext = {}, businessInput = {}, options = {}) {
   const deep = Boolean(options.deep || TINYFISH_DEEP_MODE);
   const queries = buildFeasibilityStudyQueries(locationContext, businessInput);
+  // The broad Unified pass already collects the web evidence. Use one query
+  // per feasibility parameter here so one click stays below TinyFish's
+  // 30-requests-per-minute Search limit.
+  const selectedQueries = [];
+  const seenParameters = new Set();
+  for (const query of queries) {
+    if (seenParameters.has(query.parameter)) continue;
+    seenParameters.add(query.parameter);
+    selectedQueries.push(query);
+  }
   const allSources = [];
-  const BATCH_SIZE = 4; // Run 4 queries in parallel per batch
+  const BATCH_SIZE = 2;
   const PER_QUERY_TIMEOUT_MS = 15000; // 15s per query
 
   // Helper: run a single query with timeout
@@ -1216,8 +1226,8 @@ async function runFeasibilityStudyResearch(locationContext = {}, businessInput =
   }
 
   // Run queries in parallel batches of BATCH_SIZE
-  for (let i = 0; i < queries.length; i += BATCH_SIZE) {
-    const batch = queries.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < selectedQueries.length; i += BATCH_SIZE) {
+    const batch = selectedQueries.slice(i, i + BATCH_SIZE);
     const batchResults = await Promise.all(batch.map(runSingleQuery));
     for (const results of batchResults) {
       allSources.push(...results);
@@ -1318,7 +1328,7 @@ async function runFeasibilityStudyResearch(locationContext = {}, businessInput =
       ])
     ),
     metrics: allMetrics,
-    searchQueries: queries.length,
+    searchQueries: selectedQueries.length,
     apiKeyPresent: Boolean(TINYFISH_API_KEY),
   };
 }

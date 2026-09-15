@@ -4878,6 +4878,7 @@ async function runFeasibilityStudy(lat, lon, businessInput) {
         sellingPrice: businessInput.sellingPrice,
         areaCoverage: latestAnalysisContext?.areaCoverage || [],
         crawledPois: latestAnalysisContext?.crawledPois || latestBasePois,
+        unifiedResearch: latestUnifiedResult?.tinyfish || null,
       }),
     });
 
