@@ -275,6 +275,15 @@ function setLayerVisibility(layerId, enabled) {
 }
 
 function syncPoiLayerVisibility() {
+  const mbMap = getMaplibreMap();
+  if (mbMap && (!mbMap.isStyleLoaded || mbMap.isStyleLoaded())) {
+    // Toggle bisa diklik sesaat setelah ganti style, ketika layer custom belum
+    // dibuat ulang. Pastikan layer tersedia sebelum mengubah visibility.
+    ensureMapLayers();
+  } else if (mbMap && typeof mbMap.once === "function") {
+    // Terapkan ulang setelah style selesai dimuat agar klik toggle tidak hilang.
+    mbMap.once("style.load", syncPoiLayerVisibility);
+  }
   setLayerVisibility("poi-markers-layer", poiLayerEnabled);
   syncPoiToggleUi();
 }
