@@ -138,6 +138,12 @@ set "PORT=%APP_PORT%"
 echo [INFO] Port aplikasi: %PORT%
 >> "%LOG_FILE%" echo [%date% %time%] Selected application port %PORT%.
 
+rem Beri crawler Google Maps waktu sampai 10 menit; pipeline backend 11 menit.
+rem Nilai environment ini mengalahkan default aplikasi tanpa mengubah .env.
+set "POI_CRAWL_DEADLINE_MS=600000"
+set "POI_GOOGLE_HOUSING_TIMEOUT_MS=660000"
+>> "%LOG_FILE%" echo [%date% %time%] POI timeout: crawl 600000ms, pipeline 660000ms.
+
 echo [INFO] Menjalankan Smart Finder...
 >> "%LOG_FILE%" echo [%date% %time%] Starting Node.js application.
 call node launch.js

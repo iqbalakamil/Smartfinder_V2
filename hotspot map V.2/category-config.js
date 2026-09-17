@@ -20,7 +20,7 @@
     affiliate: {
       label: "affiliate",
       exportLabel: "affiliate",
-      keywords: ["taman", "rumah sakit", "mcdonald's", "KFC", "Burger king", "playground"],
+      keywords: ["taman", "rumah sakit", "mcdonalds", "mcdonald's", "KFC", "burger king", "playground"],
     },
     others: {
       label: "lainnya",

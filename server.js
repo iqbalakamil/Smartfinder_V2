@@ -71,7 +71,7 @@ async function launchConfiguredBrowser(launchOptions = {}) {
 
 const DEFAULT_PORT = Number(process.env.PORT || 3000);
 const HOST = "127.0.0.1";
-const POI_CACHE_VERSION = "v12-partial-google-overpass-poi-crawl";
+const POI_CACHE_VERSION = "v13-affiliate-brand-keywords";
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 15000);
 const LITELLM_BASE_URL = "https://litellm.koboi2026.biz.id/v1";
 const LITELLM_MODEL = "gpt-4o-mini";
@@ -120,7 +120,7 @@ const researchSearchCache = new Map();
 const POI_EXTERNAL_RESEARCH_TIMEOUT_MS = Number(process.env.POI_EXTERNAL_RESEARCH_TIMEOUT_MS || 12000);
 // Harus lebih panjang dari crawler deadline agar endpoint tidak memotong
 // proses sebelum seluruh query POI hunian selesai.
-const POI_GOOGLE_HOUSING_TIMEOUT_MS = Number(process.env.POI_GOOGLE_HOUSING_TIMEOUT_MS || 300000);
+const POI_GOOGLE_HOUSING_TIMEOUT_MS = Number(process.env.POI_GOOGLE_HOUSING_TIMEOUT_MS || 660000);
 const FAST_MODE = String(process.env.AI_FAST_MODE || "true").toLowerCase() !== "false";
 const FAST_EXTERNAL_QUERY_LIMIT = FAST_MODE ? 6 : 999;
 const FAST_POI_QUERY_LIMIT = FAST_MODE ? 8 : 999;

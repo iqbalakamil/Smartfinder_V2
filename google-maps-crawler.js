@@ -27,9 +27,9 @@ const POPULAR_TIMES_DELAY_MS = Number(process.env.POPULAR_TIMES_DELAY_MS || 1500
 const MIN_REVIEW_COUNT = 0;
 const MAX_POI_PER_CATEGORY = 100;
 const MAX_CRAWL_PAGES = process.env.VERCEL ? 1 : 8;
-// Satu keyword inti per kategori dijalankan untuk setiap kelurahan. Cakupan
-// kelurahan tetap lengkap, tetapi crawler tidak membuat ratusan query yang
-// akhirnya timeout dan membuang seluruh hasil parsial.
+// Kategori non-hunian memakai satu keyword inti agar crawl tetap cepat.
+// Affiliate dikecualikan karena keyword brand (McDonald's/Burger King) harus
+// benar-benar dijalankan agar hasil affiliate tidak hanya berisi taman.
 const KEYWORDS_PER_CATEGORY = 1;
 
 const CATEGORY_CONFIG = {
@@ -65,10 +65,10 @@ const QUERY_POST_LOAD_DELAY_MS = VERCEL_MODE ? 900 : 1000;
 const MAX_SCROLL_ROUNDS = VERCEL_MODE ? 4 : 6;
 const SCROLL_DELAY_MS = VERCEL_MODE ? 300 : 350;
 const MAX_CRAWL_TASKS = VERCEL_MODE ? 3 : 999;
-// Lima keyword hunian dijalankan untuk setiap area. Beri waktu cukup agar
-// seluruh task selesai pada desktop/local backend, bukan berhenti di sekitar
-// task 50 saat cakupan area menghasilkan banyak kelurahan.
-const CRAWL_DEADLINE_MS = Number(process.env.POI_CRAWL_DEADLINE_MS || 240000);
+// Seluruh keyword hunian dan affiliate dijalankan untuk setiap area. Beri waktu
+// cukup agar task selesai pada desktop/local backend, bukan berhenti di tengah
+// saat cakupan area menghasilkan banyak kelurahan.
+const CRAWL_DEADLINE_MS = Number(process.env.POI_CRAWL_DEADLINE_MS || 600000);
 
 async function launchConfiguredBrowser(launchOptions = {}) {
   if (chromium) {
@@ -123,7 +123,7 @@ function buildQueries(location = {}) {
       // Hunian memakai seluruh variasi keyword agar cluster/perumahan/apartment
       // yang memakai penamaan berbeda tetap terdeteksi. Kategori lain tetap
       // dibatasi satu keyword untuk menjaga waktu crawl.
-      const keywords = mode === "hunian"
+      const keywords = mode === "hunian" || mode === "affiliate"
         ? config.keywords
         : config.keywords.slice(0, KEYWORDS_PER_CATEGORY);
       return keywords.map((keyword) => ({
