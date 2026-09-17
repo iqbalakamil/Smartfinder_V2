@@ -24,6 +24,12 @@ const {
   buildFeasibilityResearchPrompt,
   TINYFISH_API_KEY,
 } = require("./tinyfish-research");
+const {
+  bpsClient,
+  BpsApiError,
+  indicators: BPS_INDICATORS,
+  discoverVariables,
+} = require("./services/bps");
 const TINYFISH_RESEARCH_TIMEOUT_MS = Number(process.env.TINYFISH_RESEARCH_TIMEOUT_MS || 900000);
 // Research API is a gated beta. Search + Fetch is the default flow unless
 // access is explicitly enabled for this account.
@@ -6949,6 +6955,112 @@ async function handleDemographyPolygons(req, res, url) {
   }
 }
 
+function getBpsErrorStatus(error) {
+  if (error instanceof BpsApiError && error.httpStatus >= 400 && error.httpStatus < 500) return 502;
+  if (error?.code === "BPS_API_KEY_MISSING") return 503;
+  return 502;
+}
+
+function handleBpsIndicators(req, res) {
+  sendJson(res, 200, {
+    data: BPS_INDICATORS.map((indicator) => ({
+      ...indicator,
+      status: indicator.candidate_variable_id ? "candidate" : "unverified",
+      source_url: "https://webapi.bps.go.id/documentation/",
+    })),
+    metadata: {
+      source: "BPS",
+      note: "Variable ID wajib diverifikasi melalui discovery sebelum dipakai sebagai data resmi.",
+    },
+  });
+}
+
+async function handleBpsDiscovery(req, res, url) {
+  const keyword = String(url.searchParams.get("keyword") || "").trim();
+  const domain = String(url.searchParams.get("domain") || process.env.BPS_DOMAIN || "0000").trim();
+  const subject = url.searchParams.get("subject") || undefined;
+  const year = url.searchParams.get("year") || undefined;
+  const maxPages = Math.min(Math.max(Number(url.searchParams.get("maxPages") || 20), 1), 50);
+
+  if (!keyword) {
+    sendJson(res, 400, { error: "Parameter keyword wajib diisi, contoh: /api/bps/discovery?keyword=kemiskinan" });
+    return;
+  }
+
+  try {
+    const matches = await discoverVariables(bpsClient, { domain, keyword, subject, year, maxPages });
+    sendJson(res, 200, {
+      data: matches,
+      metadata: {
+        keyword,
+        domain,
+        subject: subject || null,
+        year: year || null,
+        count: matches.length,
+        source: "BPS",
+        source_url: "https://webapi.bps.go.id/documentation/",
+        retrieved_at: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error("BPS DISCOVERY ERROR:", error.message);
+    sendJson(res, getBpsErrorStatus(error), { error: error.message, code: error.code || "BPS_DISCOVERY_ERROR" });
+  }
+}
+
+async function handleBpsPeriods(req, res, url) {
+  const variableId = url.searchParams.get("variable") || url.searchParams.get("variable_id");
+  const domain = String(url.searchParams.get("domain") || process.env.BPS_DOMAIN || "0000").trim();
+  if (!variableId) {
+    sendJson(res, 400, { error: "Parameter variable wajib diisi." });
+    return;
+  }
+  try {
+    const payload = await bpsClient.listPeriods({ domain, variableId });
+    sendJson(res, 200, { data: payload.data?.[1] || [], metadata: { domain, variable_id: Number(variableId), source: "BPS" } });
+  } catch (error) {
+    console.error("BPS PERIOD ERROR:", error.message);
+    sendJson(res, getBpsErrorStatus(error), { error: error.message, code: error.code || "BPS_PERIOD_ERROR" });
+  }
+}
+
+async function handleBpsData(req, res, url) {
+  const variableId = url.searchParams.get("variable") || url.searchParams.get("variable_id");
+  const periodId = url.searchParams.get("period") || url.searchParams.get("period_id");
+  const domain = String(url.searchParams.get("domain") || process.env.BPS_DOMAIN || "0000").trim();
+  if (!variableId || !periodId) {
+    sendJson(res, 400, { error: "Parameter variable dan period wajib diisi." });
+    return;
+  }
+  try {
+    const payload = await bpsClient.fetchDynamicData({ domain, variableId, periodId });
+    sendJson(res, 200, {
+      data: payload,
+      metadata: { domain, variable_id: Number(variableId), period_id: Number(periodId), source: "BPS", retrieved_at: new Date().toISOString() },
+    });
+  } catch (error) {
+    console.error("BPS DATA ERROR:", error.message);
+    sendJson(res, getBpsErrorStatus(error), { error: error.message, code: error.code || "BPS_DATA_ERROR" });
+  }
+}
+
+async function handleBpsStaticTableSearch(req, res, url) {
+  const keyword = String(url.searchParams.get("keyword") || "").trim();
+  const domain = String(url.searchParams.get("domain") || process.env.BPS_DOMAIN || "0000").trim();
+  const year = url.searchParams.get("year") || undefined;
+  if (!keyword) {
+    sendJson(res, 400, { error: "Parameter keyword wajib diisi." });
+    return;
+  }
+  try {
+    const payload = await bpsClient.searchStaticTables({ domain, keyword, year });
+    sendJson(res, 200, { data: payload.data?.[1] || [], metadata: { keyword, domain, year: year || null, source: "BPS" } });
+  } catch (error) {
+    console.error("BPS STATIC TABLE ERROR:", error.message);
+    sendJson(res, getBpsErrorStatus(error), { error: error.message, code: error.code || "BPS_STATIC_TABLE_ERROR" });
+  }
+}
+
 function formatInstagramVenue(venue = {}) {
   const externalId =
     venue.external_id ||
@@ -8236,6 +8348,11 @@ function handleRequest(req, res) {
         "/api/instagram-locations",
         "/api/tinyfish-purchasing-power",
         "/api/unified-analysis",
+        "/api/bps/indicators",
+        "/api/bps/discovery",
+        "/api/bps/periods",
+        "/api/bps/data",
+        "/api/bps/tables/search",
       ],
     });
     return;
@@ -8323,6 +8440,31 @@ function handleRequest(req, res) {
 
   if (req.method === "GET" && pathname === "/api/demography-polygons") {
     handleDemographyPolygons(req, res, url);
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/bps/indicators") {
+    handleBpsIndicators(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/bps/discovery") {
+    handleBpsDiscovery(req, res, url);
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/bps/periods") {
+    handleBpsPeriods(req, res, url);
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/bps/data") {
+    handleBpsData(req, res, url);
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/bps/tables/search") {
+    handleBpsStaticTableSearch(req, res, url);
     return;
   }
 
