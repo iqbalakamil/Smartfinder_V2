@@ -306,6 +306,32 @@
             <div class="ft-stat"><span>Total Anak</span><strong id="demo-kids">-</strong></div>
             <div class="ft-stat"><span>Sumber</span><strong id="demo-source" style="font-size:10px;">Dukcapil</strong></div>
           </div>
+
+          <section class="bps-explorer" aria-labelledby="bps-explorer-title">
+            <div class="heatmap-header">
+              <h3 id="bps-explorer-title">📊 BPS Data Explorer</h3>
+              <span class="pill pill-muted" id="bps-discovery-status">Siap</span>
+            </div>
+            <p class="bps-explorer-note">Cari indikator resmi BPS sebelum digunakan untuk Smartfinder SES.</p>
+            <div class="bps-discovery-form">
+              <select id="bps-indicator-preset" class="demo-province-select" aria-label="Preset indikator BPS">
+                <option value="">Pilih indikator...</option>
+                <option value="pengeluaran per kapita">Pengeluaran per kapita</option>
+                <option value="kemiskinan">Kemiskinan</option>
+                <option value="rata-rata lama sekolah">Rata-rata lama sekolah</option>
+                <option value="tingkat partisipasi angkatan kerja">TPAK</option>
+                <option value="tingkat pengangguran terbuka">TPT</option>
+                <option value="kepemilikan rumah">Kepemilikan rumah</option>
+                <option value="akses internet">Akses internet</option>
+                <option value="kendaraan">Kepemilikan kendaraan</option>
+              </select>
+              <input id="bps-discovery-keyword" type="text" placeholder="atau ketik keyword BPS..." autocomplete="off">
+              <button type="button" id="bps-discovery-btn" class="kec-action-btn kec-add-btn">Cari</button>
+            </div>
+            <div id="bps-discovery-results" class="bps-discovery-results">
+              <div class="kec-empty">Belum ada pencarian indikator.</div>
+            </div>
+          </section>
         </div>
       </div>
 
@@ -638,7 +664,7 @@
   </div>
 
   <script src="./hotspot%20map%20V.2/xlsx.full.min.js"></script>
-  <script src="./app.js?v=20260907g" type="module"></script>
+  <script src="./app.js?v=20260917bps" type="module"></script>
   <script type="module">
     // === MAPLIBRE GL JS: 2 MODE (2D & SATELIT) ===
     import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.7.0/dist/maplibre-gl.mjs';

@@ -5518,6 +5518,92 @@ const demographyInfoPanel = document.getElementById("demography-info-panel");
 const demoInfoCloseEl = document.getElementById("demo-info-close");
 const demoProvinceEl = document.getElementById("demo-province-select");
 
+const bpsIndicatorPresetEl = document.getElementById("bps-indicator-preset");
+const bpsDiscoveryKeywordEl = document.getElementById("bps-discovery-keyword");
+const bpsDiscoveryBtnEl = document.getElementById("bps-discovery-btn");
+const bpsDiscoveryStatusEl = document.getElementById("bps-discovery-status");
+const bpsDiscoveryResultsEl = document.getElementById("bps-discovery-results");
+
+function renderBpsDiscoveryResults(items = [], keyword = "") {
+  if (!bpsDiscoveryResultsEl) return;
+  if (!items.length) {
+    bpsDiscoveryResultsEl.innerHTML = `<div class="kec-empty">Tidak ada variable yang cocok untuk <strong>${escapeHtml(keyword)}</strong>.</div>`;
+    return;
+  }
+  bpsDiscoveryResultsEl.innerHTML = items.map((item) => {
+    const checks = item.verification || {};
+    const statusLabel = item.status === "verified" ? "Candidate cocok" : "Perlu validasi";
+    const statusClass = item.status === "verified" ? "bps-status-ok" : "bps-status-candidate";
+    return `<article class="bps-result-card">
+      <div class="bps-result-title">${escapeHtml(item.title || "Variable tanpa judul")}</div>
+      <div class="bps-result-meta">
+        <span>Variable ID: <strong>${escapeHtml(String(item.variable_id ?? "-"))}</strong></span>
+        <span>Unit: <strong>${escapeHtml(item.unit || "-")}</strong></span>
+        <span class="${statusClass}">${escapeHtml(statusLabel)}</span>
+      </div>
+      <div class="bps-result-submeta">Subject: ${escapeHtml(item.subject || "-")} · Metadata: ${checks.metadata_complete ? "lengkap" : "belum lengkap"}</div>
+      ${item.definition ? `<div class="bps-result-definition">${escapeHtml(item.definition)}</div>` : ""}
+      <button type="button" class="kec-action-btn bps-period-btn" data-bps-variable="${escapeAttribute(String(item.variable_id ?? ""))}">Cek periode</button>
+      <div class="bps-period-result" data-bps-period-result="${escapeAttribute(String(item.variable_id ?? ""))}"></div>
+    </article>`;
+  }).join("");
+
+  bpsDiscoveryResultsEl.querySelectorAll(".bps-period-btn").forEach((button) => {
+    button.addEventListener("click", () => loadBpsPeriods(button.dataset.bpsVariable, button));
+  });
+}
+
+async function loadBpsPeriods(variableId, button) {
+  const target = bpsDiscoveryResultsEl?.querySelector(`[data-bps-period-result="${CSS.escape(variableId)}"]`);
+  if (!target) return;
+  button.disabled = true;
+  target.textContent = "Memuat periode...";
+  try {
+    const response = await fetch(`${API_BASE}/api/bps/periods?variable=${encodeURIComponent(variableId)}`);
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+    const periods = Array.isArray(payload.data) ? payload.data : [];
+    target.textContent = periods.length ? `Periode tersedia: ${periods.map((p) => p.th || p.year || p.label || "-").join(", ")}` : "Tidak ada periode tersedia.";
+  } catch (error) {
+    target.textContent = `Gagal memuat periode: ${error.message}`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function discoverBpsIndicator() {
+  const keyword = String(bpsDiscoveryKeywordEl?.value || bpsIndicatorPresetEl?.value || "").trim();
+  if (!keyword) {
+    if (bpsDiscoveryStatusEl) bpsDiscoveryStatusEl.textContent = "Isi keyword";
+    return;
+  }
+  if (bpsDiscoveryStatusEl) bpsDiscoveryStatusEl.textContent = "Memuat...";
+  if (bpsDiscoveryBtnEl) bpsDiscoveryBtnEl.disabled = true;
+  if (bpsDiscoveryResultsEl) bpsDiscoveryResultsEl.innerHTML = `<div class="kec-empty">Mencari variable BPS untuk <strong>${escapeHtml(keyword)}</strong>...</div>`;
+  try {
+    const response = await fetch(`${API_BASE}/api/bps/discovery?keyword=${encodeURIComponent(keyword)}&maxPages=5`);
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+    renderBpsDiscoveryResults(payload.data || [], keyword);
+    if (bpsDiscoveryStatusEl) bpsDiscoveryStatusEl.textContent = `${payload.data?.length || 0} hasil`;
+  } catch (error) {
+    if (bpsDiscoveryStatusEl) bpsDiscoveryStatusEl.textContent = "Error";
+    if (bpsDiscoveryResultsEl) bpsDiscoveryResultsEl.innerHTML = `<div class="kec-empty bps-error">Gagal discovery BPS: ${escapeHtml(error.message)}</div>`;
+  } finally {
+    if (bpsDiscoveryBtnEl) bpsDiscoveryBtnEl.disabled = false;
+  }
+}
+
+if (bpsIndicatorPresetEl && bpsDiscoveryKeywordEl) {
+  bpsIndicatorPresetEl.addEventListener("change", () => {
+    if (bpsIndicatorPresetEl.value) bpsDiscoveryKeywordEl.value = bpsIndicatorPresetEl.value;
+  });
+}
+if (bpsDiscoveryBtnEl) bpsDiscoveryBtnEl.addEventListener("click", discoverBpsIndicator);
+if (bpsDiscoveryKeywordEl) bpsDiscoveryKeywordEl.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") discoverBpsIndicator();
+});
+
 function getDemographyColor(u0) {
   // Blue: <1000, Orange: 1001-2000, Red: >2000
   if (u0 < 1000) return "#3b82f6";
