@@ -2370,6 +2370,7 @@ a {
 .bps-result-meta strong { color: #f8fafc; }
 .bps-status-ok { color: #4ade80; font-weight: 700; }
 .bps-status-candidate { color: #fbbf24; font-weight: 700; }
+.bps-status-static { color: #a78bfa; font-weight: 700; }
 .bps-result-definition { margin-top: 6px; color: #cbd5e1; font-size: 9px; line-height: 1.4; }
 .bps-period-btn { margin-top: 7px; padding: 4px 7px; font-size: 9px; }
 .bps-period-result { margin-top: 5px; color: #38bdf8; font-size: 9px; line-height: 1.35; }

@@ -5553,6 +5553,23 @@ function renderBpsDiscoveryResults(items = [], keyword = "") {
   });
 }
 
+function renderBpsStaticTableResults(items = [], keyword = "") {
+  if (!bpsDiscoveryResultsEl) return;
+  if (!items.length) {
+    bpsDiscoveryResultsEl.innerHTML = `<div class="kec-empty">Tidak ada variable dynamic atau tabel statis BPS yang cocok untuk <strong>${escapeHtml(keyword)}</strong>.</div>`;
+    return;
+  }
+  bpsDiscoveryResultsEl.innerHTML = items.map((item) => `<article class="bps-result-card">
+    <div class="bps-result-title">${escapeHtml(item.title || "Tabel tanpa judul")}</div>
+    <div class="bps-result-meta">
+      <span>Table ID: <strong>${escapeHtml(String(item.table_id ?? "-"))}</strong></span>
+      <span class="bps-status-static">Static Table</span>
+    </div>
+    <div class="bps-result-submeta">Subject: ${escapeHtml(item.subject || "-")} · Update: ${escapeHtml(item.update_date || "-")}</div>
+    <div class="bps-result-definition">Data tabel perlu dibuka dan divalidasi lagi untuk periode serta geographic level sebelum digunakan sebagai SES.</div>
+  </article>`).join("");
+}
+
 async function loadBpsPeriods(variableId, button) {
   const target = bpsDiscoveryResultsEl?.querySelector(`[data-bps-period-result="${CSS.escape(variableId)}"]`);
   if (!target) return;
@@ -5584,8 +5601,18 @@ async function discoverBpsIndicator() {
     const response = await fetch(`${API_BASE}/api/bps/discovery?keyword=${encodeURIComponent(keyword)}&maxPages=5`);
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
-    renderBpsDiscoveryResults(payload.data || [], keyword);
-    if (bpsDiscoveryStatusEl) bpsDiscoveryStatusEl.textContent = `${payload.data?.length || 0} hasil`;
+    const dynamicItems = Array.isArray(payload.data) ? payload.data : [];
+    if (dynamicItems.length) {
+      renderBpsDiscoveryResults(dynamicItems, keyword);
+      if (bpsDiscoveryStatusEl) bpsDiscoveryStatusEl.textContent = `${dynamicItems.length} variable`;
+    } else {
+      const tableResponse = await fetch(`${API_BASE}/api/bps/tables/search?keyword=${encodeURIComponent(keyword)}`);
+      const tablePayload = await tableResponse.json();
+      if (!tableResponse.ok) throw new Error(tablePayload.error || `HTTP ${tableResponse.status}`);
+      const tables = Array.isArray(tablePayload.data) ? tablePayload.data : [];
+      renderBpsStaticTableResults(tables, keyword);
+      if (bpsDiscoveryStatusEl) bpsDiscoveryStatusEl.textContent = `${tables.length} tabel`;
+    }
   } catch (error) {
     if (bpsDiscoveryStatusEl) bpsDiscoveryStatusEl.textContent = "Error";
     if (bpsDiscoveryResultsEl) bpsDiscoveryResultsEl.innerHTML = `<div class="kec-empty bps-error">Gagal discovery BPS: ${escapeHtml(error.message)}</div>`;
