@@ -30,6 +30,7 @@ const {
   indicators: BPS_INDICATORS,
   discoverVariables,
 } = require("./services/bps");
+const { readPageInfo } = require("./services/bps/bps-client");
 const TINYFISH_RESEARCH_TIMEOUT_MS = Number(process.env.TINYFISH_RESEARCH_TIMEOUT_MS || 900000);
 // Research API is a gated beta. Search + Fetch is the default flow unless
 // access is explicitly enabled for this account.
@@ -7053,8 +7054,27 @@ async function handleBpsStaticTableSearch(req, res, url) {
     return;
   }
   try {
-    const payload = await bpsClient.searchStaticTables({ domain, keyword, year });
-    sendJson(res, 200, { data: payload.data?.[1] || [], metadata: { keyword, domain, year: year || null, source: "BPS" } });
+    const firstPayload = await bpsClient.searchStaticTables({ domain, keyword, year, page: 1 });
+    const firstRows = Array.isArray(firstPayload.data?.[1]) ? firstPayload.data[1] : [];
+    const pageInfo = readPageInfo(firstPayload);
+    const rows = [...firstRows];
+    const maxPages = Math.min(pageInfo.pages || 1, 20);
+    for (let page = 2; page <= maxPages; page += 1) {
+      const pagePayload = await bpsClient.searchStaticTables({ domain, keyword, year, page });
+      if (Array.isArray(pagePayload.data?.[1])) rows.push(...pagePayload.data[1]);
+    }
+    const normalized = Array.from(new Map(rows.map((item) => [String(item.table_id ?? item.id ?? item.tableId), {
+      table_id: item.table_id ?? item.id ?? item.tableId ?? null,
+      title: item.title ?? item.name ?? "",
+      subject_id: item.subj_id ?? item.subject_id ?? null,
+      subject: item.subj ?? item.subject ?? "",
+      update_date: item.updt_date ?? item.update_date ?? item.updated_at ?? null,
+      size: item.size ?? null,
+      source: "BPS",
+      source_url: "https://webapi.bps.go.id/documentation/",
+    }])).values()).filter((item) => item.table_id != null);
+    normalized.sort((a, b) => String(b.update_date || "").localeCompare(String(a.update_date || "")));
+    sendJson(res, 200, { data: normalized, metadata: { keyword, domain, year: year || null, pages: maxPages, count: normalized.length, source: "BPS" } });
   } catch (error) {
     console.error("BPS STATIC TABLE ERROR:", error.message);
     sendJson(res, getBpsErrorStatus(error), { error: error.message, code: error.code || "BPS_STATIC_TABLE_ERROR" });
