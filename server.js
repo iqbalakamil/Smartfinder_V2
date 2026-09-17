@@ -693,8 +693,9 @@ function buildOverpassQuery(lat, lon, radius, options = {}) {
   const namedObjectsQuery = focusedResidential
     ? ""
     : `nwr(around:${radius},${lat},${lon})[name];`;
+  const overpassTimeoutSeconds = focusedResidential ? 50 : 25;
   return `
-    [out:json][timeout:25];
+    [out:json][timeout:${overpassTimeoutSeconds}];
     (
       node(around:${radius},${lat},${lon})[amenity];
       way(around:${radius},${lat},${lon})[amenity];
@@ -6529,7 +6530,7 @@ async function handlePois(req, res) {
       ),
       withTimeout(
         fetchOverpassPois(lat, lon, radius, { focusedResidential: useOpenStreetMap }),
-        20000,
+        useOpenStreetMap ? 60000 : 20000,
         "Overpass radius POI"
       ),
     ]);
@@ -6603,6 +6604,7 @@ async function handlePois(req, res) {
         fallbackUsed,
         degradedSources: {
           googleHousingTimedOut: !useOpenStreetMap && googleHousingPipelineResult.status === "rejected",
+          openStreetMapTimedOut: useOpenStreetMap && overpassPipelineResult.status === "rejected",
           externalResearchTimedOut: false,
         },
       },
