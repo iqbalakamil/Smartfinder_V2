@@ -688,7 +688,11 @@ function scoreResearchSource(source, locationContext = {}) {
   return score;
 }
 
-function buildOverpassQuery(lat, lon, radius) {
+function buildOverpassQuery(lat, lon, radius, options = {}) {
+  const focusedResidential = Boolean(options.focusedResidential);
+  const namedObjectsQuery = focusedResidential
+    ? ""
+    : `nwr(around:${radius},${lat},${lon})[name];`;
   return `
     [out:json][timeout:25];
     (
@@ -704,7 +708,7 @@ function buildOverpassQuery(lat, lon, radius) {
       nwr(around:${radius},${lat},${lon})[landuse="residential"];
       nwr(around:${radius},${lat},${lon})[residential];
       nwr(around:${radius},${lat},${lon})[place~"suburb|quarter|neighbourhood"];
-      nwr(around:${radius},${lat},${lon})[name];
+      ${namedObjectsQuery}
     );
     out center tags;
   `;
@@ -1125,13 +1129,13 @@ function syncBackendHotmapPois(items = []) {
   };
 }
 
-async function fetchOverpassPois(lat, lon, radius) {
+async function fetchOverpassPois(lat, lon, radius, options = {}) {
   const response = await fetch("https://overpass-api.de/api/interpreter", {
     method: "POST",
     headers: {
       "Content-Type": "text/plain;charset=UTF-8",
     },
-    body: buildOverpassQuery(lat, lon, radius),
+    body: buildOverpassQuery(lat, lon, radius, options),
   });
 
   if (!response.ok) {
@@ -1154,6 +1158,10 @@ async function fetchOverpassPois(lat, lon, radius) {
       categoryLabel: classification.label,
       source: "overpass",
     };
+  }).filter((poi) => {
+    if (!options.focusedResidential || poi.category !== "residential") return true;
+    const text = [poi.name, poi.tags?.brand, poi.tags?.operator, poi.tags?.description, poi.tags?.building].filter(Boolean).join(" ");
+    return !/(^|\s)(kos|kost|kontrakan|boarding house|boarding)(\s|$)/i.test(text);
   });
 }
 
@@ -6474,6 +6482,8 @@ async function handlePois(req, res) {
     const lon = Number(requestContext.lon);
     const radius = 3000;
     const location = requestContext.location || {};
+    const sourceMode = requestContext.sourceMode === "openstreetmap" ? "openstreetmap" : "maps-crawler";
+    const useOpenStreetMap = sourceMode === "openstreetmap";
     console.log(`POI_REQUEST_START lat=${lat} lon=${lon} radius=3000`);
     const cacheKey = JSON.stringify({
       version: POI_CACHE_VERSION,
@@ -6484,6 +6494,7 @@ async function handlePois(req, res) {
       subdistrict: location.subdistrict || "",
       district: location.district || "",
       city: location.city || "",
+      sourceMode,
     });
 
     if (Number.isNaN(lat) || Number.isNaN(lon)) {
@@ -6497,7 +6508,7 @@ async function handlePois(req, res) {
       searchAreas: areaCoverage.length ? areaCoverage : [location],
       areaCoverage,
     };
-    const crawlPlan = buildBackendCrawlPlan(searchLocation.searchAreas, location);
+    const crawlPlan = useOpenStreetMap ? [] : buildBackendCrawlPlan(searchLocation.searchAreas, location);
     console.log(`POI_AREA_SCOPE kelurahan=${areaCoverage.length} queries=${crawlPlan.length}`);
 
     const cached = poiCache.get(cacheKey);
@@ -6507,7 +6518,7 @@ async function handlePois(req, res) {
     }
 
     const [googleHousingPipelineResult, overpassPipelineResult] = await Promise.allSettled([
-      withTimeout(
+      useOpenStreetMap ? Promise.resolve([]) : withTimeout(
         (async () => {
           const googleHousingPois = await fetchGoogleHousingPois(lat, lon, radius, searchLocation).catch(() => []);
           await enrichMissingGoogleMapsCoordinates(googleHousingPois, searchLocation).catch(() => {});
@@ -6517,7 +6528,7 @@ async function handlePois(req, res) {
         "Google housing pipeline"
       ),
       withTimeout(
-        fetchOverpassPois(lat, lon, radius),
+        fetchOverpassPois(lat, lon, radius, { focusedResidential: useOpenStreetMap }),
         20000,
         "Overpass radius POI"
       ),
@@ -6556,7 +6567,7 @@ async function handlePois(req, res) {
       items: dedupePois([...poisToReturn]),
       meta: {
         usedGooglePlaces: false,
-        usedGoogleMapsCrawler: true,
+        usedGoogleMapsCrawler: !useOpenStreetMap,
         googleMapsTotal: googleHousingPois.length,
         googleMapsWithCoords: googleHousingPoisWithCoords.length,
         googleMapsWithinRadius: googleHousingPoisInRadius.length,
@@ -6577,7 +6588,7 @@ async function handlePois(req, res) {
         hotmapV2InRadius: 0,
         hotmapV2ImportedAt: 0,
         backendHotmapTotal: backendHotmapMeta.total,
-        backendHotmapInRadius: googleHousingPoisInRadius.length,
+        backendHotmapInRadius: realPoisInSelectedKelurahan.length,
         backendHotmapImportedAt: backendHotmapMeta.importedAt,
         effectiveRadius: radius,
         areaCoverage,
@@ -6585,10 +6596,13 @@ async function handlePois(req, res) {
         crawlDebug,
         crawlScope: "all-radius-kelurahan-all-keywords",
         externalResearch: { summary: "", sources: [], metricHighlights: [] },
-        sourceMode: fallbackUsed ? "google-maps-crawl-fallback" : "google-maps-crawl-overpass",
+        sourceMode: useOpenStreetMap
+          ? (fallbackUsed ? "openstreetmap-fallback" : "openstreetmap")
+          : (fallbackUsed ? "google-maps-crawl-fallback" : "google-maps-crawl-overpass"),
+        sourceModeLabel: useOpenStreetMap ? "OpenStreetMap (Overpass)" : "Google Maps Crawler",
         fallbackUsed,
         degradedSources: {
-          googleHousingTimedOut: googleHousingPipelineResult.status === "rejected",
+          googleHousingTimedOut: !useOpenStreetMap && googleHousingPipelineResult.status === "rejected",
           externalResearchTimedOut: false,
         },
       },
@@ -6604,7 +6618,7 @@ async function handlePois(req, res) {
       poiCache.delete(cacheKey);
     }
 
-    console.log(`POI_REQUEST_DONE ms=${Date.now() - requestStartedAt} google=${googleHousingPois.length} overpass=${overpassPoisInRadius.length} returned=${poisToReturn.length} fallback=${fallbackUsed}`);
+    console.log(`POI_REQUEST_DONE source=${sourceMode} ms=${Date.now() - requestStartedAt} google=${googleHousingPois.length} overpass=${overpassPoisInRadius.length} returned=${poisToReturn.length} fallback=${fallbackUsed}`);
     sendJson(res, 200, payload);
   } catch (error) {
     console.error(`POI_REQUEST_ERROR ms=${Date.now() - requestStartedAt} message=${error.message || error}`);

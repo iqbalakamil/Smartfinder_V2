@@ -54,6 +54,7 @@ const downloadPdfBtn = document.getElementById("download-pdf");
 const downloadPoiXlsBtn = document.getElementById("download-poi-xls");
 const cancelProcessBtn = document.getElementById("cancel-process");
 const coordinatesInput = document.getElementById("coordinates");
+const poiSourceInput = document.getElementById("poi-source");
 const activityLogEl = document.getElementById("activity-log");
 const mapLoadingEl = document.getElementById("map-loading");
 const analysisLoadingEl = document.getElementById("analysis-loading");
@@ -1080,12 +1081,12 @@ async function reverseGeocode(lat, lon, signal) {
   return response.json();
 }
 
-async function fetchPois(lat, lon, radius, location = {}, signal) {
+async function fetchPois(lat, lon, radius, location = {}, signal, sourceMode = "maps-crawler") {
   try {
     const response = await fetch(`${API_BASE}/api/pois`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lat, lon, radius, location }),
+      body: JSON.stringify({ lat, lon, radius, location, sourceMode }),
       signal,
     });
 
@@ -1771,8 +1772,10 @@ function renderPoiEvidencePanel(supporting = [], risks = [], meta = {}) {
 
   const sourceLabel = ["google-maps-crawl", "google-maps-crawl-only"].includes(meta?.sourceMode)
     ? "Google Maps asli"
-    : meta?.sourceMode === "google-maps-crawl-fallback"
+    : ["google-maps-crawl-fallback", "openstreetmap-fallback"].includes(meta?.sourceMode)
       ? "Crawl sementara"
+      : meta?.sourceMode === "openstreetmap"
+        ? "OpenStreetMap / Overpass"
       : "Sumber POI aktif";
   const sourceCount = Array.isArray(meta?.crawlPlan) ? meta.crawlPlan.length : 0;
   const sourcePill = poiEvidencePanelEl.querySelector(".pill-muted");
@@ -4078,10 +4081,12 @@ async function analyzeLocation(lat, lon, radius) {
     advanceResearchWorkflow(3);
     setStatus(`Titik koordinat berada di Kecamatan ${districtName}, ${cityName}.`);
     await sleep(1200);
-    setStatus("Menjalankan Google Maps crawler dari backend...");
+    const sourceMode = poiSourceInput?.value || "maps-crawler";
+    const sourceModeLabel = sourceMode === "openstreetmap" ? "OpenStreetMap / Overpass" : "Google Maps crawler";
+    setStatus(`Menjalankan pencarian POI dari ${sourceModeLabel}...`);
     advanceResearchWorkflow(4);
 
-    const poiPayload = await fetchPois(lat, lon, radius, locationContext, controller.signal);
+    const poiPayload = await fetchPois(lat, lon, radius, locationContext, controller.signal, sourceMode);
     const pois = Array.isArray(poiPayload?.items) ? poiPayload.items : [];
     advanceResearchWorkflow(5);
     latestPoiMeta = poiPayload?.meta || {};
@@ -4192,12 +4197,12 @@ async function analyzeLocation(lat, lon, radius) {
       syncShortlistNotification();
     }
     appendActivityLog("Shortlist website ruko per kecamatan/kota berhasil dibuat.", "success");
-    analysisStatusBanner.textContent = "Data crawl Google Maps sudah siap. Analisa area Dukcapil sedang dijalankan otomatis.";
+    analysisStatusBanner.textContent = `Data POI ${poiPayload.meta?.sourceModeLabel || "terpilih"} sudah siap. Analisa area Dukcapil sedang dijalankan otomatis.`;
     renderAnalysisDropdown(
       "Hasil crawl siap",
-      "<p>Hasil crawl Google Maps siap dipakai. Analisa area Dukcapil akan segera menampilkan tabel perhitungan.</p>",
+      `<p>Hasil POI dari ${escapeHtml(poiPayload.meta?.sourceModeLabel || "sumber terpilih")} siap dipakai. Analisa area Dukcapil akan segera menampilkan tabel perhitungan.</p>`,
     );
-    appendActivityLog("Data crawl Google Maps selesai disiapkan. Tombol analisa area sekarang aktif.", "success");
+    appendActivityLog(`Data POI ${poiPayload.meta?.sourceModeLabel || "terpilih"} sudah siap. Tombol analisa area sekarang aktif.`, "success");
     setStatus("Crawl lokasi selesai. Analisa area Dukcapil sedang diproses.");
     syncActionButtons();
   } catch (error) {

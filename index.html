@@ -126,6 +126,15 @@
               </label>
             </div>
 
+            <label>
+              Sumber pencarian POI
+              <select id="poi-source" name="poi-source" class="demo-province-select">
+                <option value="maps-crawler">Google Maps Crawler</option>
+                <option value="openstreetmap">OpenStreetMap (Overpass) — hunian lebih terarah</option>
+              </select>
+              <small style="display:block; margin-top:5px; color:var(--muted);">OpenStreetMap memakai tag peta seperti perumahan/apartemen dan menyaring indikasi kost/kontrakan.</small>
+            </label>
+
             <div class="button-row">
               <button type="submit" class="button button-primary">🔍 Analisa Studi Kelayakan</button>
               <button type="button" id="use-my-location" class="button button-secondary">📍 Lokasi Saya</button>
