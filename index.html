@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://tile.openstreetmap.org">
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.7.0/dist/maplibre-gl.css">
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-  <link rel="stylesheet" href="./styles.css?v=20260907c">
+  <link rel="stylesheet" href="./styles.css?v=20260918sesgrid9">
 </head>
 <body>
   <div class="page-shell">
@@ -99,6 +99,14 @@
         <section class="panel control-panel">
           <form id="search-form" class="search-form">
             <label>
+              Cari alamat dengan ArcGIS
+              <div class="coord-input-row">
+                <input id="address-search" name="address-search" type="text" placeholder="Contoh: Jalan Sudirman, Jakarta">
+                <button type="button" id="arcgis-geocode-btn" class="button button-check">Cari</button>
+              </div>
+              <small id="arcgis-geocode-status" style="display:block;margin-top:5px;color:var(--muted);">Opsional — hasil terbaik akan mengisi koordinat.</small>
+            </label>
+            <label>
               Koordinat lokasi
               <div class="coord-input-row">
                 <input id="coordinates" name="coordinates" type="text" required value="" placeholder="-6.171, 106.683">
@@ -131,8 +139,9 @@
               <select id="poi-source" name="poi-source" class="demo-province-select">
                 <option value="maps-crawler">Google Maps Crawler</option>
                 <option value="openstreetmap">OpenStreetMap (Overpass) — hunian lebih terarah</option>
+                <option value="arcgis-places">ArcGIS Places</option>
               </select>
-              <small style="display:block; margin-top:5px; color:var(--muted);">OpenStreetMap memakai tag peta seperti perumahan/apartemen dan menyaring indikasi kost/kontrakan.</small>
+              <small style="display:block; margin-top:5px; color:var(--muted);">ArcGIS Places membutuhkan privilege Places dan dapat dikenai biaya per request; OpenStreetMap memakai Overpass tanpa API berbayar.</small>
             </label>
 
             <div class="button-row">
@@ -234,14 +243,12 @@
         </div>
         <div id="demography-controls" class="demography-inline-controls">
           <div class="heatmap-header">
-            <h3>👶 Peta Demografi Usia Dini</h3>
+            <div>
+              <h3>👶 Peta Demografi Usia Dini</h3>
+              <p class="cgis-control-caption">1. Tentukan wilayah dari provinsi sampai kelurahan terlebih dahulu.</p>
+            </div>
             <span class="pill pill-accent" id="demography-status">Nonaktif</span>
           </div>
-          <label class="heatmap-toggle">
-            <input type="checkbox" id="demography-toggle">
-            <span class="heatmap-color" style="background: linear-gradient(90deg, #3b82f6, #f97316, #ef4444);"></span>
-            <span>Aktifkan Polygon</span>
-          </label>
           <div class="demo-level-row">
             <label class="demo-province-label">Level:</label>
             <select id="demo-level-select" class="demo-province-select" style="flex:0 0 auto;width:auto;">
@@ -252,6 +259,7 @@
           <div id="loaded-provinces" class="loaded-provinces"></div>
           <div class="demo-province-row">
             <select id="demo-province-select" class="demo-province-select">
+              <option value="JABODETABEK">Jabodetabek (data kelurahan)</option>
               <option value="">— Pilih provinsi —</option>
               <option value="ACEH">Aceh</option>
               <option value="SUMATERA UTARA">Sumatera Utara</option>
@@ -301,11 +309,77 @@
               <div class="kec-empty">Pilih kota terlebih dahulu</div>
             </div>
           </div>
+          <div id="ses-layer-panel" class="ses-layer-panel hidden">
+            <div class="ses-layer-panel-header">
+              <div>
+                <strong>2. Pilihan tampilan wilayah</strong>
+                <small>Hasil mengikuti filter wilayah yang dicentang.</small>
+              </div>
+              <span class="pill pill-accent">Siap ditampilkan</span>
+            </div>
+            <div class="cgis-layer-toggles" aria-label="Pilihan hasil wilayah">
+              <label class="cgis-layer-toggle">
+                <input type="checkbox" id="demography-toggle">
+                <span class="cgis-layer-swatch cgis-boundary-swatch"></span>
+                <span class="cgis-layer-copy">
+                  <strong>Data Polygon Wilayah</strong>
+                  <small>Kelurahan/kecamatan terpilih</small>
+                </span>
+              </label>
+              <label class="cgis-layer-toggle">
+                <input type="checkbox" id="ses-grid-toggle" disabled>
+                <span class="cgis-layer-swatch cgis-grid-swatch"></span>
+                <span class="cgis-layer-copy">
+                  <strong>Grid SES</strong>
+                  <small>Sel hexagon 3 km</small>
+                </span>
+              </label>
+            </div>
+            <div class="cgis-actions">
+            <div class="cgis-action-row">
+              <button type="button" id="arcgis-ses-btn" class="kec-action-btn kec-add-btn">Ambil Profil SES ArcGIS</button>
+              <span class="pill pill-muted" id="arcgis-ses-status">Belum dimuat</span>
+            </div>
+          </div>
+          <div class="cgis-grid-status-row">
+            <span class="pill pill-muted" id="ses-grid-status">Belum dibuat</span>
+            <span class="cgis-grid-size-badge">Sel 3 KM · mengikuti extent wilayah</span>
+          </div>
+          <div id="ses-proxy-note" class="ses-proxy-note">
+              Klik Data Polygon Wilayah untuk melihat batas sumber. Klik Grid SES untuk menampilkan hexagon 3 km yang mengikuti seluruh extent polygon Dukcapil terpilih.
+            </div>
+            <div id="ses-proxy-legend" class="ses-proxy-legend hidden" aria-label="Legenda SES Proxy">
+              <div><span class="ses-legend-swatch ses-class-a"></span>A · relatif lebih tinggi</div>
+              <div><span class="ses-legend-swatch ses-class-b"></span>B · relatif menengah</div>
+              <div><span class="ses-legend-swatch ses-class-c"></span>C · relatif lebih rendah</div>
+            </div>
+          </div>
           <div id="demography-summary" class="foot-traffic-summary">
             <div class="ft-stat"><span>Kecamatan</span><strong id="demo-count">0</strong></div>
             <div class="ft-stat"><span>Total Anak</span><strong id="demo-kids">-</strong></div>
             <div class="ft-stat"><span>Sumber</span><strong id="demo-source" style="font-size:10px;">Dukcapil</strong></div>
           </div>
+
+          <section class="cgis-external-layers" aria-labelledby="bhumi-layers-title">
+            <div class="heatmap-header">
+              <div>
+                <h3 id="bhumi-layers-title">🗺️ Layer Nilai Tanah BHUMI</h3>
+                <p class="cgis-control-caption">Aktifkan layer untuk menampilkan data spasial ATR/BPN pada peta.</p>
+              </div>
+              <span class="pill pill-muted" id="bhumi-layer-status">Siap</span>
+            </div>
+            <div class="cgis-layer-toggles" aria-label="Layer nilai tanah BHUMI">
+              <label class="cgis-layer-toggle">
+                <input type="checkbox" id="bhumi-all-toggle">
+                <span class="cgis-layer-swatch" style="background:linear-gradient(90deg,#f59e0b,#22c55e,#ef4444);"></span>
+                <span class="cgis-layer-copy">
+                  <strong>Nilai Tanah</strong>
+                  <small>Zona, penggunaan, dan nilai bidang tanah</small>
+                </span>
+              </label>
+              <button type="button" id="bhumi-hide-btn" class="kec-action-btn">Sembunyikan</button>
+            </div>
+          </section>
 
           <section class="bps-explorer" aria-labelledby="bps-explorer-title">
             <div class="heatmap-header">
@@ -542,6 +616,10 @@
             </div>
           </div>
           <div id="map" aria-label="Peta lokasi"></div>
+          <div id="map-center-info" class="map-center-info hidden" role="dialog" aria-live="polite">
+            <button type="button" class="map-center-info-close" aria-label="Tutup informasi">&times;</button>
+            <div id="map-center-info-content"></div>
+          </div>
         </section>
 
         <!-- HIDDEN BACKEND ELEMENTS CONTAINER (Keeps JS running smoothly) -->
@@ -664,7 +742,7 @@
   </div>
 
   <script src="./hotspot%20map%20V.2/xlsx.full.min.js"></script>
-  <script src="./app.js?v=20260917bps" type="module"></script>
+  <script src="./app.js?v=20260918sesgrid9" type="module"></script>
   <script type="module">
     // === MAPLIBRE GL JS: 2 MODE (2D & SATELIT) ===
     import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.7.0/dist/maplibre-gl.mjs';
@@ -703,18 +781,26 @@
     // Style 2D: OpenFreeMap Dark Vector Style (100% Gratis, Tanpa API Key)
     const style2D = 'https://tiles.openfreemap.org/styles/dark';
 
-    // Style Satelit: EOX Sentinel-2 Cloudless (gratis, tanpa API key)
+    // Style Satelit: Esri World Imagery (resolusi lebih tinggi daripada Sentinel-2)
     const styleSat = {
       version: 8,
       sources: {
         satellite: {
           type: 'raster',
           tiles: [
-            'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2020_3857/default/g/{z}/{y}/{x}.jpg',
+            'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
           ],
           tileSize: 256,
-          attribution: '&copy; EOX / Sentinel-2 Cloudless',
-          maxzoom: 18,
+          attribution: '&copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+          maxzoom: 19,
+        },
+        satelliteLabels: {
+          type: 'raster',
+          tiles: [
+            'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+          ],
+          tileSize: 256,
+          maxzoom: 19,
         },
       },
       layers: [
@@ -722,6 +808,18 @@
           id: 'satellite-tiles',
           type: 'raster',
           source: 'satellite',
+          paint: {
+            'raster-resampling': 'linear',
+            'raster-fade-duration': 0,
+          },
+        },
+        {
+          id: 'satellite-labels',
+          type: 'raster',
+          source: 'satelliteLabels',
+          paint: {
+            'raster-fade-duration': 0,
+          },
         },
       ],
     };
@@ -799,6 +897,166 @@
       addRadiusCircle(lon, lat, radiusKm);
     }
 
+    const BHUMI_WMS_BASE = 'https://bhumi.atrbpn.go.id/expapi/bhumigeos/umum/wms';
+    const BHUMI_RASTER_LAYERS = {
+      'bhumi-znt': { layer: 'umum:ZNTRANGE', label: 'Zona Nilai Tanah', color: '#f59e0b' },
+      'bhumi-landuse': { layer: 'umum:PenggunaanTanah', label: 'Penggunaan Tanah', color: '#22c55e' },
+      'bhumi-landvalue': { layer: 'umum:nbt3', label: 'Peta Nilai Bidang Tanah', color: '#ef4444' },
+    };
+    const bhumiLayerState = Object.fromEntries(Object.keys(BHUMI_RASTER_LAYERS).map((id) => [id, false]));
+
+    function bhumiWmsTileUrl(layer) {
+      // Placeholder bbox harus tetap literal agar diganti MapLibre untuk setiap tile.
+      return `${BHUMI_WMS_BASE}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image%2Fpng&TRANSPARENT=true&LAYERS=${encodeURIComponent(layer)}&STYLES=&SRS=EPSG%3A3857&CRS=EPSG%3A3857&TILED=true&WIDTH=512&HEIGHT=512&BBOX={bbox-epsg-3857}`;
+    }
+
+    function syncBhumiLayers() {
+      const map = window.maplibreMap;
+      if (!map || !map.isStyleLoaded || !map.isStyleLoaded()) return;
+      Object.entries(BHUMI_RASTER_LAYERS).forEach(([id, config]) => {
+        const sourceId = `${id}-source`;
+        const layerId = `${id}-raster`;
+        if (!map.getSource(sourceId)) {
+          map.addSource(sourceId, { type: 'raster', tiles: [bhumiWmsTileUrl(config.layer)], tileSize: 256, attribution: '© ATR/BPN BHUMI' });
+        }
+        if (!map.getLayer(layerId)) {
+          map.addLayer({ id: layerId, type: 'raster', source: sourceId, paint: { 'raster-opacity': 0.62 }, layout: { visibility: bhumiLayerState[id] ? 'visible' : 'none' } });
+        } else {
+          map.setLayoutProperty(layerId, 'visibility', bhumiLayerState[id] ? 'visible' : 'none');
+        }
+      });
+    }
+
+    function setBhumiLayer(id, enabled) {
+      if (!BHUMI_RASTER_LAYERS[id]) return;
+      bhumiLayerState[id] = Boolean(enabled);
+      syncBhumiLayers();
+      const active = Object.values(bhumiLayerState).filter(Boolean).length;
+      const status = document.getElementById('bhumi-layer-status');
+      if (status) status.textContent = active ? `${active} layer aktif` : 'Siap';
+    }
+
+    function setAllBhumiLayers(enabled) {
+      Object.keys(BHUMI_RASTER_LAYERS).forEach((id) => { bhumiLayerState[id] = Boolean(enabled); });
+      syncBhumiLayers();
+      const toggle = document.getElementById('bhumi-all-toggle');
+      const status = document.getElementById('bhumi-layer-status');
+      if (toggle) toggle.checked = Boolean(enabled);
+      if (status) status.textContent = enabled ? '3 layer aktif' : 'Tersembunyi';
+    }
+
+    function setupBhumiLayerToggles() {
+      const toggle = document.getElementById('bhumi-all-toggle');
+      const hideButton = document.getElementById('bhumi-hide-btn');
+      if (toggle) toggle.addEventListener('change', () => setAllBhumiLayers(toggle.checked));
+      if (hideButton) hideButton.addEventListener('click', () => setAllBhumiLayers(false));
+      window.refreshBhumiLayers = syncBhumiLayers;
+    }
+
+    function escapeBhumiHtml(value) {
+      return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+    }
+
+    function showCenteredMapInfo(html) {
+      const panel = document.getElementById('map-center-info');
+      const content = document.getElementById('map-center-info-content');
+      if (!panel || !content) return;
+      content.innerHTML = html;
+      panel.classList.remove('hidden');
+    }
+
+    function hideCenteredMapInfo() {
+      document.getElementById('map-center-info')?.classList.add('hidden');
+    }
+
+    window.showCenteredMapInfo = showCenteredMapInfo;
+    window.hideCenteredMapInfo = hideCenteredMapInfo;
+    document.getElementById('map-center-info')?.querySelector('.map-center-info-close')?.addEventListener('click', hideCenteredMapInfo);
+
+    function bhumiResultProperties(result) {
+      const feature = result?.features?.[0] || result?.data?.features?.[0];
+      if (feature?.properties && typeof feature.properties === 'object') return feature.properties;
+      if (Array.isArray(result?.data)) return result.data[0] || null;
+      if (result?.data && typeof result.data === 'object') return result.data;
+      if (result && typeof result === 'object') return result;
+      return null;
+    }
+
+    const BHUMI_DISPLAY_FIELDS = {
+      'umum:ZNTRANGE': [
+        ['NAMAKANTOR', 'Nama Kantor'],
+        ['NOMORZONE', 'Nomor Zone'],
+        ['TAHUNDIBUAT', 'Tahun'],
+        ['RANGENILAI', 'Range Nilai'],
+        ['KELAS', 'Kelas'],
+      ],
+      'umum:PenggunaanTanah': [
+        ['NAMAOBJ', 'Nama Objek'],
+        ['LUAS', 'Luas'],
+        ['GUNATANAH', 'Guna Tanah'],
+      ],
+      'umum:nbt3': [
+        ['kecamatan', 'Kecamatan'],
+        ['kelurahan', 'Kelurahan'],
+        ['tipehak', 'Tipe Hak'],
+        ['zonasi', 'Zonasi'],
+        ['luasbidang', 'Luas Bidang'],
+      ],
+    };
+
+    function bhumiPropertyValue(properties, field) {
+      if (!properties || typeof properties !== 'object') return null;
+      const key = Object.keys(properties).find((candidate) => candidate.toLowerCase() === field.toLowerCase());
+      return key ? properties[key] : null;
+    }
+
+    function bhumiDisplayRows(layer, properties) {
+      return (BHUMI_DISPLAY_FIELDS[layer] || []).map(([field, label]) => ({
+        label,
+        value: bhumiPropertyValue(properties, field),
+      }));
+    }
+
+    async function identifyBhumiAtClick(event) {
+      const active = Object.entries(bhumiLayerState).filter(([, enabled]) => enabled);
+      if (!active.length || !window.maplibreMap) return;
+      const map = window.maplibreMap;
+      const bounds = map.getBounds();
+      const [sw, ne] = bounds.toArray();
+      const canvas = map.getCanvas();
+      const bbox = [sw[0], sw[1], ne[0], ne[1]].join(',');
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      const status = document.getElementById('bhumi-layer-status');
+      if (status) status.textContent = 'Mencari informasi...';
+      try {
+        const responses = await Promise.all(active.map(async ([id]) => {
+          const config = BHUMI_RASTER_LAYERS[id];
+          const response = await fetch('/api/bhumi-identify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              service_layer_name: config.layer,
+              query_layers: config.layer,
+              width, height, bbox,
+              x: Math.round(event.point.x), y: Math.round(event.point.y),
+            }),
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload.error || `BHUMI HTTP ${response.status}`);
+          const properties = bhumiResultProperties(payload.result);
+          return { label: config.label, layer: config.layer, properties, rows: bhumiDisplayRows(config.layer, properties) };
+        }));
+        const found = responses.filter((item) => item.properties && Object.keys(item.properties).length);
+        if (!found.length) throw new Error('Tidak ada objek BHUMI pada titik ini.');
+        const html = found.map((item) => `<div style="margin-bottom:10px;"><strong>${escapeBhumiHtml(item.label)}</strong>${item.rows.map((row) => `<div style="display:flex;justify-content:space-between;gap:12px;border-top:1px solid rgba(148,163,184,.18);padding:4px 0;"><span>${escapeBhumiHtml(row.label)}</span><b style="text-align:right;max-width:58%;">${escapeBhumiHtml(row.value == null || row.value === '' ? '-' : row.value)}</b></div>`).join('')}</div>`).join('');
+        showCenteredMapInfo(`<div style="font:12px/1.45 system-ui;max-height:320px;overflow:auto;">${html}</div>`);
+        if (status) status.textContent = `${found.length} informasi ditemukan`;
+      } catch (error) {
+        if (status) status.textContent = error.message;
+      }
+    }
+
     async function initMaplibreMap() {
       const mapContainer = document.getElementById('map');
 
@@ -826,6 +1084,7 @@
       });
 
       maplibreMap.on('load', () => {
+        syncBhumiLayers();
         // Set UI button ke mode 2D
         const btn2d = document.getElementById('map-mode-2d');
         const btnSat = document.getElementById('map-mode-sat');
@@ -840,15 +1099,23 @@
         document.querySelector('.map-panel')?.classList.remove('satellite-active');
       });
 
+      maplibreMap.on('style.load', () => syncBhumiLayers());
+
       // Event klik peta untuk POI interaction
       maplibreMap.on('click', (e) => {
         // Placeholder: bisa ditambahkan logic click handling
         console.log('Map click at:', e.lngLat.lng, e.lngLat.lat);
+        identifyBhumiAtClick(e);
       });
 
       // Error handling
       maplibreMap.on('error', (e) => {
         console.warn('MapLibre error:', e.error?.message || e);
+        const message = String(e.error?.message || '');
+        if (/bhumigs|ZNTRANGE|PenggunaanTanah|nbt3|wms/i.test(message)) {
+          const status = document.getElementById('bhumi-layer-status');
+          if (status) status.textContent = 'Endpoint BHUMI gagal diakses';
+        }
       });
     }
 
@@ -934,6 +1201,7 @@
 
     // Initialize Maplibre map when DOM ready
     document.addEventListener('DOMContentLoaded', () => {
+      setupBhumiLayerToggles();
       initMaplibreMap();
     });
 

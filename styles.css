@@ -1665,6 +1665,39 @@ a {
 .maplibregl-marker {
   pointer-events: auto !important;
 }
+
+/* Informasi peta tetap berada di tengah viewport tanpa menggeser peta. */
+.map-center-info {
+  position: absolute;
+  z-index: 30;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(390px, calc(100% - 32px));
+  max-height: min(72%, 520px);
+  overflow: auto;
+  padding: 16px 18px;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.96);
+  color: #e2e8f0;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(10px);
+}
+
+.map-center-info.hidden { display: none; }
+.map-center-info-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  border: 0;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 23px;
+  line-height: 1;
+  cursor: pointer;
+}
+.map-center-info-close:hover { color: #fff; }
 .demo-popup {
   font-family: system-ui, sans-serif;
   padding: 8px 10px;
@@ -2303,6 +2336,183 @@ a {
   margin-top: 14px;
 }
 
+.cgis-control-caption {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.cgis-layer-toggles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.cgis-layer-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.58);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, opacity 0.2s ease;
+}
+
+.cgis-layer-toggle:hover {
+  border-color: var(--accent);
+  background: rgba(197, 107, 45, 0.06);
+}
+
+.cgis-layer-toggle:has(input:checked) {
+  border-color: var(--accent);
+  background: rgba(197, 107, 45, 0.1);
+}
+
+.cgis-layer-toggle:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.cgis-layer-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: var(--primary-strong);
+  cursor: pointer;
+}
+
+.cgis-layer-toggle input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+}
+
+.cgis-layer-swatch {
+  width: 22px;
+  height: 12px;
+  flex: 0 0 auto;
+  border-radius: 3px;
+}
+
+.cgis-boundary-swatch {
+  background: rgba(59, 130, 246, 0.28);
+  border: 2px solid #3b82f6;
+}
+
+.cgis-grid-swatch {
+  background: linear-gradient(135deg, #10b981 25%, #f59e0b 25%, #f59e0b 50%, #10b981 50%, #10b981 75%, #f59e0b 75%);
+  background-size: 8px 8px;
+  border: 1px solid #047857;
+}
+
+.cgis-layer-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cgis-layer-copy strong {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.cgis-layer-copy small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cgis-actions {
+  display: grid;
+  gap: 7px;
+}
+
+.ses-layer-panel {
+  margin: 14px 0 10px;
+  padding: 12px;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(14, 116, 144, 0.08), rgba(15, 23, 42, 0.04));
+}
+
+.ses-layer-panel.hidden {
+  display: none;
+}
+
+.ses-layer-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.ses-layer-panel-header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.ses-layer-panel-header strong {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.ses-layer-panel-header small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.cgis-action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cgis-action-row .kec-action-btn {
+  flex: 1 1 auto;
+  min-height: 30px;
+}
+
+.cgis-action-row .pill {
+  flex: 0 0 auto;
+  max-width: 42%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cgis-grid-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.cgis-grid-size-badge {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 7px;
+  background: rgba(15, 23, 42, 0.08);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+@media (max-width: 520px) {
+  .cgis-layer-toggles {
+    grid-template-columns: 1fr;
+  }
+}
+
 .bps-explorer {
   margin-top: 14px;
   padding-top: 14px;
@@ -2631,6 +2841,62 @@ a {
   border-radius: 10px !important;
   transition: all 0.2s ease;
 }
+
+.ses-proxy-row {
+  align-items: center;
+}
+
+.ses-proxy-btn {
+  border-color: rgba(16, 185, 129, 0.55) !important;
+  color: #a7f3d0 !important;
+}
+
+.ses-proxy-btn:hover {
+  background: rgba(16, 185, 129, 0.16) !important;
+}
+
+.ses-grid-size-select {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 118px;
+}
+
+.ses-grid-btn {
+  border-color: rgba(56, 189, 248, 0.55) !important;
+  color: #bae6fd !important;
+}
+
+.ses-proxy-note {
+  margin: 8px 0 4px;
+  color: #94a3b8;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.ses-proxy-legend {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 4px;
+  color: #cbd5e1;
+  font-size: 10px;
+}
+
+.ses-proxy-legend.hidden {
+  display: none;
+}
+
+.ses-legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 10px;
+  margin-right: 5px;
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+
+.ses-class-a { background: #10b981; }
+.ses-class-b { background: #f59e0b; }
+.ses-class-c { background: #ef4444; }
 
 .search-form input:focus,
 .search-form select:focus,

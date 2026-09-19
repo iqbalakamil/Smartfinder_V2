@@ -1,6 +1,7 @@
-require("dotenv").config();
+require("dotenv").config({ quiet: true });
 const http = require("http");
 const https = require("https");
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { execFile, execFileSync } = require("child_process");
@@ -31,6 +32,11 @@ const {
   discoverVariables,
 } = require("./services/bps");
 const { readPageInfo } = require("./services/bps/bps-client");
+const {
+  calculateSesPolygons,
+  calculateSesHexagonGrid,
+  publicConfig: getSesConfig,
+} = require("./services/ses");
 const TINYFISH_RESEARCH_TIMEOUT_MS = Number(process.env.TINYFISH_RESEARCH_TIMEOUT_MS || 900000);
 // Research API is a gated beta. Search + Fetch is the default flow unless
 // access is explicitly enabled for this account.
@@ -96,12 +102,22 @@ const DUKCAPIL_DEMOGRAPHY_SERVICE = process.env.DUKCAPIL_DEMOGRAPHY_SERVICE || "
 const DUKCAPIL_DEMOGRAPHY_LAYER_ID = Number(process.env.DUKCAPIL_DEMOGRAPHY_LAYER_ID || 2);
 const DUKCAPIL_KELURAHAN_SERVICE = process.env.DUKCAPIL_KELURAHAN_SERVICE || "AGR_VISUAL_KEL_FIX";
 const DUKCAPIL_KELURAHAN_LAYER_ID = Number(process.env.DUKCAPIL_KELURAHAN_LAYER_ID || 0);
+// The public Dukcapil map currently exposes the complete demographic schema
+// through MapServer. Keep the type configurable and retain FeatureServer as a
+// fallback for older deployments/configurations.
+const DUKCAPIL_DEMOGRAPHY_SERVICE_TYPE = process.env.DUKCAPIL_DEMOGRAPHY_SERVICE_TYPE || "MapServer";
+const DUKCAPIL_KELURAHAN_SERVICE_TYPE = process.env.DUKCAPIL_KELURAHAN_SERVICE_TYPE || "MapServer";
 const WORLDPOP_API_URL = normalizeOptionalUrl(process.env.WORLDPOP_API_URL) || "https://api.worldpop.org/v1";
 const ENABLE_WORLDPOP_FALLBACK = String(process.env.ENABLE_WORLDPOP_FALLBACK || "true").toLowerCase() === "true";
 const WORLDPOP_REQUEST_TIMEOUT_MS = Number(process.env.WORLDPOP_REQUEST_TIMEOUT_MS || 15000);
 const WORLDPOP_POLL_ATTEMPTS = Number(process.env.WORLDPOP_POLL_ATTEMPTS || 5);
 const WORLDPOP_POLL_DELAY_MS = Number(process.env.WORLDPOP_POLL_DELAY_MS || 1200);
 const DUKCAPIL_REQUEST_TIMEOUT_MS = Number(process.env.DUKCAPIL_REQUEST_TIMEOUT_MS || 60000);
+const ARCGIS_API_KEY = String(process.env.ARCGIS_API_KEY || "").trim();
+const BHUMI_TOKEN = String(process.env.BHUMI_TOKEN || "").trim();
+let bhumiTokenCache = BHUMI_TOKEN;
+const ARCGIS_GEOENRICH_URL = "https://geoenrich.arcgis.com/arcgis/rest/services/World/GeoEnrichmentServer/Geoenrichment/Enrich";
+const ARCGIS_GEOCODE_URL = "https://geocode-api.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates";
 const DEFAULT_CAPACITY_PER_UNIT = Number(process.env.DEFAULT_CAPACITY_PER_UNIT || 40);
 const DEFAULT_UTILIZATION_RATE = Number(process.env.DEFAULT_UTILIZATION_RATE || 0.7);
 const MONTHLY_COST_ESTIMATE = parseOptionalNumber(process.env.MONTHLY_COST_ESTIMATE);
@@ -348,6 +364,78 @@ function parseBody(req) {
     });
     req.on("error", reject);
   });
+}
+
+function decryptBhumiPayload(encrypted) {
+  const raw = Buffer.from(String(encrypted || ""), "base64");
+  if (raw.subarray(0, 8).toString("utf8") !== "Salted__") {
+    throw new Error("Format respons terenkripsi BHUMI tidak dikenali.");
+  }
+  const salt = raw.subarray(8, 16);
+  const password = Buffer.from("s3CRetCR1pT0", "utf8");
+  let previous = Buffer.alloc(0);
+  let derived = Buffer.alloc(0);
+  while (derived.length < 48) {
+    previous = crypto.createHash("md5").update(Buffer.concat([previous, password, salt])).digest();
+    derived = Buffer.concat([derived, previous]);
+  }
+  const decipher = crypto.createDecipheriv("aes-256-cbc", derived.subarray(0, 32), derived.subarray(32, 48));
+  return JSON.parse(Buffer.concat([decipher.update(raw.subarray(16)), decipher.final()]).toString("utf8"));
+}
+
+async function handleBhumiIdentify(req, res) {
+  try {
+    const body = await parseBody(req);
+    const layer = String(body.service_layer_name || "");
+    if (!["umum:ZNTRANGE", "umum:PenggunaanTanah", "umum:nbt3"].includes(layer)) {
+      sendJson(res, 400, { error: "Layer BHUMI tidak didukung." });
+      return;
+    }
+    const requestBody = JSON.stringify({ ...body, url: "/expapi/getPersil", service: "/bhumigs/umum" });
+    const fetchPersil = async (token) => fetch("https://bhumi.atrbpn.go.id/expapi/getPersil", {
+      method: "POST",
+      headers: {
+        Authorization: token,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Origin: "https://bhumi.atrbpn.go.id",
+        Referer: "https://bhumi.atrbpn.go.id/peta",
+      },
+      body: requestBody,
+    });
+
+    let response = bhumiTokenCache ? await fetchPersil(bhumiTokenCache) : null;
+    if (!response || response.status === 401) {
+      const loginResponse = await fetch("https://bhumi.atrbpn.go.id/expapi/loginApi", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "https://bhumi.atrbpn.go.id",
+          Referer: "https://bhumi.atrbpn.go.id/peta",
+        },
+        body: JSON.stringify({ username: "user", password: "password" }),
+      });
+      if (!loginResponse.ok) {
+        sendJson(res, 502, { error: `BHUMI login HTTP ${loginResponse.status}` });
+        return;
+      }
+      const rawToken = await loginResponse.text();
+      try { bhumiTokenCache = JSON.parse(rawToken); } catch { bhumiTokenCache = rawToken.trim().replace(/^"|"$/g, ""); }
+      response = await fetchPersil(bhumiTokenCache);
+    }
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      sendJson(res, response.status, { error: payload.message || `BHUMI HTTP ${response.status}` });
+      return;
+    }
+    const result = payload.encrypted && payload.data
+      ? decryptBhumiPayload(payload.data)
+      : payload;
+    sendJson(res, 200, { layer, result });
+  } catch (error) {
+    sendJson(res, 502, { error: error.message || "Gagal mengambil informasi objek BHUMI." });
+  }
 }
 
 function toFiniteNumber(value) {
@@ -1171,6 +1259,130 @@ async function fetchOverpassPois(lat, lon, radius, options = {}) {
     const text = [poi.name, poi.tags?.brand, poi.tags?.operator, poi.tags?.description, poi.tags?.building].filter(Boolean).join(" ");
     return !/(^|\s)(kos|kost|kontrakan|boarding house|boarding)(\s|$)/i.test(text);
   });
+}
+
+async function fetchArcgisPlacesPois(lat, lon, radius) {
+  if (!ARCGIS_API_KEY) throw new Error("ARCGIS_API_KEY belum dikonfigurasi di .env.");
+  const groups = [
+    { key: "residential", label: "Hunian", target: 60, searches: ["perumahan", "cluster", "apartment", "housing", "residential"] },
+    { key: "education", label: "Kompetitor", target: 20, searches: ["school", "preschool", "daycare", "kindergarten", "bimba", "paud", "tk"] },
+    { key: "family-services", label: "Affiliate", target: 20, perSearchTarget: 5, searches: ["McDonald's", "MCD", "KFC", "Burger King", "park", "taman", "hospital", "rumah sakit"] },
+  ];
+  const fetchGroup = async (group) => {
+    let target = new URL("https://places-api.arcgis.com/arcgis/rest/services/places-service/v1/places/near-point");
+    target.searchParams.set("x", String(lon));
+    target.searchParams.set("y", String(lat));
+    target.searchParams.set("radius", String(Math.min(Math.max(Number(radius) || 3000, 1), 10000)));
+    target.searchParams.set("pageSize", "20");
+    const rawPlaces = [];
+    const seenPlaceIds = new Set();
+    const countsBySearch = new Map();
+    const matchesRequestedGroup = (place, search) => {
+      const text = [place.name, ...(place.categories || []).map((item) => item.label)].filter(Boolean).join(" ").toLowerCase();
+      if (group.key === "residential") {
+        return /(perumahan|residential|housing|apartment|apartemen|cluster|residence|real estate|townhouse|condominium|condo)/i.test(text)
+          && !/(cafe|coffee|restaurant|warung|hotel|hospital|school|mosque|masjid)/i.test(text);
+      }
+      if (group.key === "education") {
+        return /(school|preschool|daycare|kindergarten|education|bimba|paud|tk|taman kanak)/i.test(text);
+      }
+      if (/mcd|mc ?donald/i.test(search)) return /mcdonald/i.test(text);
+      if (/kfc/i.test(search)) return /\bkfc\b|kentucky fried chicken/i.test(text);
+      if (/burger king/i.test(search)) return /burger king/i.test(text);
+      if (/park|taman/i.test(search)) return /(park|taman|playground|recreation)/i.test(text);
+      if (/hospital|rumah sakit/i.test(search)) return /(hospital|rumah sakit|medical center)/i.test(text);
+      return false;
+    };
+    const targets = group.searches || [""];
+    for (const search of targets) {
+      target = new URL("https://places-api.arcgis.com/arcgis/rest/services/places-service/v1/places/near-point");
+      target.searchParams.set("x", String(lon));
+      target.searchParams.set("y", String(lat));
+      target.searchParams.set("radius", String(Math.min(Math.max(Number(radius) || 3000, 1), 10000)));
+      target.searchParams.set("pageSize", "20");
+      target.searchParams.set("searchText", search);
+      while (target && rawPlaces.length < group.target) {
+      const response = await fetch(target, { headers: { Authorization: `Bearer ${ARCGIS_API_KEY}`, Accept: "application/json" } });
+      if (!response.ok) throw new Error(`ArcGIS Places ${group.label} HTTP ${response.status}`);
+      const payload = await response.json();
+      if (payload.error) throw new Error(payload.error.message || `ArcGIS Places ${group.label} gagal.`);
+      (payload.results || []).forEach((place) => {
+        const id = place.placeId || `${place.location?.x},${place.location?.y},${place.name}`;
+        const searchCount = countsBySearch.get(search) || 0;
+        if (searchCount >= (group.perSearchTarget || group.target)) return;
+        if (!matchesRequestedGroup(place, search)) return;
+        if (!seenPlaceIds.has(id)) {
+          seenPlaceIds.add(id);
+          countsBySearch.set(search, searchCount + 1);
+          rawPlaces.push(place);
+        }
+      });
+      target = payload.pagination?.nextUrl ? new URL(payload.pagination.nextUrl) : null;
+      }
+      if (rawPlaces.length >= group.target) break;
+    }
+    return rawPlaces.slice(0, group.target).map((place) => ({
+      name: place.name || "POI ArcGIS",
+      lat: Number(place.location?.y),
+      lon: Number(place.location?.x),
+      category: group.key,
+      source: "arcgis-places",
+      distance: Number(place.distance) || null,
+      tags: {
+        place_id: place.placeId || "",
+        category: place.categories?.map((item) => item.label).filter(Boolean).join(", ") || group.label,
+        category_group: group.label,
+      },
+    })).filter((place) => Number.isFinite(place.lat) && Number.isFinite(place.lon));
+  };
+  const grouped = await Promise.all(groups.map(fetchGroup));
+  return grouped.flat();
+}
+
+async function handleArcgisGeocode(req, res) {
+  if (!ARCGIS_API_KEY) {
+    sendJson(res, 503, { error: "ARCGIS_API_KEY belum dikonfigurasi di .env." });
+    return;
+  }
+  try {
+    const body = await parseBody(req);
+    const address = String(body.address || "").trim();
+    if (!address) {
+      sendJson(res, 400, { error: "Alamat wajib diisi." });
+      return;
+    }
+    const target = new URL(ARCGIS_GEOCODE_URL);
+    target.searchParams.set("SingleLine", address);
+    target.searchParams.set("maxLocations", "5");
+    target.searchParams.set("f", "json");
+    target.searchParams.set("token", ARCGIS_API_KEY);
+    const response = await fetch(target, { headers: { Accept: "application/json" } });
+    const payload = await response.json();
+    if (!response.ok || payload.error) {
+      // Keep address search usable when the ArcGIS key has Places privilege
+      // but not Geocoding privilege. The fallback uses the existing free OSM
+      // geocoder and is explicitly reported to the client.
+      const fallback = await geocodeAddress(address).catch(() => null);
+      if (fallback?.lat && fallback?.lon) {
+        sendJson(res, 200, {
+          candidates: [{ address, lat: fallback.lat, lon: fallback.lon, score: 0, provider: "openstreetmap-fallback" }],
+          meta: { provider: "openstreetmap-fallback", arcgisError: payload?.error?.message || `HTTP ${response.status}` },
+        });
+        return;
+      }
+      sendJson(res, 502, { error: payload?.error?.message || `ArcGIS Geocoding HTTP ${response.status}` });
+      return;
+    }
+    const candidates = (payload.candidates || []).map((candidate) => ({
+      address: candidate.address || "",
+      lat: Number(candidate.location?.y),
+      lon: Number(candidate.location?.x),
+      score: Number(candidate.score) || 0,
+    })).filter((candidate) => Number.isFinite(candidate.lat) && Number.isFinite(candidate.lon));
+    sendJson(res, 200, { candidates, meta: { provider: "arcgis" } });
+  } catch (error) {
+    sendJson(res, 500, { error: `Gagal mencari alamat ArcGIS: ${error.message}` });
+  }
 }
 
 async function geocodeAddress(addressText) {
@@ -6490,8 +6702,11 @@ async function handlePois(req, res) {
     const lon = Number(requestContext.lon);
     const radius = 3000;
     const location = requestContext.location || {};
-    const sourceMode = requestContext.sourceMode === "openstreetmap" ? "openstreetmap" : "maps-crawler";
+    const sourceMode = ["openstreetmap", "arcgis-places"].includes(requestContext.sourceMode)
+      ? requestContext.sourceMode
+      : "maps-crawler";
     const useOpenStreetMap = sourceMode === "openstreetmap";
+    const useArcgisPlaces = sourceMode === "arcgis-places";
     console.log(`POI_REQUEST_START lat=${lat} lon=${lon} radius=3000`);
     const cacheKey = JSON.stringify({
       version: POI_CACHE_VERSION,
@@ -6516,7 +6731,7 @@ async function handlePois(req, res) {
       searchAreas: areaCoverage.length ? areaCoverage : [location],
       areaCoverage,
     };
-    const crawlPlan = useOpenStreetMap ? [] : buildBackendCrawlPlan(searchLocation.searchAreas, location);
+    const crawlPlan = useOpenStreetMap || useArcgisPlaces ? [] : buildBackendCrawlPlan(searchLocation.searchAreas, location);
     console.log(`POI_AREA_SCOPE kelurahan=${areaCoverage.length} queries=${crawlPlan.length}`);
 
     const cached = poiCache.get(cacheKey);
@@ -6525,8 +6740,8 @@ async function handlePois(req, res) {
       return;
     }
 
-    const [googleHousingPipelineResult, overpassPipelineResult] = await Promise.allSettled([
-      useOpenStreetMap ? Promise.resolve([]) : withTimeout(
+    const [googleHousingPipelineResult, overpassPipelineResult, arcgisPlacesPipelineResult] = await Promise.allSettled([
+      useOpenStreetMap || useArcgisPlaces ? Promise.resolve([]) : withTimeout(
         (async () => {
           const googleHousingPois = await fetchGoogleHousingPois(lat, lon, radius, searchLocation).catch(() => []);
           await enrichMissingGoogleMapsCoordinates(googleHousingPois, searchLocation).catch(() => {});
@@ -6535,11 +6750,12 @@ async function handlePois(req, res) {
         POI_GOOGLE_HOUSING_TIMEOUT_MS,
         "Google housing pipeline"
       ),
-      withTimeout(
+      useArcgisPlaces ? Promise.resolve([]) : withTimeout(
         fetchOverpassPois(lat, lon, radius, { focusedResidential: useOpenStreetMap }),
         useOpenStreetMap ? 60000 : 20000,
         "Overpass radius POI"
       ),
+      useArcgisPlaces ? withTimeout(fetchArcgisPlacesPois(lat, lon, radius), 30000, "ArcGIS Places radius POI") : Promise.resolve([]),
     ]);
 
     const googleHousingPois = googleHousingPipelineResult.status === "fulfilled" ? googleHousingPipelineResult.value : [];
@@ -6556,6 +6772,12 @@ async function handlePois(req, res) {
     const overpassPois = overpassPipelineResult.status === "fulfilled"
       ? overpassPipelineResult.value
       : [];
+    const arcgisPlacesPois = arcgisPlacesPipelineResult?.status === "fulfilled"
+      ? arcgisPlacesPipelineResult.value
+      : [];
+    const arcgisPlacesError = arcgisPlacesPipelineResult?.status === "rejected"
+      ? arcgisPlacesPipelineResult.reason?.message || "ArcGIS Places request gagal"
+      : null;
     const overpassPoisInRadius = overpassPois.filter((item) =>
       Number.isFinite(Number(item.lat)) &&
       Number.isFinite(Number(item.lon)) &&
@@ -6564,6 +6786,7 @@ async function handlePois(req, res) {
     const realPoisInSelectedKelurahan = dedupePois([
       ...googleHousingPoisWithinSelectedAreas,
       ...overpassPoisInRadius,
+      ...arcgisPlacesPois,
     ]);
     const fallbackUsed = googleHousingPois.length === 0 && overpassPoisInRadius.length === 0;
     // Jangan pernah mengembalikan titik sintetis. Jika sumber nyata gagal,
@@ -6575,7 +6798,7 @@ async function handlePois(req, res) {
       items: dedupePois([...poisToReturn]),
       meta: {
         usedGooglePlaces: false,
-        usedGoogleMapsCrawler: !useOpenStreetMap,
+        usedGoogleMapsCrawler: !useOpenStreetMap && !useArcgisPlaces,
         googleMapsTotal: googleHousingPois.length,
         googleMapsWithCoords: googleHousingPoisWithCoords.length,
         googleMapsWithinRadius: googleHousingPoisInRadius.length,
@@ -6584,6 +6807,12 @@ async function handlePois(req, res) {
         googleMapsWithoutCoords: googleHousingPoisWithoutCoords,
         overpassTotal: overpassPois.length,
         overpassInRadius: overpassPoisInRadius.length,
+        arcgisPlacesTotal: arcgisPlacesPois.length,
+        arcgisPlacesError,
+        arcgisPlacesByGroup: arcgisPlacesPois.reduce((groups, place) => {
+          groups[place.category] = (groups[place.category] || 0) + 1;
+          return groups;
+        }, {}),
         realPoisInRadius: realPoisInSelectedKelurahan.length,
         radiusFilterApplied: false,
         radiusFilterNote: "Radius 3 km dipakai untuk memilih kelurahan dari polygon Dukcapil; seluruh POI berkoordinat valid dari kelurahan terpilih ditampilkan.",
@@ -6604,10 +6833,12 @@ async function handlePois(req, res) {
         crawlDebug,
         crawlScope: "all-radius-kelurahan-all-keywords",
         externalResearch: { summary: "", sources: [], metricHighlights: [] },
-        sourceMode: useOpenStreetMap
+        sourceMode: useArcgisPlaces
+          ? (fallbackUsed ? "arcgis-places-fallback" : "arcgis-places")
+          : useOpenStreetMap
           ? (fallbackUsed ? "openstreetmap-fallback" : "openstreetmap")
           : (fallbackUsed ? "google-maps-crawl-fallback" : "google-maps-crawl-overpass"),
-        sourceModeLabel: useOpenStreetMap ? "OpenStreetMap (Overpass)" : "Google Maps Crawler",
+        sourceModeLabel: useArcgisPlaces ? "ArcGIS Places" : useOpenStreetMap ? "OpenStreetMap (Overpass)" : "Google Maps Crawler",
         fallbackUsed,
         degradedSources: {
           googleHousingTimedOut: !useOpenStreetMap && googleHousingPipelineResult.status === "rejected",
@@ -6821,64 +7052,225 @@ function handleHotmapPois(req, res, url) {
   });
 }
 
+async function handleArcgisSesEnrichment(req, res) {
+  if (!ARCGIS_API_KEY) {
+    sendJson(res, 503, { error: "ARCGIS_API_KEY belum dikonfigurasi di .env." });
+    return;
+  }
+
+  try {
+    const body = await parseBody(req);
+    const inputFeatures = Array.isArray(body.features) ? body.features.slice(0, 100) : [];
+    if (!inputFeatures.length) {
+      sendJson(res, 400, { error: "Minimal satu polygon diperlukan." });
+      return;
+    }
+
+    // GeoEnrichment menerima maksimum 100 study areas per request. Geometry
+    // polygon Dukcapil sudah berada di WGS84/4326.
+    const studyAreas = inputFeatures.map((feature, index) => ({
+      geometry: {
+        rings: feature?.geometry?.coordinates?.[0] || [],
+        spatialReference: { wkid: 4326 },
+      },
+      attributes: { source_id: String(feature?.properties?.nama_kel || feature?.properties?.nama_kec || index) },
+    })).filter((area) => area.geometry.rings.length >= 3);
+
+    if (!studyAreas.length) {
+      sendJson(res, 400, { error: "Polygon tidak memiliki koordinat yang valid." });
+      return;
+    }
+
+    const params = new URLSearchParams();
+    params.set("studyareas", JSON.stringify(studyAreas));
+    params.set("dataCollections", JSON.stringify(["KeyGlobalFacts"]));
+    params.set("useData", JSON.stringify({ sourceCountry: "ID" }));
+    params.set("returnGeometry", "true");
+    params.set("outSR", "4326");
+    params.set("f", "json");
+
+    const response = await withTimeout(fetch(ARCGIS_GEOENRICH_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+      body: `${params.toString()}&token=${encodeURIComponent(ARCGIS_API_KEY)}`,
+    }), DUKCAPIL_REQUEST_TIMEOUT_MS, "ArcGIS GeoEnrichment SES");
+    const payload = await response.json();
+    if (!response.ok || payload.error) {
+      sendJson(res, 502, { error: payload?.error?.message || `ArcGIS GeoEnrichment HTTP ${response.status}` });
+      return;
+    }
+
+    const featureSet = payload?.results?.[0]?.value?.FeatureSet?.[0]?.features
+      || payload?.results?.[0]?.value?.features
+      || [];
+    const attributesById = new Map(featureSet.map((item) => [String(item?.attributes?.source_id ?? ""), item.attributes || {}]));
+    const features = inputFeatures.map((feature, index) => {
+      const sourceId = String(feature?.properties?.nama_kel || feature?.properties?.nama_kec || index);
+      const attributes = attributesById.get(sourceId) || {};
+      return {
+        ...feature,
+        properties: {
+          ...(feature.properties || {}),
+          arcgis_totpop: attributes.TOTPOP ?? null,
+          arcgis_tothh: attributes.TOTHH ?? null,
+          arcgis_avghhsz: attributes.AVGHHSZ ?? null,
+          arcgis_males: attributes.MALES ?? null,
+          arcgis_females: attributes.FEMALES ?? null,
+          ses_source: "ArcGIS GeoEnrichment / KeyGlobalFacts",
+          ses_note: "Profil sosial-demografi ArcGIS; bukan skor ekonomi resmi.",
+        },
+      };
+    });
+
+    sendJson(res, 200, {
+      type: "FeatureCollection",
+      features,
+      meta: { source: "arcgis_geoenrichment", collection: "KeyGlobalFacts", country: "ID" },
+    });
+  } catch (error) {
+    sendJson(res, 500, { error: `Gagal mengambil data SES ArcGIS: ${error.message}` });
+  }
+}
+
+async function handleSesCalculate(req, res) {
+  try {
+    const body = await parseBody(req);
+    const features = Array.isArray(body.features)
+      ? body.features
+      : body?.type === "FeatureCollection" && Array.isArray(body.features)
+        ? body.features
+        : [];
+
+    if (!features.length) {
+      sendJson(res, 400, { error: "Minimal satu polygon diperlukan untuk menghitung SES." });
+      return;
+    }
+    if (features.length > 10000) {
+      sendJson(res, 413, { error: "Maksimal 10.000 polygon per perhitungan SES." });
+      return;
+    }
+
+    const result = calculateSesPolygons(features);
+    sendJson(res, 200, result);
+  } catch (error) {
+    console.error("SES CALCULATE ERROR:", error.message);
+    sendJson(res, 500, { error: `Gagal menghitung SES polygon: ${error.message}` });
+  }
+}
+
+async function handleSesGrid(req, res) {
+  try {
+    const body = await parseBody(req);
+    const features = Array.isArray(body.features)
+      ? body.features
+      : body?.type === "FeatureCollection" && Array.isArray(body.features)
+        ? body.features
+        : [];
+
+    if (!features.length) {
+      sendJson(res, 400, { error: "Minimal satu polygon sumber diperlukan untuk membangun grid SES." });
+      return;
+    }
+    if (features.length > 10000) {
+      sendJson(res, 413, { error: "Maksimal 10.000 polygon sumber per grid SES." });
+      return;
+    }
+
+    const result = calculateSesHexagonGrid(features, {
+      cellSizeM: body.cellSizeM,
+      coverageRadiusM: body.coverageRadiusM,
+      centerLon: body.centerLon,
+      centerLat: body.centerLat,
+    });
+    sendJson(res, 200, result);
+  } catch (error) {
+    console.error("SES GRID ERROR:", error.message);
+    sendJson(res, 500, { error: `Gagal membangun grid polygon SES: ${error.message}` });
+  }
+}
+
+function handleSesConfig(req, res) {
+  sendJson(res, 200, { data: getSesConfig() });
+}
+
 async function handleDemographyPolygons(req, res, url) {
   try {
     const province = url.searchParams.get("province") || "DKI JAKARTA";
     const level = url.searchParams.get("level") || "kecamatan"; // "kecamatan" or "kelurahan"
     const PAGE_SIZE = level === "kelurahan" ? 2000 : 1000;
-    const whereClause = `nama_prop='${province.replace(/'/g, "''")}'`;
+    const jabodetabekWhere = [
+      "no_prop=31",
+      "(no_prop=32 AND no_kab IN (1,16,71,75,76))",
+      "(no_prop=36 AND no_kab IN (3,71,74))",
+    ].join(" OR ");
+    const whereClause = province.toUpperCase() === "JABODETABEK"
+      ? `(${jabodetabekWhere})`
+      : `nama_prop='${province.replace(/'/g, "''")}'`;
 
     // Select service based on level
     const serviceName = level === "kelurahan" ? DUKCAPIL_KELURAHAN_SERVICE : DUKCAPIL_DEMOGRAPHY_SERVICE;
     const layerId = level === "kelurahan" ? DUKCAPIL_KELURAHAN_LAYER_ID : DUKCAPIL_DEMOGRAPHY_LAYER_ID;
-    const nameField = level === "kelurahan" ? "nama_kel" : "nama_kec";
+    const configuredServiceType = level === "kelurahan"
+      ? DUKCAPIL_KELURAHAN_SERVICE_TYPE
+      : DUKCAPIL_DEMOGRAPHY_SERVICE_TYPE;
+    const serviceTypes = [...new Set([configuredServiceType, "MapServer", "FeatureServer"])]
+      .filter(Boolean);
 
-    const outFields = level === "kelurahan"
-      ? `nama_kel,nama_kec,nama_kab,nama_prop,jumlah_penduduk,jumlah_kk,u0,u5,u10,pria,wanita,lhr_2020,lhr_2021,lhr_2022,lhr_2023,lhr_2024`
-      : `nama_kec,nama_kab,nama_prop,jumlah_penduduk,jumlah_kk,u0,u5,u10,pria,wanita,jumlah_kelurahan,jumlah_desa,lhr_2020,lhr_2021,lhr_2022,lhr_2023,lhr_2024`;
+    // The portal's query explicitly exposes the complete demographic schema.
+    // Keep every returned attribute instead of dropping education, employment,
+    // religion, marital-status, fertility, migration, and growth fields.
+    const outFields = "*";
 
     // Paginate through ALL ArcGIS records
     let allArcFeatures = [];
     let offset = 0;
     let exceededLimit = true;
 
+    let activeServiceType = null;
+    let lastServiceError = null;
     while (exceededLimit) {
-      const arcgisUrl = new URL(
-        `${serviceName}/FeatureServer/${layerId}/query`,
-        `${DUKCAPIL_ARCGIS_BASE_URL}/`
-      );
-      arcgisUrl.searchParams.set("where", whereClause);
-      arcgisUrl.searchParams.set("outFields", outFields);
-      arcgisUrl.searchParams.set("returnGeometry", "true");
-      arcgisUrl.searchParams.set("outSR", "4326");
-      arcgisUrl.searchParams.set("maxAllowableOffset", "0.002");
-      arcgisUrl.searchParams.set("f", "json");
-      arcgisUrl.searchParams.set("resultRecordCount", String(PAGE_SIZE));
-      arcgisUrl.searchParams.set("resultOffset", String(offset));
-      arcgisUrl.searchParams.set("returnExceededLimitFeatures", "true");
+      const typesToTry = activeServiceType ? [activeServiceType] : serviceTypes;
+      let data = null;
 
-      const response = await withTimeout(
-        fetch(arcgisUrl.toString(), {
-          headers: {
-            "User-Agent": "smartkidz-demography-map/1.0",
-          },
-        }),
-        DUKCAPIL_REQUEST_TIMEOUT_MS,
-        `Dukcapil ArcGIS polygons page ${Math.floor(offset / PAGE_SIZE) + 1}`
-      );
+      for (const serviceType of typesToTry) {
+        const arcgisUrl = new URL(
+          `${serviceName}/${serviceType}/${layerId}/query`,
+          `${DUKCAPIL_ARCGIS_BASE_URL}/`
+        );
+        arcgisUrl.searchParams.set("where", whereClause);
+        arcgisUrl.searchParams.set("outFields", outFields);
+        arcgisUrl.searchParams.set("returnGeometry", "true");
+        arcgisUrl.searchParams.set("outSR", "4326");
+        arcgisUrl.searchParams.set("maxAllowableOffset", "0.002");
+        arcgisUrl.searchParams.set("f", "json");
+        arcgisUrl.searchParams.set("resultRecordCount", String(PAGE_SIZE));
+        arcgisUrl.searchParams.set("resultOffset", String(offset));
+        arcgisUrl.searchParams.set("returnExceededLimitFeatures", "true");
 
-      if (!response.ok) {
-        sendJson(res, 502, {
-          error: `Dukcapil ArcGIS returned HTTP ${response.status} at offset ${offset}`,
-        });
-        return;
+        try {
+          const response = await withTimeout(
+            fetch(arcgisUrl.toString(), {
+              headers: {
+                "User-Agent": "smartkidz-demography-map/1.0",
+              },
+            }),
+            DUKCAPIL_REQUEST_TIMEOUT_MS,
+            `Dukcapil ArcGIS ${serviceType} page ${Math.floor(offset / PAGE_SIZE) + 1}`
+          );
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const payload = await response.json();
+          if (payload.error) throw new Error(payload.error.message || "unknown ArcGIS error");
+          data = payload;
+          activeServiceType = serviceType;
+          break;
+        } catch (error) {
+          lastServiceError = `${serviceType}: ${error.message}`;
+        }
       }
 
-      const data = await response.json();
-
-      if (data.error) {
+      if (!data) {
         sendJson(res, 502, {
-          error: `Dukcapil ArcGIS error: ${data.error.message || "unknown"}`,
+          error: `Dukcapil ArcGIS gagal di semua service type (${lastServiceError || "unknown error"}).`,
         });
         return;
       }
@@ -6896,6 +7288,7 @@ async function handleDemographyPolygons(req, res, url) {
 
     const features = allArcFeatures.map((feature) => {
       const a = feature.attributes || {};
+      const rawAttributes = { ...a };
       const u0 = toFiniteNumber(a.u0) || 0;
       const u5 = toFiniteNumber(a.u5) || 0;
       const earlyChildhood = Math.round(u0 * (3 / 5) + u5 * (3 / 5));
@@ -6913,6 +7306,8 @@ async function handleDemographyPolygons(req, res, url) {
         type: "Feature",
         geometry: geoJsonGeometry,
         properties: {
+          // Preserve every attribute returned by the Dukcapil layer.
+          ...rawAttributes,
           nama_kel: a.nama_kel || "",
           nama_kec: a.nama_kec || "",
           nama_kab: a.nama_kab || "",
@@ -6935,6 +7330,12 @@ async function handleDemographyPolygons(req, res, url) {
           wanita: toInteger(a.wanita),
           jumlah_kelurahan: toInteger(a.jumlah_kelurahan),
           jumlah_desa: toInteger(a.jumlah_desa),
+          demographic_data_complete: true,
+          demographic_source_layer: `${serviceName}/${activeServiceType}/${layerId}`,
+          demographic_source_url: `${DUKCAPIL_ARCGIS_BASE_URL}/${serviceName}/${activeServiceType}/${layerId}`,
+          demographic_reference_period: "Mengikuti periode publikasi layer Dukcapil; tidak ditebak dari tanggal aplikasi.",
+          economic_indicator_status: "not_available_in_source_layer",
+          economic_indicator_note: "Layer Dukcapil publik tidak menyediakan pendapatan, kemiskinan, atau PDRB tingkat kelurahan.",
         },
       };
     });
@@ -6946,6 +7347,16 @@ async function handleDemographyPolygons(req, res, url) {
         province,
         total: features.length,
         source: "dukcapil_arcgis",
+        source_url: `${DUKCAPIL_ARCGIS_BASE_URL}/${serviceName}/${activeServiceType}/${layerId}`,
+        reference_period: "Mengikuti periode publikasi layer Dukcapil",
+        query_scope: province.toUpperCase() === "JABODETABEK"
+          ? "DKI Jakarta; Kab/Kota Bogor, Depok, Bekasi, Tangerang, dan Tangerang Selatan"
+          : province,
+        service: serviceName,
+        service_type: activeServiceType,
+        layer_id: layerId,
+        out_fields: "*",
+        attributes_preserved: true,
         generated_at: new Date().toISOString(),
       },
     });
@@ -8373,6 +8784,9 @@ function handleRequest(req, res) {
         "/api/bps/periods",
         "/api/bps/data",
         "/api/bps/tables/search",
+        "/api/ses/config",
+        "/api/ses/calculate",
+        "/api/ses/grid",
       ],
     });
     return;
@@ -8418,6 +8832,16 @@ function handleRequest(req, res) {
     return;
   }
 
+  if (req.method === "POST" && pathname === "/api/arcgis-geocode") {
+    handleArcgisGeocode(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/api/bhumi-identify") {
+    handleBhumiIdentify(req, res);
+    return;
+  }
+
   if (req.method === "POST" && pathname === "/api/structured-analysis") {
     handleStructuredAnalysis(req, res);
     return;
@@ -8460,6 +8884,26 @@ function handleRequest(req, res) {
 
   if (req.method === "GET" && pathname === "/api/demography-polygons") {
     handleDemographyPolygons(req, res, url);
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/api/arcgis-ses-enrich") {
+    handleArcgisSesEnrichment(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/ses/config") {
+    handleSesConfig(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/api/ses/calculate") {
+    handleSesCalculate(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/api/ses/grid") {
+    handleSesGrid(req, res);
     return;
   }
 
@@ -8525,7 +8969,9 @@ const server = http.createServer(handleRequest);
 function startServer(port, attempt = 0, onListening = null) {
   const resolvedPort = Number(port);
   server.once("error", (error) => {
-    if (error.code === "EADDRINUSE" && !process.env.PORT && attempt < 10) {
+    // PORT dari .env tidak boleh membuat launcher gagal ketika instance
+    // Smart Finder sebelumnya masih aktif. Pilih port berikutnya otomatis.
+    if (error.code === "EADDRINUSE" && attempt < 10) {
       const fallbackPort = resolvedPort + 1;
       console.warn(`Port ${resolvedPort} sedang dipakai. Mencoba port ${fallbackPort}...`);
       startServer(fallbackPort, attempt + 1, onListening);
@@ -8568,4 +9014,6 @@ module.exports.handleReverseGeocode = handleReverseGeocode;
 module.exports.handleStructuredAnalysis = handleStructuredAnalysis;
 module.exports.handleHeatmapData = handleHeatmapData;
 module.exports.handleDemographyPolygons = handleDemographyPolygons;
+module.exports.handleSesCalculate = handleSesCalculate;
+module.exports.handleSesGrid = handleSesGrid;
 module.exports.startServer = startServer;
