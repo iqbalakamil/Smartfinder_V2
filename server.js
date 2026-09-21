@@ -100,6 +100,8 @@ const GOOGLE_SEARCH_CX = process.env.GOOGLE_SEARCH_CX || "72ddafb59f85b45e0";
 const DUKCAPIL_ARCGIS_BASE_URL = normalizeOptionalUrl(process.env.DUKCAPIL_ARCGIS_BASE_URL) || "https://gis.dukcapil.kemendagri.go.id/arcgis/rest/services";
 const DUKCAPIL_DEMOGRAPHY_SERVICE = process.env.DUKCAPIL_DEMOGRAPHY_SERVICE || "AGR_VISUAL_KEC_FIX";
 const DUKCAPIL_DEMOGRAPHY_LAYER_ID = Number(process.env.DUKCAPIL_DEMOGRAPHY_LAYER_ID || 2);
+const DUKCAPIL_CITY_SERVICE = process.env.DUKCAPIL_CITY_SERVICE || "AGR_VISUAL_KAB_FIX";
+const DUKCAPIL_CITY_LAYER_ID = Number(process.env.DUKCAPIL_CITY_LAYER_ID || 3);
 const DUKCAPIL_KELURAHAN_SERVICE = process.env.DUKCAPIL_KELURAHAN_SERVICE || "AGR_VISUAL_KEL_FIX";
 const DUKCAPIL_KELURAHAN_LAYER_ID = Number(process.env.DUKCAPIL_KELURAHAN_LAYER_ID || 0);
 // The public Dukcapil map currently exposes the complete demographic schema
@@ -107,6 +109,7 @@ const DUKCAPIL_KELURAHAN_LAYER_ID = Number(process.env.DUKCAPIL_KELURAHAN_LAYER_
 // fallback for older deployments/configurations.
 const DUKCAPIL_DEMOGRAPHY_SERVICE_TYPE = process.env.DUKCAPIL_DEMOGRAPHY_SERVICE_TYPE || "MapServer";
 const DUKCAPIL_KELURAHAN_SERVICE_TYPE = process.env.DUKCAPIL_KELURAHAN_SERVICE_TYPE || "MapServer";
+let demographyCityCache = null;
 const WORLDPOP_API_URL = normalizeOptionalUrl(process.env.WORLDPOP_API_URL) || "https://api.worldpop.org/v1";
 const ENABLE_WORLDPOP_FALLBACK = String(process.env.ENABLE_WORLDPOP_FALLBACK || "true").toLowerCase() === "true";
 const WORLDPOP_REQUEST_TIMEOUT_MS = Number(process.env.WORLDPOP_REQUEST_TIMEOUT_MS || 15000);
@@ -116,6 +119,23 @@ const DUKCAPIL_REQUEST_TIMEOUT_MS = Number(process.env.DUKCAPIL_REQUEST_TIMEOUT_
 const ARCGIS_API_KEY = String(process.env.ARCGIS_API_KEY || "").trim();
 const BHUMI_TOKEN = String(process.env.BHUMI_TOKEN || "").trim();
 let bhumiTokenCache = BHUMI_TOKEN;
+const bhumiSampleCache = new Map();
+const BIG_ZNT_QUERY_URL = "https://kspservices.big.go.id/satupeta/rest/services/PUBLIK/PERIZINAN_DAN_PERTANAHAN/MapServer/60/query";
+const BIG_LAND_USE_QUERY_URL = "https://kspservices.big.go.id/satupeta/rest/services/PUBLIK/SUMBER_DAYA_ALAM_DAN_LINGKUNGAN/MapServer/3/query";
+const BIG_ZNT_TIMEOUT_MS = Number(process.env.BIG_ZNT_TIMEOUT_MS || 20000);
+const BIG_LAND_USE_TIMEOUT_MS = Number(process.env.BIG_LAND_USE_TIMEOUT_MS || 20000);
+const BHUMI_REQUEST_TIMEOUT_MS = Number(process.env.BHUMI_REQUEST_TIMEOUT_MS || 15000);
+// BIG now supplies polygons for land-use and ZNT, so BHUMI only needs a
+// lighter lattice to estimate the ownership signal.
+// BHUMI-only enrichment uses a small lattice for faster exploratory analysis.
+// Increase this to 5 or 7 when higher spatial sampling accuracy is needed.
+const BHUMI_RIGHTS_GRID_SIZE = Math.max(3, Math.min(7, Number(process.env.BHUMI_RIGHTS_GRID_SIZE || 3)));
+const BIG_FREEHOLD_LAYER_BY_PROVINCE = {
+  "NUSA TENGGARA BARAT": 11, "JAWA TIMUR": 12, "DAERAH ISTIMEWA YOGYAKARTA": 13,
+  "KALIMANTAN BARAT": 14, "SULAWESI BARAT": 15, "KALIMANTAN UTARA": 16,
+  ACEH: 17, "SULAWESI TENGGARA": 18, MALUKU: 19, "KALIMANTAN TIMUR": 20,
+  "JAWA BARAT": 21, BALI: 22, BANTEN: 23, "KEPULAUAN RIAU": 24, "JAWA TENGAH": 25,
+};
 const ARCGIS_GEOENRICH_URL = "https://geoenrich.arcgis.com/arcgis/rest/services/World/GeoEnrichmentServer/Geoenrichment/Enrich";
 const ARCGIS_GEOCODE_URL = "https://geocode-api.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates";
 const DEFAULT_CAPACITY_PER_UNIT = Number(process.env.DEFAULT_CAPACITY_PER_UNIT || 40);
@@ -383,6 +403,41 @@ function decryptBhumiPayload(encrypted) {
   return JSON.parse(Buffer.concat([decipher.update(raw.subarray(16)), decipher.final()]).toString("utf8"));
 }
 
+async function fetchBhumiPersil(body) {
+  const requestBody = JSON.stringify({ ...body, url: "/expapi/getPersil", service: "/bhumigs/umum" });
+  const fetchPersil = async (token) => withTimeout(fetch("https://bhumi.atrbpn.go.id/expapi/getPersil", {
+    method: "POST",
+    headers: {
+      Authorization: token,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Origin: "https://bhumi.atrbpn.go.id",
+      Referer: "https://bhumi.atrbpn.go.id/peta",
+    },
+    body: requestBody,
+  }), BHUMI_REQUEST_TIMEOUT_MS, "BHUMI persil request");
+
+  let response = bhumiTokenCache ? await fetchPersil(bhumiTokenCache) : null;
+  if (!response || response.status === 401) {
+    const loginResponse = await withTimeout(fetch("https://bhumi.atrbpn.go.id/expapi/loginApi", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "https://bhumi.atrbpn.go.id",
+        Referer: "https://bhumi.atrbpn.go.id/peta",
+      },
+      body: JSON.stringify({ username: "user", password: "password" }),
+    }), BHUMI_REQUEST_TIMEOUT_MS, "BHUMI login request");
+    if (!loginResponse.ok) throw new Error(`BHUMI login HTTP ${loginResponse.status}`);
+    const rawToken = await loginResponse.text();
+    try { bhumiTokenCache = JSON.parse(rawToken); } catch { bhumiTokenCache = rawToken.trim().replace(/^"|"$/g, ""); }
+    response = await fetchPersil(bhumiTokenCache);
+  }
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.message || `BHUMI HTTP ${response.status}`);
+  return payload.encrypted && payload.data ? decryptBhumiPayload(payload.data) : payload;
+}
+
 async function handleBhumiIdentify(req, res) {
   try {
     const body = await parseBody(req);
@@ -391,50 +446,308 @@ async function handleBhumiIdentify(req, res) {
       sendJson(res, 400, { error: "Layer BHUMI tidak didukung." });
       return;
     }
-    const requestBody = JSON.stringify({ ...body, url: "/expapi/getPersil", service: "/bhumigs/umum" });
-    const fetchPersil = async (token) => fetch("https://bhumi.atrbpn.go.id/expapi/getPersil", {
-      method: "POST",
-      headers: {
-        Authorization: token,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Origin: "https://bhumi.atrbpn.go.id",
-        Referer: "https://bhumi.atrbpn.go.id/peta",
-      },
-      body: requestBody,
-    });
-
-    let response = bhumiTokenCache ? await fetchPersil(bhumiTokenCache) : null;
-    if (!response || response.status === 401) {
-      const loginResponse = await fetch("https://bhumi.atrbpn.go.id/expapi/loginApi", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Origin: "https://bhumi.atrbpn.go.id",
-          Referer: "https://bhumi.atrbpn.go.id/peta",
-        },
-        body: JSON.stringify({ username: "user", password: "password" }),
-      });
-      if (!loginResponse.ok) {
-        sendJson(res, 502, { error: `BHUMI login HTTP ${loginResponse.status}` });
-        return;
-      }
-      const rawToken = await loginResponse.text();
-      try { bhumiTokenCache = JSON.parse(rawToken); } catch { bhumiTokenCache = rawToken.trim().replace(/^"|"$/g, ""); }
-      response = await fetchPersil(bhumiTokenCache);
-    }
-
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      sendJson(res, response.status, { error: payload.message || `BHUMI HTTP ${response.status}` });
-      return;
-    }
-    const result = payload.encrypted && payload.data
-      ? decryptBhumiPayload(payload.data)
-      : payload;
+    const result = await fetchBhumiPersil(body);
     sendJson(res, 200, { layer, result });
   } catch (error) {
     sendJson(res, 502, { error: error.message || "Gagal mengambil informasi objek BHUMI." });
+  }
+}
+
+function bhumiFeatureProperties(result) {
+  const feature = result?.features?.[0] || result?.data?.features?.[0];
+  if (feature?.properties && typeof feature.properties === "object") return feature.properties;
+  if (Array.isArray(result?.data)) return result.data[0] || null;
+  if (result?.data && typeof result.data === "object") return result.data;
+  return result && typeof result === "object" ? result : null;
+}
+
+function bhumiValue(properties, names) {
+  if (!properties || typeof properties !== "object") return null;
+  const key = Object.keys(properties).find((candidate) => names.some((name) => candidate.toLowerCase() === name.toLowerCase()));
+  return key ? properties[key] : null;
+}
+
+function bhumiSamplePoints(feature) {
+  const ring = feature?.geometry?.coordinates?.[0] || [];
+  if (ring.length < 3) return [];
+  const vertices = ring.slice(0, ring.length - 1).map((point) => [Number(point[0]), Number(point[1])]);
+  const minLon = Math.min(...vertices.map((point) => point[0]));
+  const maxLon = Math.max(...vertices.map((point) => point[0]));
+  const minLat = Math.min(...vertices.map((point) => point[1]));
+  const maxLat = Math.max(...vertices.map((point) => point[1]));
+  // A regular lattice covers the complete hexagon footprint. Points on
+  // the outer boundary are avoided because BHUMI identify is less reliable
+  // exactly on a polygon edge.
+  const gridSize = BHUMI_RIGHTS_GRID_SIZE;
+  const points = [];
+  const pointInRing = (point) => {
+    let inside = false;
+    for (let i = 0, j = vertices.length - 1; i < vertices.length; j = i++) {
+      const xi = vertices[i][0], yi = vertices[i][1];
+      const xj = vertices[j][0], yj = vertices[j][1];
+      const intersects = ((yi > point[1]) !== (yj > point[1]))
+        && (point[0] < ((xj - xi) * (point[1] - yi)) / ((yj - yi) || Number.EPSILON) + xi);
+      if (intersects) inside = !inside;
+    }
+    return inside;
+  };
+  for (let row = 0; row < gridSize; row += 1) {
+    for (let column = 0; column < gridSize; column += 1) {
+      const point = [
+        minLon + ((column + 0.5) / gridSize) * (maxLon - minLon),
+        minLat + ((row + 0.5) / gridSize) * (maxLat - minLat),
+      ];
+      if (pointInRing(point)) points.push(point);
+    }
+  }
+  return points;
+}
+
+function parseBhumiNumber(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const text = String(value ?? "");
+  const matches = text.match(/[0-9][0-9.,]*/g);
+  if (!matches?.length) return null;
+  const numbers = matches.map((part) => {
+    const normalized = part.includes(".") && part.includes(",")
+      ? part.replace(/\./g, "").replace(",", ".")
+      : part.replace(/[.,]/g, "");
+    const number = Number(normalized);
+    return Number.isFinite(number) ? number : null;
+  }).filter((number) => number != null);
+  return numbers.length ? numbers.reduce((sum, number) => sum + number, 0) / numbers.length : null;
+}
+
+async function fetchBigZntForHexagon(feature) {
+  const ring = feature?.geometry?.coordinates?.[0];
+  if (!Array.isArray(ring) || ring.length < 4) return [];
+  const geometry = {
+    rings: [ring],
+    spatialReference: { wkid: 4326 },
+  };
+  const params = new URLSearchParams({
+    f: "json",
+    where: "1=1",
+    geometry: JSON.stringify(geometry),
+    geometryType: "esriGeometryPolygon",
+    inSR: "4326",
+    spatialRel: "esriSpatialRelIntersects",
+    outFields: "range,kelasnilai,nozn,kanwil,kantah,tglsk,akhirsk,thnsk,blnsk",
+    returnGeometry: "false",
+    resultRecordCount: "1000",
+  });
+  const response = await withTimeout(
+    fetch(`${BIG_ZNT_QUERY_URL}?${params}`, { headers: { Accept: "application/json" } }),
+    BIG_ZNT_TIMEOUT_MS,
+    "BIG ZNT query",
+  );
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.error) {
+    throw new Error(payload.error?.message || `BIG ZNT HTTP ${response.status}`);
+  }
+  return (payload.features || [])
+    .map((item) => item?.attributes || {})
+    .filter((attributes) => Object.keys(attributes).length);
+}
+
+async function fetchBigLandUseForHexagon(feature) {
+  const ring = feature?.geometry?.coordinates?.[0];
+  if (!Array.isArray(ring) || ring.length < 4) return [];
+  const params = new URLSearchParams({
+    f: "json",
+    where: "1=1",
+    geometry: JSON.stringify({ rings: [ring], spatialReference: { wkid: 4326 } }),
+    geometryType: "esriGeometryPolygon",
+    inSR: "4326",
+    spatialRel: "esriSpatialRelIntersects",
+    outFields: "ptnobjname,ptnsbjname,namobj,fcode,ig25k_penggunaan10k_ar_area,ptnremarks",
+    returnGeometry: "false",
+    resultRecordCount: "1000",
+  });
+  const response = await withTimeout(
+    fetch(`${BIG_LAND_USE_QUERY_URL}?${params}`, { headers: { Accept: "application/json" } }),
+    BIG_LAND_USE_TIMEOUT_MS,
+    "BIG land-use query",
+  );
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.error) {
+    throw new Error(payload.error?.message || `BIG land-use HTTP ${response.status}`);
+  }
+  return (payload.features || [])
+    .map((item) => item?.attributes || {})
+    .filter((attributes) => Object.keys(attributes).length);
+}
+
+async function fetchBigFreeholdForHexagon(feature) {
+  const province = String(
+    feature?.properties?.nama_prop || feature?.properties?.nama_provinsi
+      || feature?.properties?.province || feature?.properties?.provinsi || "",
+  ).toUpperCase().replace(/\s+/g, " ").trim();
+  const layerId = BIG_FREEHOLD_LAYER_BY_PROVINCE[province];
+  const ring = feature?.geometry?.coordinates?.[0];
+  if (!layerId || !Array.isArray(ring) || ring.length < 4) return [];
+  const params = new URLSearchParams({
+    f: "json",
+    where: "1=1",
+    geometry: JSON.stringify({ rings: [ring], spatialReference: { wkid: 4326 } }),
+    geometryType: "esriGeometryPolygon",
+    inSR: "4326",
+    spatialRel: "esriSpatialRelIntersects",
+    outFields: "tipehak,nib,kecamatan,kelurahan",
+    returnGeometry: "false",
+    resultRecordCount: "1000",
+  });
+  const response = await withTimeout(
+    fetch(`https://kspservices.big.go.id/satupeta/rest/services/PUBLIK/PERIZINAN_DAN_PERTANAHAN/MapServer/${layerId}/query?${params}`, { headers: { Accept: "application/json" } }),
+    BIG_ZNT_TIMEOUT_MS,
+    "BIG freehold query",
+  );
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.error) {
+    throw new Error(payload.error?.message || `BIG freehold HTTP ${response.status}`);
+  }
+  return (payload.features || []).map((item) => item?.attributes || {}).filter((attributes) => Object.keys(attributes).length);
+}
+
+async function fetchBigSlumForHexagon(feature) {
+  const ring = feature?.geometry?.coordinates?.[0];
+  if (!Array.isArray(ring) || ring.length < 4) return [];
+  const params = new URLSearchParams({
+    f: "json",
+    where: "1=1",
+    geometry: JSON.stringify({ rings: [ring], spatialReference: { wkid: 4326 } }),
+    geometryType: "esriGeometryPolygon",
+    inSR: "4326",
+    spatialRel: "esriSpatialRelIntersects",
+    outFields: "provinsi,kab_kota,kecamatan,kelurahan,kode_rt_rw,sk_kumuh,remarks",
+    returnGeometry: "false",
+    resultRecordCount: "1000",
+  });
+  const response = await withTimeout(
+    fetch(`https://kspservices.big.go.id/satupeta/rest/services/PUBLIK/KAWASAN_KHUSUS_DAN_TRANSMIGRASI/MapServer/5/query?${params}`, { headers: { Accept: "application/json" } }),
+    BIG_LAND_USE_TIMEOUT_MS,
+    "BIG slum query",
+  );
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.error) {
+    throw new Error(payload.error?.message || `BIG slum HTTP ${response.status}`);
+  }
+  return (payload.features || []).map((item) => item?.attributes || {}).filter((attributes) => Object.keys(attributes).length);
+}
+
+async function handleBhumiEnrichHexagons(req, res) {
+  try {
+    const body = await parseBody(req);
+    const inputFeatures = Array.isArray(body.features) ? body.features.slice(0, 120) : [];
+    if (!inputFeatures.length) {
+      sendJson(res, 400, { error: "Minimal satu hexagon diperlukan." });
+      return;
+    }
+    const enrichFeature = async (feature) => {
+      // Exploratory SES mode intentionally uses BHUMI sampling only. This
+      // avoids four BIG polygon queries per hexagon before sampling starts.
+      const bigZntAttributes = [];
+      const bigLandUseAttributes = [];
+      const bigFreeholdAttributes = [];
+      const bigSlumAttributes = [];
+      const layers = ["umum:nbt3", "umum:PenggunaanTanah", "umum:ZNTRANGE"];
+      const points = bhumiSamplePoints(feature);
+      const sampledResults = await Promise.all(points.map(async (point) => {
+        const delta = 0.0008;
+        const bbox = [point[0] - delta, point[1] - delta, point[0] + delta, point[1] + delta].join(",");
+        const results = await Promise.allSettled(layers.map((layer) => {
+          const cacheKey = `${layer}|${bbox}`;
+          if (!bhumiSampleCache.has(cacheKey)) {
+            const request = fetchBhumiPersil({
+              service_layer_name: layer,
+              query_layers: layer,
+              width: 512,
+              height: 512,
+              bbox,
+              x: 256,
+              y: 256,
+            }).catch((error) => {
+              bhumiSampleCache.delete(cacheKey);
+              throw error;
+            });
+            bhumiSampleCache.set(cacheKey, request);
+            if (bhumiSampleCache.size > 10000) bhumiSampleCache.delete(bhumiSampleCache.keys().next().value);
+          }
+          return bhumiSampleCache.get(cacheKey);
+        }));
+        return results.map((result, index) => {
+          if (result.status === "fulfilled") {
+            const properties = bhumiFeatureProperties(result.value);
+            if (properties && Object.keys(properties).length) return { layer: layers[index], properties };
+          }
+          return null;
+        }).filter(Boolean);
+      }));
+      const observations = sampledResults.flat();
+
+      const rights = observations.map((item) => bhumiValue(item.properties, ["tipehak", "hak", "jenis_hak"])).filter(Boolean);
+      const bigRights = bigFreeholdAttributes.map((attributes) => attributes.tipehak || "Hak Milik").filter(Boolean);
+      const bigLandUses = bigLandUseAttributes.map((attributes) => bhumiValue(attributes, ["ptnobjname", "ptnsbjname", "namobj", "fcode", "ptnremarks"])).filter(Boolean);
+      const landUses = [...bigLandUses, ...observations.map((item) => bhumiValue(item.properties, ["GUNATANAH", "NAMAOBJ", "landuse"])).filter(Boolean)];
+      const bigZntLandValues = bigZntAttributes.map((attributes) => bhumiValue(attributes, ["range", "kelasnilai"]))
+        .map(parseBhumiNumber).filter((value) => value != null);
+      const sampledLandValues = observations.map((item) => bhumiValue(item.properties, ["RANGENILAI", "nilai_tanah", "nilai", "landvalue"]))
+        .map(parseBhumiNumber).filter((value) => value != null);
+      const landValues = [...bigZntLandValues, ...sampledLandValues];
+      const freeholdCount = [...rights, ...bigRights].filter((value) => /hak\s*milik|\bHM\b/i.test(String(value))).length;
+      // Count formal/clustered residential uses as the market-fit signal.
+      // Kampung and generic village labels are intentionally excluded.
+      const formalResidentialCount = landUses.filter((value) => {
+        const text = String(value);
+        return /perumahan|permukiman|hunian|residential|cluster|komplek|real\s*estate|apartemen|rusun|residence/i.test(text)
+          && !/kampung|pedesaan|perkampungan/i.test(text);
+      }).length;
+      const formalResidentialShare = landUses.length ? (formalResidentialCount / landUses.length) * 100 : null;
+      const properties = {
+        ...(feature.properties || {}),
+        bhumi_data_available: observations.length > 0 || bigZntAttributes.length > 0 || bigLandUseAttributes.length > 0 || bigFreeholdAttributes.length > 0 || bigSlumAttributes.length > 0,
+        bhumi_sample_count: points.length,
+        bhumi_observation_count: observations.length + bigZntAttributes.length + bigLandUseAttributes.length + bigFreeholdAttributes.length + bigSlumAttributes.length,
+        bhumi_znt_feature_count: bigZntAttributes.length,
+        bhumi_znt_source: bigZntAttributes.length ? "BIG PUBLIK/PERIZINAN_DAN_PERTANAHAN/MapServer/60" : null,
+        bhumi_znt_ranges: [...new Set(bigZntAttributes.map((attributes) => attributes.range || attributes.kelasnilai).filter(Boolean))].slice(0, 8).join(", "),
+        big_land_use_feature_count: bigLandUseAttributes.length,
+        big_land_use_source: bigLandUseAttributes.length ? "BIG PUBLIK/SUMBER_DAYA_ALAM_DAN_LINGKUNGAN/MapServer/3" : null,
+        big_freehold_feature_count: bigFreeholdAttributes.length,
+        big_freehold_source: bigFreeholdAttributes.length ? "BIG PUBLIK/PERIZINAN_DAN_PERTANAHAN/MapServer/10" : null,
+        big_slum_feature_count: bigSlumAttributes.length,
+        big_slum_presence: bigSlumAttributes.length ? 100 : 0,
+        big_slum_source: bigSlumAttributes.length ? "BIG PUBLIK/KAWASAN_KHUSUS_DAN_TRANSMIGRASI/MapServer/5" : null,
+        bhumi_freehold_share: (rights.length + bigRights.length) ? (freeholdCount / (rights.length + bigRights.length)) * 100 : null,
+        bhumi_dense_residential_share: formalResidentialShare,
+        bhumi_formal_residential_share: formalResidentialShare,
+        bhumi_land_value_average: landValues.length ? landValues.reduce((sum, value) => sum + value, 0) / landValues.length : null,
+        bhumi_land_value_median: landValues.length ? landValues.sort((a, b) => a - b)[Math.floor(landValues.length / 2)] : null,
+        bhumi_right_types: [...new Set([...bigRights, ...rights].map(String))].slice(0, 8).join(", "),
+        bhumi_land_use_types: [...new Set(landUses.map(String))].slice(0, 8).join(", "),
+        freehold_share: (rights.length + bigRights.length) ? (freeholdCount / (rights.length + bigRights.length)) * 100 : null,
+        // Keep the source area indicator separate from the BHUMI formal-
+        // residential indicator so the two do not get counted twice.
+        dense_residential_share: formalResidentialShare ?? feature.properties?.dense_residential_share ?? null,
+        area_freehold_share: (rights.length + bigRights.length) ? (freeholdCount / (rights.length + bigRights.length)) * 100 : null,
+        area_dense_residential_share: formalResidentialShare ?? feature.properties?.area_dense_residential_share ?? null,
+        big_query_errors: null,
+        enrichment_source: "bhumi_sampling_only",
+      };
+      return { ...feature, properties };
+    };
+
+    // Process several hexagons concurrently instead of waiting for every
+    // hexagon sequentially.
+    const enriched = [];
+    const concurrency = Math.max(4, Math.min(10, Number(process.env.SES_ENRICH_CONCURRENCY || 8)));
+    for (let index = 0; index < inputFeatures.length; index += concurrency) {
+      const batch = await Promise.all(inputFeatures.slice(index, index + concurrency).map(enrichFeature));
+      enriched.push(...batch);
+    }
+    sendJson(res, 200, { type: "FeatureCollection", features: enriched, meta: { source: "bhumi_sampled_per_hexagon", hexagons: enriched.length, sampling: `${BHUMI_RIGHTS_GRID_SIZE}x${BHUMI_RIGHTS_GRID_SIZE} regular grid inside every hexagon`, provider_mode: "BHUMI-only" } });
+  } catch (error) {
+    sendJson(res, 502, { error: error.message || "Gagal menggabungkan data BHUMI ke hexagon." });
   }
 }
 
@@ -7181,6 +7494,7 @@ async function handleSesGrid(req, res) {
       coverageRadiusM: body.coverageRadiusM,
       centerLon: body.centerLon,
       centerLat: body.centerLat,
+      selectedKeys: Array.isArray(body.selectedKeys) ? body.selectedKeys : undefined,
     });
     sendJson(res, 200, result);
   } catch (error) {
@@ -7193,19 +7507,47 @@ function handleSesConfig(req, res) {
   sendJson(res, 200, { data: getSesConfig() });
 }
 
+function arcgisRingsToGeoJson(rings = []) {
+  const validRings = rings.filter((ring) => Array.isArray(ring) && ring.length >= 4);
+  if (!validRings.length) return null;
+  // The Dukcapil administrative response can contain several disjoint rings
+  // for one feature. Treat every ring as an area part; otherwise MapLibre can
+  // interpret a disjoint administrative ring as a hole and show basemap gaps.
+  return validRings.length === 1
+    ? { type: "Polygon", coordinates: [validRings[0]] }
+    : { type: "MultiPolygon", coordinates: validRings.map((ring) => [ring]) };
+}
+
 async function handleDemographyPolygons(req, res, url) {
   try {
     const province = url.searchParams.get("province") || "DKI JAKARTA";
     const level = url.searchParams.get("level") || "kecamatan"; // "kecamatan" or "kelurahan"
+    const requestedCities = (url.searchParams.get("cities") || "")
+      .split("||").map((value) => value.trim()).filter(Boolean);
     const PAGE_SIZE = level === "kelurahan" ? 2000 : 1000;
     const jabodetabekWhere = [
       "no_prop=31",
       "(no_prop=32 AND no_kab IN (1,16,71,75,76))",
       "(no_prop=36 AND no_kab IN (3,71,74))",
     ].join(" OR ");
-    const whereClause = province.toUpperCase() === "JABODETABEK"
+    const provinceWhere = province.toUpperCase() === "JABODETABEK"
       ? `(${jabodetabekWhere})`
       : `nama_prop='${province.replace(/'/g, "''")}'`;
+    const cityVariants = [...new Set(requestedCities.flatMap((city) => {
+      const raw = city.trim();
+      const plain = city.replace(/^KABUPATEN\s+|^KAB\.?\s+|^KOTA\s+/i, "").trim();
+      const escapedPlain = plain.replace(/'/g, "''");
+      const escapedRaw = raw.replace(/'/g, "''");
+      // The city endpoint returns bare names for kabupaten (e.g. TANGERANG),
+      // so do not add KOTA for a bare name and accidentally fetch both regions.
+      if (/^KOTA\s+/i.test(raw)) return [escapedRaw, `KOTA ${escapedPlain}`];
+      if (/^(KABUPATEN|KAB\.?)/i.test(raw)) return [escapedRaw, escapedPlain, `KAB. ${escapedPlain}`, `KABUPATEN ${escapedPlain}`];
+      return [escapedRaw, escapedPlain, `KAB. ${escapedPlain}`, `KABUPATEN ${escapedPlain}`];
+    }))];
+    const cityWhere = cityVariants.length
+      ? ` AND nama_kab IN (${cityVariants.map((city) => `'${city}'`).join(",")})`
+      : "";
+    const whereClause = `${provinceWhere}${cityWhere}`;
 
     // Select service based on level
     const serviceName = level === "kelurahan" ? DUKCAPIL_KELURAHAN_SERVICE : DUKCAPIL_DEMOGRAPHY_SERVICE;
@@ -7213,13 +7555,27 @@ async function handleDemographyPolygons(req, res, url) {
     const configuredServiceType = level === "kelurahan"
       ? DUKCAPIL_KELURAHAN_SERVICE_TYPE
       : DUKCAPIL_DEMOGRAPHY_SERVICE_TYPE;
-    const serviceTypes = [...new Set([configuredServiceType, "MapServer", "FeatureServer"])]
+    // The Dukcapil web map uses MapServer. Do not wait through several
+    // unreachable service variants before returning the local/direct fallback.
+    const serviceTypes = [...new Set([
+      configuredServiceType || "MapServer",
+      configuredServiceType === "FeatureServer" ? "MapServer" : "FeatureServer",
+    ])]
       .filter(Boolean);
 
-    // The portal's query explicitly exposes the complete demographic schema.
-    // Keep every returned attribute instead of dropping education, employment,
-    // religion, marital-status, fertility, migration, and growth fields.
-    const outFields = "*";
+    // Request the fields used by the map, SES, popup, and demographic profile.
+    // Avoiding unrelated ArcGIS columns makes large provinces much faster.
+    const outFields = [
+      "nama_prop", "nama_kab", "nama_kec", "nama_kel", "jumlah_penduduk", "jumlah_kk",
+      "u0", "u5", "u10", "u15", "u20", "u25", "u30", "u35", "u40", "u45", "u50", "u55", "u60", "u65", "u70", "u75",
+      "pria", "wanita", "lhr_2020", "lhr_2021", "lhr_2022", "lhr_2023", "lhr_2024",
+      "pertumbuhan_2020", "pertumbuhan_2021", "pertumbuhan_2022", "pertumbuhan_2023", "pertumbuhan_2024",
+      "belum_tidak_bekerja", "pelajar_mahasiswa", "mengurus_rumah_tangga", "perdagangan", "wiraswasta",
+      "tidak_blm_sekolah", "belum_tamat_sd", "tamat_sd", "sltp", "slta", "d1_dan_d2", "d3", "s1", "s2", "s3",
+      "guru", "nelayan", "pengacara", "pensiunan", "perawat",
+      "islam", "kristen", "katholik", "hindu", "budha", "konghucu", "kepercayaan", "kawin", "cerai_hidup", "cerai_mati",
+      "lhr_sebelum_2020", "lhr_sebelum_2021", "lhr_sebelum_2022", "lhr_sebelum_2023", "lhr_sebelum_2024", "objectid"
+    ].join(",");
 
     // Paginate through ALL ArcGIS records
     let allArcFeatures = [];
@@ -7254,7 +7610,7 @@ async function handleDemographyPolygons(req, res, url) {
                 "User-Agent": "smartkidz-demography-map/1.0",
               },
             }),
-            DUKCAPIL_REQUEST_TIMEOUT_MS,
+            Math.min(DUKCAPIL_REQUEST_TIMEOUT_MS, 30000),
             `Dukcapil ArcGIS ${serviceType} page ${Math.floor(offset / PAGE_SIZE) + 1}`
           );
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -7269,6 +7625,21 @@ async function handleDemographyPolygons(req, res, url) {
       }
 
       if (!data) {
+        const localFeatures = readLocalDemographyFeatures(province);
+        if (localFeatures.length) {
+          sendJson(res, 200, {
+            type: "FeatureCollection",
+            features: localFeatures,
+            meta: {
+              province,
+              total: localFeatures.length,
+              source: "local_geojson_fallback",
+              warning: `Dukcapil sementara tidak dapat diakses: ${lastServiceError || "fetch failed"}`,
+              source_url: null,
+            },
+          });
+          return;
+        }
         sendJson(res, 502, {
           error: `Dukcapil ArcGIS gagal di semua service type (${lastServiceError || "unknown error"}).`,
         });
@@ -7295,12 +7666,7 @@ async function handleDemographyPolygons(req, res, url) {
 
       // Convert ArcGIS geometry (rings) to GeoJSON (coordinates)
       let geoJsonGeometry = null;
-      if (feature.geometry && feature.geometry.rings) {
-        geoJsonGeometry = {
-          type: "Polygon",
-          coordinates: feature.geometry.rings,
-        };
-      }
+      if (feature.geometry && feature.geometry.rings) geoJsonGeometry = arcgisRingsToGeoJson(feature.geometry.rings);
 
       return {
         type: "Feature",
@@ -7364,6 +7730,142 @@ async function handleDemographyPolygons(req, res, url) {
     sendJson(res, 500, {
       error: `Gagal mengambil data polygon demografi: ${error.message}`,
     });
+  }
+}
+
+function readLocalDemographyCities() {
+  const cities = new Map();
+  try {
+    const files = fs.readdirSync(PUBLIC_DIR).filter((name) => /\.geojson$/i.test(name));
+    files.forEach((name) => {
+      try {
+        const payload = JSON.parse(fs.readFileSync(path.join(PUBLIC_DIR, name), "utf8"));
+        (payload.features || []).forEach((feature) => {
+          const attributes = feature.properties || {};
+          const province = attributes.nama_prop || attributes.PROVINSI || attributes.provinsi;
+          const city = attributes.nama_kab || attributes.KABKOT || attributes.kabupaten_kota;
+          if (province && city) cities.set(`${province}||${city}`, { province, city });
+        });
+      } catch {
+        // Ignore unrelated or malformed local GeoJSON files.
+      }
+    });
+  } catch {
+    return [];
+  }
+  return [...cities.values()].sort((a, b) => `${a.city}, ${a.province}`.localeCompare(`${b.city}, ${b.province}`, "id"));
+}
+
+function readLocalDemographyFeatures(province) {
+  const features = [];
+  try {
+    const files = fs.readdirSync(PUBLIC_DIR).filter((name) => /\.geojson$/i.test(name));
+    files.forEach((name) => {
+      try {
+        const payload = JSON.parse(fs.readFileSync(path.join(PUBLIC_DIR, name), "utf8"));
+        (payload.features || []).forEach((feature) => {
+          const source = feature.properties || {};
+          const featureProvince = source.nama_prop || source.PROVINSI || source.provinsi || "";
+          if (!featureProvince || String(featureProvince).toUpperCase() !== String(province).toUpperCase()) return;
+          features.push({
+            type: "Feature",
+            geometry: feature.geometry || null,
+            properties: {
+              ...source,
+              nama_prop: featureProvince,
+              nama_kab: source.nama_kab || source.KABKOT || source.kabupaten_kota || "",
+              nama_kec: source.nama_kec || source.KECAMATAN || source.kecamatan || "",
+              nama_kel: source.nama_kel || source.DESA || source.kelurahan || "",
+              jumlah_penduduk: toInteger(source.jumlah_penduduk ?? source["JUMLAH PENDUDUK"]),
+              jumlah_kk: toInteger(source.jumlah_kk ?? source["JUMLAH KK"]),
+              average_schooling: toFiniteNumber(source.average_schooling ?? source.rata_rata_lama_sekolah ?? source["RATA RATA LAMA SEKOLAH"]),
+              level: "kecamatan",
+              demographic_data_complete: false,
+              demographic_source_layer: `local_geojson/${name}`,
+              demographic_source_url: null,
+              demographic_reference_period: "Fallback lokal; bukan query Dukcapil live",
+            },
+          });
+        });
+      } catch {
+        // Ignore unrelated or malformed local GeoJSON files.
+      }
+    });
+  } catch {
+    return [];
+  }
+  return features;
+}
+
+async function handleDemographyCities(req, res) {
+  try {
+    const cityService = DUKCAPIL_CITY_SERVICE;
+    const cityLayer = DUKCAPIL_CITY_LAYER_ID;
+    const configuredServiceTypes = ["MapServer", "FeatureServer"];
+    let payload = null;
+    let lastError = null;
+
+    for (const serviceType of [...new Set(["MapServer", ...configuredServiceTypes])]) {
+      const arcgisUrl = new URL(
+        `${cityService}/${serviceType}/${cityLayer}/query`,
+        `${DUKCAPIL_ARCGIS_BASE_URL}/`,
+      );
+      const requestedProvince = req.url ? new URL(req.url, "http://127.0.0.1").searchParams.get("province") : "";
+      arcgisUrl.searchParams.set("where", requestedProvince
+        ? `nama_prop='${requestedProvince.replace(/'/g, "''")}'`
+        : "1=1");
+      // The city list only needs these two fields. Requesting the complete
+      // demographic schema makes the search endpoint unnecessarily slow.
+      arcgisUrl.searchParams.set("outFields", "nama_prop,nama_kab");
+      arcgisUrl.searchParams.set("returnGeometry", "false");
+      arcgisUrl.searchParams.set("resultRecordCount", "2000");
+      arcgisUrl.searchParams.set("f", "json");
+      try {
+        const response = await withTimeout(
+          fetch(arcgisUrl.toString(), {
+            headers: { "User-Agent": "smartkidz-demography-map/1.0" },
+          }),
+          5000,
+          `Dukcapil daftar kota ${serviceType}`,
+        );
+        const candidate = await response.json();
+        if (!response.ok || candidate.error) {
+          throw new Error(candidate?.error?.message || `ArcGIS HTTP ${response.status}`);
+        }
+        payload = candidate;
+        break;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    if (!payload) {
+      const fallbackCities = demographyCityCache || readLocalDemographyCities();
+      if (fallbackCities.length) {
+        demographyCityCache = fallbackCities;
+        sendJson(res, 200, {
+          data: fallbackCities,
+          meta: {
+            source: "local_geojson_fallback",
+            warning: `Dukcapil sementara tidak dapat diakses: ${lastError?.message || "fetch failed"}`,
+          },
+        });
+        return;
+      }
+      throw lastError || new Error("ArcGIS tidak mengembalikan data kota/kabupaten");
+    }
+    const cities = [...new Map((payload.features || [])
+      .map((feature) => feature.attributes || {})
+      .filter((attributes) => attributes.nama_prop && attributes.nama_kab)
+      .map((attributes) => [`${attributes.nama_prop}||${attributes.nama_kab}`, {
+        province: attributes.nama_prop,
+        city: attributes.nama_kab,
+      }])).values()]
+      .sort((a, b) => `${a.city}, ${a.province}`.localeCompare(`${b.city}, ${b.province}`, "id"));
+    demographyCityCache = cities;
+    sendJson(res, 200, { data: cities, meta: { source: "dukcapil_arcgis" } });
+  } catch (error) {
+    sendJson(res, 502, { error: `Gagal mengambil daftar kota/kabupaten: ${error.message}` });
   }
 }
 
@@ -8842,6 +9344,11 @@ function handleRequest(req, res) {
     return;
   }
 
+  if (req.method === "POST" && pathname === "/api/bhumi-enrich-hexagons") {
+    handleBhumiEnrichHexagons(req, res);
+    return;
+  }
+
   if (req.method === "POST" && pathname === "/api/structured-analysis") {
     handleStructuredAnalysis(req, res);
     return;
@@ -8884,6 +9391,11 @@ function handleRequest(req, res) {
 
   if (req.method === "GET" && pathname === "/api/demography-polygons") {
     handleDemographyPolygons(req, res, url);
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/demography-cities") {
+    handleDemographyCities(req, res);
     return;
   }
 
@@ -8969,18 +9481,8 @@ const server = http.createServer(handleRequest);
 function startServer(port, attempt = 0, onListening = null) {
   const resolvedPort = Number(port);
   server.once("error", (error) => {
-    // PORT dari .env tidak boleh membuat launcher gagal ketika instance
-    // Smart Finder sebelumnya masih aktif. Pilih port berikutnya otomatis.
-    if (error.code === "EADDRINUSE" && attempt < 10) {
-      const fallbackPort = resolvedPort + 1;
-      console.warn(`Port ${resolvedPort} sedang dipakai. Mencoba port ${fallbackPort}...`);
-      startServer(fallbackPort, attempt + 1, onListening);
-      return;
-    }
-
     if (error.code === "EADDRINUSE") {
-      console.error(`Port ${resolvedPort} sedang dipakai. Hentikan proses yang memakai port ini atau jalankan dengan PORT yang berbeda.`);
-      console.error(`Contoh: $env:PORT=3001; npm start`);
+      console.error(`Port ${resolvedPort} sedang dipakai. Tutup instance Smartkidz lama lalu jalankan kembali pada port 3000.`);
       process.exit(1);
     }
 

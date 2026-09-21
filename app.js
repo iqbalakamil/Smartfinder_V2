@@ -8,6 +8,7 @@ const API_BASE = window.__POI_API_BASE__ || (
 );
 
 const form = document.getElementById("search-form");
+const hardResetButtonEl = document.getElementById("hard-reset-button");
 const statusBox = document.getElementById("status-box");
 const streetNameEl = document.getElementById("street-name");
 const districtNameEl = document.getElementById("district-name");
@@ -15,6 +16,25 @@ const cityNameEl = document.getElementById("city-name");
 const poiTotalEl = document.getElementById("poi-total");
 const positiveScoreEl = document.getElementById("positive-score");
 const riskScoreEl = document.getElementById("risk-score");
+
+async function hardResetApplication() {
+  if (hardResetButtonEl) {
+    hardResetButtonEl.disabled = true;
+    hardResetButtonEl.title = "Sedang membersihkan aplikasi...";
+  }
+  try { window.localStorage.clear(); } catch {}
+  try { window.sessionStorage.clear(); } catch {}
+  try {
+    if (window.caches) {
+      const cacheNames = await window.caches.keys();
+      await Promise.all(cacheNames.map((name) => window.caches.delete(name)));
+    }
+  } catch {}
+  const separator = window.location.href.includes("?") ? "&" : "?";
+  window.location.replace(`${window.location.href.split("#")[0]}${separator}hard_reset=${Date.now()}`);
+}
+
+hardResetButtonEl?.addEventListener("click", hardResetApplication);
 const residentialBreakdownBody = document.getElementById("residential-breakdown-body");
 const educationBreakdownBody = document.getElementById("education-breakdown-body");
 const affiliateBreakdownBody = document.getElementById("affiliate-breakdown-body");
@@ -5577,11 +5597,12 @@ let demographyEventsBound = false;
 let loadedProvinces = new Set();
 let selectedKota = new Set();
 let selectedKecamatan = new Set();
+let kotaFilterTouched = false;
 let sesProxyData = [];
 let sesProxyVisible = false;
 let sesProxyEventsBound = false;
-const SES_GRID_CELL_SIZE_M = 3000;
-const SES_GRID_RADIUS_M = 3000;
+const SES_GRID_CELL_SIZE_M = 1500;
+const SES_GRID_RADIUS_M = 1500;
 const demographyToggleEl = document.getElementById("demography-toggle");
 const demographyStatusEl = document.getElementById("demography-status");
 const demoCountEl = document.getElementById("demo-count");
@@ -5760,6 +5781,125 @@ function getProvinceFromCoords(lat, lon) {
   return "";
 }
 
+function arcgisRingsToGeoJsonClient(rings = []) {
+  const validRings = rings.filter((ring) => Array.isArray(ring) && ring.length >= 4);
+  if (!validRings.length) return null;
+  // Keep each ArcGIS ring as a separate area part. Combining disjoint rings
+  // as one Polygon makes MapLibre render them as holes.
+  return validRings.length === 1
+    ? { type: "Polygon", coordinates: [validRings[0]] }
+    : { type: "MultiPolygon", coordinates: validRings.map((ring) => [ring]) };
+}
+
+async function fetchDukcapilPolygonsDirect(province, level = "kecamatan") {
+  const targets = level === "kelurahan"
+    ? [["AGR_VISUAL_KEL_FIX", "MapServer", 0], ["AGR_VISUAL_KEL_FIX", "FeatureServer", 0]]
+    : [["AGR_VISUAL_KEC_FIX", "MapServer", 2], ["AGR_VISUAL_KEC_FIX", "FeatureServer", 2], ["AGR_VISUAL_KAB_FIX", "MapServer", 3], ["AGR_VISUAL_KAB_FIX", "FeatureServer", 3]];
+  let directUrl = null;
+  let payload = null;
+  let lastError = null;
+  for (const [service, serviceType, layer] of targets) {
+    const candidateUrl = new URL(`https://gis.dukcapil.kemendagri.go.id/arcgis/rest/services/${service}/${serviceType}/${layer}/query`);
+    candidateUrl.searchParams.set("where", `nama_prop='${String(province).replace(/'/g, "''")}'`);
+    candidateUrl.searchParams.set("outFields", "*");
+    candidateUrl.searchParams.set("returnGeometry", "true");
+    candidateUrl.searchParams.set("outSR", "4326");
+    candidateUrl.searchParams.set("resultRecordCount", "2000");
+    candidateUrl.searchParams.set("returnExceededLimitFeatures", "true");
+    candidateUrl.searchParams.set("f", "json");
+    try {
+      const allFeatures = [];
+      let offset = 0;
+      let candidate = null;
+      while (true) {
+        candidateUrl.searchParams.set("resultOffset", String(offset));
+        const response = await fetch(candidateUrl.toString());
+        candidate = await response.json().catch(() => ({}));
+        if (!response.ok || candidate.error) throw new Error(candidate?.error?.message || `Dukcapil HTTP ${response.status}`);
+        const pageFeatures = Array.isArray(candidate.features) ? candidate.features : [];
+        allFeatures.push(...pageFeatures);
+        offset += pageFeatures.length;
+        if (!pageFeatures.length || pageFeatures.length < 2000 || offset >= 10000) break;
+      }
+      candidate.features = allFeatures;
+      directUrl = candidateUrl;
+      payload = candidate;
+      break;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (!payload || !directUrl) throw lastError || new Error("Dukcapil tidak mengembalikan JSON");
+  const sourcePath = directUrl.origin + directUrl.pathname;
+  return {
+    type: "FeatureCollection",
+    features: (payload.features || []).map((feature) => {
+      const attributes = feature.attributes || {};
+      const numeric = (key) => {
+        const value = Number(attributes[key]);
+        return Number.isFinite(value) ? value : 0;
+      };
+      return {
+        type: "Feature",
+        geometry: feature.geometry?.rings ? arcgisRingsToGeoJsonClient(feature.geometry.rings) : null,
+        properties: {
+          ...attributes,
+          nama_prop: attributes.nama_prop || province,
+          nama_kab: attributes.nama_kab || "",
+          nama_kec: attributes.nama_kec || "",
+          nama_kel: attributes.nama_kel || "",
+          level,
+          jumlah_penduduk: Number(attributes.jumlah_penduduk) || null,
+          jumlah_kk: Number(attributes.jumlah_kk) || null,
+          u0: Number(attributes.u0) || null,
+          u5: Number(attributes.u5) || null,
+          u10: Number(attributes.u10) || null,
+          total_anak: numeric("u0") + numeric("u5") + numeric("u10"),
+          average_schooling: Number(attributes.average_schooling ?? attributes.rata_rata_lama_sekolah ?? attributes["RATA RATA LAMA SEKOLAH"]) || null,
+          demographic_data_complete: true,
+          demographic_source_layer: sourcePath,
+          demographic_source_url: sourcePath,
+          demographic_reference_period: "Mengikuti periode publikasi layer Dukcapil",
+        },
+      };
+    }),
+    meta: { source: "dukcapil_arcgis_direct", source_url: sourcePath },
+  };
+}
+
+async function fetchDukcapilCitiesDirect() {
+  let payload = null;
+  let directUrl = null;
+  let lastError = null;
+  for (const serviceType of ["MapServer", "FeatureServer"]) {
+    const candidateUrl = new URL(`https://gis.dukcapil.kemendagri.go.id/arcgis/rest/services/AGR_VISUAL_KAB_FIX/${serviceType}/3/query`);
+    candidateUrl.searchParams.set("where", "1=1");
+    candidateUrl.searchParams.set("outFields", "nama_prop,nama_kab");
+    candidateUrl.searchParams.set("returnGeometry", "false");
+    candidateUrl.searchParams.set("resultRecordCount", "2000");
+    candidateUrl.searchParams.set("f", "json");
+    try {
+      const response = await fetch(candidateUrl.toString());
+      const candidate = await response.json().catch(() => ({}));
+      if (!response.ok || candidate.error) throw new Error(candidate?.error?.message || `Dukcapil HTTP ${response.status}`);
+      payload = candidate;
+      directUrl = candidateUrl;
+      break;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (!payload || !directUrl) throw lastError || new Error("Dukcapil tidak mengembalikan JSON");
+  return [...new Map((payload.features || [])
+    .map((feature) => feature.attributes || {})
+    .filter((attributes) => attributes.nama_prop && attributes.nama_kab)
+    .map((attributes) => [`${attributes.nama_prop}||${attributes.nama_kab}`, {
+      province: attributes.nama_prop,
+      city: attributes.nama_kab,
+    }])).values()]
+    .sort((a, b) => `${a.city}, ${a.province}`.localeCompare(`${b.city}, ${b.province}`, "id"));
+}
+
 async function loadDemographyPolygons(forceProvince, options = {}) {
   const province = forceProvince || (demoProvinceEl ? demoProvinceEl.value : "");
   if (!province) {
@@ -5784,12 +5924,24 @@ async function loadDemographyPolygons(forceProvince, options = {}) {
   demographyCurrentProvince = province;
 
   try {
-    const response = await fetch(`/api/demography-polygons?province=${encodeURIComponent(province)}&level=${getDemoLevel()}&limit=5000`, {
+    const response = await fetch(`${API_BASE}/api/demography-polygons?province=${encodeURIComponent(province)}&level=${getDemoLevel()}&limit=5000`, {
       signal: controller.signal,
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.json();
-    if (data.error) throw new Error(data.error);
+    let data = await response.json().catch(() => ({}));
+    if (!response.ok || data.error) {
+      try {
+        data = await fetchDukcapilPolygonsDirect(province, getDemoLevel());
+      } catch (directError) {
+        throw new Error(`Data Dukcapil belum dapat dimuat untuk ${province}. Pastikan server berjalan di port 3000 dan coba Hard Reset.`);
+      }
+    } else if (data.meta?.source === "local_geojson_fallback") {
+      try {
+        const directData = await fetchDukcapilPolygonsDirect(province, getDemoLevel());
+        if (directData.features?.length) data = directData;
+      } catch {
+        // Keep local fallback when direct browser access is unavailable.
+      }
+    }
 
     // Only render if this is still the active request
     if (controller.signal.aborted) return;
@@ -5808,7 +5960,6 @@ async function loadDemographyPolygons(forceProvince, options = {}) {
       const kabupatenKey = props.nama_kab || "";
       const kecamatanKey = props.nama_kec || "";
       const kelurahanKey = props.nama_kel || "";
-      if (kabupatenKey) selectedKota.add(`${provinceKey}||${kabupatenKey}`);
       if (kecamatanKey) {
         selectedKecamatan.add(isKelurahan
           ? `${provinceKey}||${kabupatenKey}||${kecamatanKey}||${kelurahanKey}`
@@ -5824,7 +5975,7 @@ async function loadDemographyPolygons(forceProvince, options = {}) {
   } catch (error) {
     if (error.name === "AbortError") return;
     console.error("DEMOGRAPHY: Gagal memuat polygon:", error.message);
-    if (demographyStatusEl) demographyStatusEl.textContent = "Error";
+    if (demographyStatusEl) demographyStatusEl.textContent = `Error: ${error.message || "gagal memuat data"}`;
     demographyCurrentProvince = "";
   }
 }
@@ -5847,6 +5998,10 @@ function humanizeDemographyKey(key) {
     nama_kel: "Kelurahan",
     jumlah_penduduk: "Jumlah penduduk",
     jumlah_kk: "Jumlah KK",
+    u0: "U0-U4 (usia 0-4 tahun)",
+    u5: "U5-U9 (usia 5-9 tahun)",
+    average_schooling: "Rata-rata lama sekolah (tahun)",
+    "RATA RATA LAMA SEKOLAH": "Rata-rata lama sekolah (tahun)",
     jumlah_kelurahan: "Jumlah kelurahan",
     jumlah_desa: "Jumlah desa",
     luas_wilayah: "Luas wilayah",
@@ -5885,10 +6040,10 @@ function humanizeDemographyKey(key) {
 
 function formatDemographyValue(key, value) {
   if (value == null || value === "") return "—";
-  if (typeof value === "number" && Number.isFinite(value)) return formatDemoNum(value);
+  if (typeof value === "number" && Number.isFinite(value)) return `${formatDemoNum(value)}${/^pertumbuhan_/i.test(key) ? "%" : ""}`;
   const text = String(value);
   if (/^-?\d+(?:\.\d+)?$/.test(text) && !/^0\d+/.test(text)) {
-    return formatDemoNum(Number(text));
+    return `${formatDemoNum(Number(text))}${/^pertumbuhan_/i.test(key) ? "%" : ""}`;
   }
   return text;
 }
@@ -5908,6 +6063,7 @@ function buildAllDemographyPopupHtml(properties = {}) {
   const grouped = new Map();
   Object.entries(properties).forEach(([key, value]) => {
     if (DEMOGRAPHY_INTERNAL_KEYS.has(key) || key.startsWith("ses_")) return;
+    if (/^lhr_sebelum_/i.test(key) || /^lahir_sebelum_/i.test(key) || /^lahir_sebelum_tahun_/i.test(key)) return;
     if (value == null || value === "") return;
     const group = demographyGroupForKey(key);
     if (!grouped.has(group)) grouped.set(group, []);
@@ -5928,6 +6084,95 @@ function buildAllDemographyPopupHtml(properties = {}) {
   }).join("");
 }
 
+function numericDemographyValue(properties, key) {
+  const actualKey = Object.keys(properties || {}).find((candidate) => candidate.toLowerCase() === String(key).toLowerCase());
+  const value = Number(properties?.[actualKey || key]);
+  return Number.isFinite(value) ? value : null;
+}
+
+function firstDemographyNumber(properties, keys) {
+  for (const key of keys) {
+    const value = numericDemographyValue(properties, key);
+    if (value != null) return value;
+  }
+  return null;
+}
+
+function percentileValue(values, percentile) {
+  const sorted = values.filter((value) => Number.isFinite(value)).sort((a, b) => a - b);
+  if (!sorted.length) return null;
+  const position = (sorted.length - 1) * percentile;
+  const lower = Math.floor(position);
+  const upper = Math.ceil(position);
+  if (lower === upper) return sorted[lower];
+  return sorted[lower] + (sorted[upper] - sorted[lower]) * (position - lower);
+}
+
+function enrichDemographyColorMetrics(features = []) {
+  const rows = features.map((feature) => {
+    const p = feature.properties || {};
+    const birthKeys = ["lhr_2020", "lhr_2021", "lhr_2022", "lhr_2023", "lhr_2024"];
+    const growthKeys = ["pertumbuhan_2020", "pertumbuhan_2021", "pertumbuhan_2022", "pertumbuhan_2023", "pertumbuhan_2024"];
+    const births = birthKeys.map((key) => numericDemographyValue(p, key)).filter((value) => value != null);
+    const growth = growthKeys.map((key) => numericDemographyValue(p, key)).filter((value) => value != null);
+    const population = firstDemographyNumber(p, ["jumlah_penduduk", "JUMLAH PENDUDUK"]);
+    const u0 = firstDemographyNumber(p, ["u0", "U0"]);
+    const u5 = firstDemographyNumber(p, ["u5", "U5"]);
+    const ageValues = (key) => firstDemographyNumber(p, [key, key.toUpperCase()]);
+    const children014 = [u0, u5, ageValues("u10")].filter((value) => value != null).reduce((sum, value) => sum + value, 0);
+    const working1564 = ["u15", "u20", "u25", "u30", "u35", "u40", "u45", "u50", "u55", "u60"]
+      .map(ageValues).filter((value) => value != null).reduce((sum, value) => sum + value, 0);
+    return {
+      feature,
+      metrics: {
+        children_0_4: u0,
+        children_0_4_share: (() => {
+          return u0 != null && population > 0 ? (u0 / population) * 100 : null;
+        })(),
+        children_5_9_share: u5 != null && population > 0 ? (u5 / population) * 100 : null,
+        birth_rate_per_1000: births.length && population > 0 ? (births.reduce((sum, value) => sum + value, 0) / births.length / population) * 1000 : null,
+        population_growth: growth.length ? growth.reduce((sum, value) => sum + value, 0) / growth.length : null,
+        child_dependency_ratio: working1564 > 0 ? (children014 / working1564) * 100 : null,
+      },
+    };
+  });
+  const metricKeys = ["children_0_4_share", "children_5_9_share", "birth_rate_per_1000", "population_growth", "child_dependency_ratio"];
+  const stats = Object.fromEntries(metricKeys.map((key) => {
+    const values = rows.map((row) => row.metrics[key]).filter((value) => value != null);
+    return [key, {
+      low: percentileValue(values, 0.05),
+      high: percentileValue(values, 0.95),
+      min: values.length ? Math.min(...values) : null,
+      max: values.length ? Math.max(...values) : null,
+    }];
+  }));
+  const normalizeMetric = (value, stat) => {
+    if (value == null || stat.low == null) return null;
+    const low = stat.low;
+    const high = stat.high > low ? stat.high : stat.max;
+    if (high === low) return 50;
+    return Math.max(0, Math.min(100, ((value - low) / (high - low)) * 100));
+  };
+  return rows.map(({ feature, metrics }) => {
+    const normalized = metricKeys.map((key) => normalizeMetric(metrics[key], stats[key])).filter((value) => value != null);
+    const score = normalized.length ? normalized.reduce((sum, value) => sum + value, 0) / normalized.length : null;
+    return {
+      ...feature,
+      properties: {
+        ...(feature.properties || {}),
+        demography_children_0_4: metrics.children_0_4,
+        demography_children_0_4_share: metrics.children_0_4_share,
+        demography_children_5_9_share: metrics.children_5_9_share,
+        demography_birth_rate_per_1000: metrics.birth_rate_per_1000,
+        demography_growth_average: metrics.population_growth,
+        demography_child_dependency_ratio: metrics.child_dependency_ratio,
+        demography_color_score: score == null ? null : Math.round(score * 10) / 10,
+        demography_color_metrics_available: normalized.length,
+      },
+    };
+  });
+}
+
 function renderDemographyLayer(features) {
   const mbMap = getMaplibreMap();
   if (!mbMap) {
@@ -5940,19 +6185,32 @@ function renderDemographyLayer(features) {
     demographyPopup = null;
   }
 
-  // Remove existing demography layers
+  // Remove layers before their source. Removing the source first fails while
+  // the outline still references it, leaving the old source behind.
   try {
-    mbMap.removeLayer('demography-fill');
-    mbMap.removeSource('demography-source');
-    mbMap.removeLayer('demography-outline');
-  } catch (e) {}
+    if (mbMap.getLayer('demography-fill')) mbMap.removeLayer('demography-fill');
+    if (mbMap.getLayer('demography-outline')) mbMap.removeLayer('demography-outline');
+    if (mbMap.getSource('demography-source')) mbMap.removeSource('demography-source');
+  } catch (e) {
+    console.warn('DEMOGRAPHY: gagal membersihkan layer lama:', e.message);
+  }
 
   if (features.length === 0) return;
+
+  const renderableFeatures = enrichDemographyColorMetrics(features).filter((feature) => {
+    const geometry = feature && feature.geometry;
+    return geometry && Array.isArray(geometry.coordinates) && geometry.coordinates.length > 0
+      && (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon');
+  });
+  if (renderableFeatures.length === 0) {
+    if (demographyStatusEl) demographyStatusEl.textContent = 'Data ada, tetapi geometri polygon kosong';
+    return;
+  }
 
   // Create GeoJSON source
   mbMap.addSource('demography-source', {
     type: 'geojson',
-    data: { type: 'FeatureCollection', features },
+    data: { type: 'FeatureCollection', features: renderableFeatures },
   });
 
   // Add fill layer
@@ -5963,14 +6221,16 @@ function renderDemographyLayer(features) {
     paint: {
       'fill-color': [
         'case',
-        ['==', ['get', 'u0'], 0], '#1a1a2e',
-        ['>=', ['get', 'u0'], 5000], '#ef4444',
-        ['>=', ['get', 'u0'], 3000], '#f97316',
-        ['>=', ['get', 'u0'], 1500], '#eab308',
-        ['>=', ['get', 'u0'], 500], '#3b82f6',
-        '#0f766e',
+        ['==', ['coalesce', ['get', 'demography_color_metrics_available'], 0], 0], '#64748b',
+        ['interpolate', ['linear'], ['coalesce', ['get', 'demography_color_score'], 50],
+          0, '#2563eb',
+          25, '#60a5fa',
+          50, '#facc15',
+          75, '#f97316',
+          100, '#dc2626',
+        ],
       ],
-      'fill-opacity': 0.45,
+      'fill-opacity': 0.82,
       'fill-outline-color': '#475569',
     },
     layout: { visibility: 'none' },
@@ -5982,8 +6242,8 @@ function renderDemographyLayer(features) {
     type: 'line',
     source: 'demography-source',
     paint: {
-      'line-color': '#475569',
-      'line-width': 1.5,
+      'line-color': '#0f172a',
+      'line-width': 1.8,
     },
     layout: { visibility: 'none' },
   });
@@ -6021,6 +6281,15 @@ function renderDemographyLayer(features) {
     const html = '<div style="' + s + 'padding:8px 10px;min-width:240px;max-height:420px;overflow:auto;">'
       + '<div style="font-weight:700;font-size:12px;color:#38bdf8;margin-bottom:2px;">' + escapeHtml(p.nama_kel || p.nama_kec || '-') + '</div>'
       + '<div style="font-size:9px;color:#94a3b8;margin-bottom:5px;">' + escapeHtml([p.nama_kec, p.nama_kab, p.nama_prop].filter(Boolean).join(', ')) + '</div>'
+      + '<div style="border-top:1px solid #334155;padding-top:4px;margin-bottom:4px;">'
+      + '<div style="font-weight:700;font-size:9px;color:#38bdf8;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:2px;">Klasifikasi Demografi</div>'
+      + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">Skor warna</span><span style="font-weight:600;">' + formatDemoNum(p.demography_color_score) + ' / 100</span></div>'
+      + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">U0-U4 (usia 0-4)</span><span style="font-weight:600;">' + formatDemoNum(p.demography_children_0_4) + ' (' + formatDemoNum(p.demography_children_0_4_share) + '%)</span></div>'
+      + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">U5-U9</span><span style="font-weight:600;">' + formatDemoNum(p.demography_children_5_9_share) + '% penduduk</span></div>'
+      + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">Angka kelahiran kasar</span><span style="font-weight:600;">' + formatDemoNum(p.demography_birth_rate_per_1000) + ' / 1.000</span></div>'
+      + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">Pertumbuhan penduduk</span><span style="font-weight:600;">' + formatDemoNum(p.demography_growth_average) + '%</span></div>'
+      + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">Rasio ketergantungan anak</span><span style="font-weight:600;">' + formatDemoNum(p.demography_child_dependency_ratio) + ' / 100 usia kerja</span></div>'
+      + '</div>'
       + buildAllDemographyPopupHtml(p)
       + '</div>';
 
@@ -6062,6 +6331,30 @@ function renderDemographyLayer(features) {
       mbMap2.moveLayer('poi-markers-layer');
       if (branchVisible) mbMap.moveLayer('branch-markers');
     } catch (e) {}
+  }
+}
+
+function fitMapToDemographyFeatures(features) {
+  const mbMap = getMaplibreMap();
+  if (!mbMap || !Array.isArray(features) || !features.length) return;
+  const bounds = [[Infinity, Infinity], [-Infinity, -Infinity]];
+  const visit = (coordinates) => {
+    if (!Array.isArray(coordinates)) return;
+    if (coordinates.length >= 2 && Number.isFinite(Number(coordinates[0])) && Number.isFinite(Number(coordinates[1]))) {
+      bounds[0][0] = Math.min(bounds[0][0], Number(coordinates[0]));
+      bounds[0][1] = Math.min(bounds[0][1], Number(coordinates[1]));
+      bounds[1][0] = Math.max(bounds[1][0], Number(coordinates[0]));
+      bounds[1][1] = Math.max(bounds[1][1], Number(coordinates[1]));
+      return;
+    }
+    coordinates.forEach(visit);
+  };
+  features.forEach((feature) => visit(feature.geometry?.coordinates));
+  if (!Number.isFinite(bounds[0][0])) return;
+  try {
+    mbMap.fitBounds(bounds, { padding: 70, maxZoom: 12, duration: 500 });
+  } catch (error) {
+    console.warn('DEMOGRAPHY: gagal memusatkan peta:', error.message);
   }
 }
 
@@ -6187,6 +6480,7 @@ function buildSesComponentPopupHtml(properties = {}) {
     ["employment", "Employment"],
     ["household_housing", "Household & Housing"],
     ["consumption", "Consumption / Purchasing Power"],
+    ["demography", "Demografi usia"],
   ];
   const domainRows = domains.map(([key, label]) => `
     <div style="display:grid;grid-template-columns:1fr auto;gap:4px;margin:3px 0;">
@@ -6201,9 +6495,77 @@ function buildSesComponentPopupHtml(properties = {}) {
       ${domainRows}
       <div style="border-top:1px dashed #cbd5e1;margin-top:5px;padding-top:5px;font-size:10px;">
         Pendidikan: SLTA+ ${formatSesComponentValue(properties.ses_pct_high_school_plus, "%")}, Diploma+ ${formatSesComponentValue(properties.ses_pct_diploma_plus, "%")}, S1+ ${formatSesComponentValue(properties.ses_pct_bachelor_plus, "%")}<br>
-        Pekerjaan: profesional/terampil ${formatSesComponentValue(properties.ses_pct_professional_skilled, "%")}, usaha/perdagangan ${formatSesComponentValue(properties.ses_pct_business, "%")}, belum/tidak bekerja ${formatSesComponentValue(properties.ses_pct_unemployed, "%")}
+        Hunian: ukuran KK ${formatSesComponentValue(properties.ses_household_size, " orang/KK")}, tanah hak milik ATR/BPN ${formatSesComponentValue(properties.ses_freehold_share, "%")}<br>
+        Pekerjaan: profesional/terampil ${formatSesComponentValue(properties.ses_pct_professional_skilled, "%")}, usaha/perdagangan ${formatSesComponentValue(properties.ses_pct_business, "%")}, belum/tidak bekerja ${formatSesComponentValue(properties.ses_pct_unemployed, "%")}<br>
+        Demografi: usia 0-14 ${formatSesComponentValue(properties.ses_pct_children_0_14, "%")}, usia produktif 15-64 ${formatSesComponentValue(properties.ses_pct_working_age_15_64, "%")}, usia 65+ ${formatSesComponentValue(properties.ses_pct_elderly_65_plus, "%")}<br>
+        Rincian usia: ${[
+          ["0-4", "0_4"], ["5-9", "5_9"], ["10-14", "10_14"], ["15-19", "15_19"],
+          ["20-24", "20_24"], ["25-29", "25_29"], ["30-34", "30_34"], ["35-39", "35_39"],
+          ["40-44", "40_44"], ["45-49", "45_49"], ["50-54", "50_54"], ["55-59", "55_59"],
+          ["60-64", "60_64"], ["65-69", "65_69"], ["70-74", "70_74"], ["75+", "75_plus"],
+        ].map(([label, key]) => `${label} ${formatSesComponentValue(properties[`ses_pct_age_${key}`], "%")}`).join(", ")}
       </div>
     </div>`;
+}
+
+function buildAreaPotentialExplanationHtml(properties = {}) {
+  const rawU0 = Number(properties.u0);
+  const rawU5 = Number(properties.u5);
+  const child05Fallback = Number.isFinite(rawU0) && Number.isFinite(rawU5) ? rawU0 + (rawU5 / 5) : null;
+  const childShareFallback = Number.isFinite(Number(properties.ses_child_share)) ? Number(properties.ses_child_share) : null;
+  const populationFallback = Number.isFinite(Number(properties.jumlah_penduduk)) ? Number(properties.jumlah_penduduk) : null;
+  const items = [
+    ["Porsi anak usia 0–5", properties.area_target_children_0_5 ?? child05Fallback, "Anak lebih banyak → potensi pasar PAUD lebih tinggi. Proxy dihitung dari u0 + 1/5 u5.", "target_demand", "orang"],
+    ["Proporsi anak usia 0–14", properties.area_child_share ?? childShareFallback, "Menunjukkan komposisi keluarga muda terhadap seluruh penduduk.", "child_share", "%"],
+    ["Jumlah penduduk", properties.area_population ?? populationFallback, "Basis pasar absolut. Ini bukan kepadatan karena belum dibagi luas wilayah.", "population", "orang"],
+    ["Sebaran hak milik", properties.area_freehold_share, "Proporsi bidang/luas dengan hak milik. Lebih tinggi berarti keamanan tenure lebih baik.", "tenure_security", "%"],
+    ["Sebaran permukiman padat", properties.area_dense_residential_share, "Proporsi area permukiman padat. Lebih tinggi berarti potensi pelanggan lebih terkonsentrasi, bukan otomatis SES lebih tinggi.", "residential_density", "%"],
+    ["Sebaran permukiman formal/padat BHUMI", properties.area_bhumi_formal_residential_share ?? properties.bhumi_formal_residential_share, "Proporsi objek guna tanah BHUMI yang teridentifikasi sebagai perumahan, cluster, hunian, apartemen, atau residential; kategori kampung dikeluarkan.", "residential_density", "%"],
+    ["Kelahiran 2020-2024", properties.area_birth_count_2020_2024, "Sinyal tambahan ukuran pasar anak; bukan indikator SES ekonomi.", "birth_signal", ""],
+    ["Pertumbuhan penduduk", properties.area_population_growth_average, "Rata-rata pertumbuhan tahunan pada periode data Dukcapil.", "growth_signal", "%"],
+    ["Rata-rata nilai tanah BHUMI", properties.area_bhumi_land_value_average ?? properties.bhumi_land_value_average ?? properties.bhumi_land_value_median, "Rata-rata nilai tanah dari sampling BHUMI di dalam hexagon. Ini proxy lokasi, bukan pendapatan rumah tangga.", "land_market", ""],
+  ];
+  const rows = items.map(([label, value, explanation, domain, suffix]) => {
+    const numeric = Number.isFinite(Number(value));
+    const componentScore = properties[`area_component_${domain}_score`];
+    return `<div style="padding:5px 0;border-top:1px solid rgba(148,163,184,.18);">
+      <div style="display:flex;justify-content:space-between;gap:8px;"><b>${label}</b><b>${numeric ? `${formatSesNumber(value)}${suffix}` : "Belum tersedia"}</b></div>
+      <div style="color:#64748b;font-size:10px;margin-top:2px;">${explanation}</div>
+      <div style="color:#0f766e;font-size:10px;margin-top:2px;">Nilai relatif: ${formatSesNumber(componentScore)}%</div>
+    </div>`;
+  }).join("");
+  return `<div style="border-top:1px solid #cbd5e1;margin-top:6px;padding-top:6px;color:#475569;">
+    <div style="font-weight:700;color:#0f766e;margin-bottom:4px;">Penjelasan Potensi Area</div>
+    <div style="font-size:10px;color:#64748b;margin-bottom:4px;">Skor ini mengukur kecocokan pasar area, bukan SES ekonomi resmi. Nilai relatif dibandingkan kecamatan lain dalam kota/kabupaten yang sama.</div>
+    ${rows}
+    <div style="border-top:1px solid rgba(148,163,184,.18);margin-top:5px;padding-top:5px;font-size:10px;color:#64748b;">
+      <b>Sumber:</b> Dukcapil untuk usia dan populasi. ${properties.bhumi_data_available ? `BHUMI/BIG diagregasi dari ${formatSesNumber(properties.bhumi_observation_count, 0)} observasi${properties.bhumi_sample_count ? ` pada ${formatSesNumber(properties.bhumi_sample_count, 0)} titik sampel` : ""}${properties.bhumi_znt_feature_count ? `; BIG ZNT ${formatSesNumber(properties.bhumi_znt_feature_count, 0)} poligon` : ""}${properties.big_land_use_feature_count ? `; BIG guna tanah ${formatSesNumber(properties.big_land_use_feature_count, 0)} poligon` : ""}${properties.big_freehold_feature_count ? `; BIG Hak Milik ${formatSesNumber(properties.big_freehold_feature_count, 0)} bidang` : ""}${properties.big_slum_feature_count ? `; BIG kumuh ${formatSesNumber(properties.big_slum_feature_count, 0)} poligon` : ""}.` : "Data BHUMI/BIG belum berhasil diambil untuk hexagon ini."}<br>
+      ${properties.bhumi_znt_ranges ? `<b>Range nilai tanah BIG:</b> ${escapeHtml(properties.bhumi_znt_ranges)}<br>` : ""}
+      ${properties.bhumi_right_types ? `<b>Jenis hak:</b> ${escapeHtml(properties.bhumi_right_types)}<br>` : ""}
+      ${properties.bhumi_land_use_types ? `<b>Guna tanah:</b> ${escapeHtml(properties.bhumi_land_use_types)}` : ""}
+    </div>
+    <div style="margin-top:6px;font-size:10px;color:#64748b;">Index Potensi Area: <b>${formatSesNumber(properties.area_potential_index)}%</b> · Coverage data: <b>${formatSesNumber(properties.area_potential_data_coverage)}%</b></div>
+  </div>`;
+}
+
+function enrichSesColorMetrics(features = []) {
+  const values = features.map((feature) => Number(feature.properties?.ses_index)).filter(Number.isFinite);
+  const low = percentileValue(values, 0.05);
+  const highRaw = percentileValue(values, 0.95);
+  const high = highRaw != null && highRaw > low ? highRaw : Math.max(...values, low || 0);
+  return features.map((feature) => {
+    const value = Number(feature.properties?.ses_index);
+    const score = Number.isFinite(value) && low != null
+      ? (high > low ? Math.max(0, Math.min(100, ((value - low) / (high - low)) * 100)) : 50)
+      : null;
+    return {
+      ...feature,
+      properties: {
+        ...(feature.properties || {}),
+        ses_color_score: score == null ? null : Math.round(score * 10) / 10,
+      },
+    };
+  });
 }
 
 function renderSesProxyLayer(features = []) {
@@ -6221,9 +6583,10 @@ function renderSesProxyLayer(features = []) {
 
   if (!features.length) return;
 
+  const colorFeatures = enrichSesColorMetrics(features);
   mbMap.addSource("ses-proxy-source", {
     type: "geojson",
-    data: { type: "FeatureCollection", features },
+    data: { type: "FeatureCollection", features: colorFeatures },
   });
   mbMap.addLayer({
     id: "ses-proxy-fill",
@@ -6233,13 +6596,14 @@ function renderSesProxyLayer(features = []) {
       "fill-color": [
         "interpolate",
         ["linear"],
-        ["coalesce", ["get", "ses_index"], 0],
-        0, "#ef4444",
-        34, "#f97316",
-        67, "#10b981",
-        100, "#0f766e",
+        ["coalesce", ["get", "ses_color_score"], 50],
+        0, "#2563eb",
+        25, "#60a5fa",
+        50, "#facc15",
+        75, "#f97316",
+        100, "#dc2626",
       ],
-      "fill-opacity": 0.48,
+      "fill-opacity": 0.78,
     },
     layout: { visibility: sesProxyVisible ? "visible" : "none" },
   });
@@ -6247,7 +6611,7 @@ function renderSesProxyLayer(features = []) {
     id: "ses-proxy-outline",
     type: "line",
     source: "ses-proxy-source",
-    paint: { "line-color": "#d1fae5", "line-width": 1.5, "line-opacity": 0.9 },
+    paint: { "line-color": "#111827", "line-width": 1.8, "line-opacity": 0.95 },
     layout: { visibility: sesProxyVisible ? "visible" : "none" },
   });
 
@@ -6264,6 +6628,7 @@ function renderSesProxyLayer(features = []) {
             <div><b>Kelas:</b> ${escapeHtml(p.ses_class || "-")} — ${escapeHtml(p.ses_class_label || "-")}</div>
             <div><b>Confidence:</b> ${formatSesNumber(p.ses_confidence, 0)}%</div>
             <div><b>Coverage:</b> ${formatSesNumber(p.ses_data_coverage)}%</div>
+            <div><b>Potensi area:</b> ${formatSesNumber(p.area_potential_index)}% · ${escapeHtml(p.area_potential_class || "-")}</div>
           </div>
           <div style="border-top:1px solid #cbd5e1;margin-top:5px;padding-top:5px;color:#475569;">
             Ukuran KK: ${formatSesNumber(p.ses_household_size)} orang<br>
@@ -6271,6 +6636,7 @@ function renderSesProxyLayer(features = []) {
             Proxy kelahiran: ${formatSesNumber(p.ses_birth_rate_proxy)} / 1.000
           </div>
           ${buildSesComponentPopupHtml(p)}
+          ${buildAreaPotentialExplanationHtml(p)}
           <div style="margin-top:6px;color:#64748b;font-size:10px;">
             Sumber: ${escapeHtml(p.demographic_source_url || p.ses_source || "Dukcapil")}
             <br>Periode: ${escapeHtml(p.demographic_reference_period || "Mengikuti periode sumber")}
@@ -6278,7 +6644,11 @@ function renderSesProxyLayer(features = []) {
           </div>
           <div style="margin-top:6px;color:#64748b;font-size:10px;">${escapeHtml(p.ses_note || "Proxy demografi")}</div>
         </div>`;
-      new maplibregl.Popup({ maxWidth: 290 }).setLngLat(event.lngLat).setHTML(html).addTo(mbMap);
+      if (typeof window.showCenteredMapInfo === "function") {
+        window.showCenteredMapInfo(`<div class="ses-centered-popup-content">${html}</div>`);
+      } else {
+        new maplibregl.Popup({ maxWidth: 290, closeOnClick: true }).setLngLat(event.lngLat).setHTML(html).addTo(mbMap);
+      }
     });
     mbMap.on("mouseenter", "ses-proxy-fill", () => { mbMap.getCanvas().style.cursor = "pointer"; });
     mbMap.on("mouseleave", "ses-proxy-fill", () => { mbMap.getCanvas().style.cursor = ""; });
@@ -6417,11 +6787,27 @@ async function addProvince(province) {
   demographyAbortController = controller;
 
   try {
-    const response = await fetch(`/api/demography-polygons?province=${encodeURIComponent(province)}&level=${getDemoLevel()}&limit=5000`, {
+    let demographicMetricsUnavailable = false;
+    const response = await fetch(`${API_BASE}/api/demography-polygons?province=${encodeURIComponent(province)}&level=${getDemoLevel()}&limit=5000`, {
       signal: controller.signal,
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.json();
+    let data = await response.json().catch(() => ({}));
+    // The server may return a local GeoJSON fallback when its outbound
+    // request is blocked. That fallback has boundaries but not the detailed
+    // Dukcapil age, birth, and growth fields needed for the color score.
+    if (!response.ok || data.error || data.meta?.source === "local_geojson_fallback") {
+      try {
+        const directData = await fetchDukcapilPolygonsDirect(province, getDemoLevel());
+        if (directData.features?.length) data = directData;
+      } catch (directError) {
+        if (!response.ok || data.error) {
+          throw new Error(`Data Dukcapil belum dapat dimuat untuk ${province}. Pastikan koneksi Dukcapil tersedia lalu coba lagi.`);
+        }
+        // Keep the local boundary fallback, but make its missing metrics
+        // explicit in the status instead of presenting it as a low score.
+        demographicMetricsUnavailable = true;
+      }
+    }
     if (data.error) throw new Error(data.error);
     if (controller.signal.aborted) return;
 
@@ -6432,6 +6818,7 @@ async function addProvince(province) {
     }
 
     // Add to master list
+    const hadDemographyFeatures = allDemographyFeatures.length > 0;
     loadedProvinces.add(province);
     allDemographyFeatures = allDemographyFeatures.concat(features);
 
@@ -6445,9 +6832,6 @@ async function addProvince(province) {
       const kabupatenKey = props.nama_kab || "";
       const kecamatanKey = props.nama_kec || "";
       const kelurahanKey = props.nama_kel || "";
-      if (kabupatenKey) {
-        selectedKota.add(`${provinceKey}||${kabupatenKey}`);
-      }
       if (kecamatanKey) {
         selectedKecamatan.add(isKelurahan
           ? `${provinceKey}||${kabupatenKey}||${kecamatanKey}||${kelurahanKey}`
@@ -6457,13 +6841,24 @@ async function addProvince(province) {
 
     rebuildChecklists();
     filterAndRenderDemography();
+    if (!hadDemographyFeatures && demographyData.length) {
+      fitMapToDemographyFeatures(demographyData);
+    }
     renderLoadedProvinceTags();
 
-    if (demographyStatusEl) demographyStatusEl.textContent = "Aktif";
+    if (demographyStatusEl) demographyStatusEl.textContent = demographicMetricsUnavailable
+      ? "Aktif; detail demografi belum tersedia"
+      : "Aktif";
   } catch (error) {
     if (error.name === "AbortError") return;
     console.error("DEMOGRAPHY: Gagal memuat polygon:", error.message);
-    if (demographyStatusEl) demographyStatusEl.textContent = "Error";
+    if (allDemographyFeatures.length) {
+      rebuildChecklists();
+      filterAndRenderDemography();
+      if (demographyStatusEl) demographyStatusEl.textContent = "Sebagian data tampil; wilayah baru gagal dimuat";
+    } else if (demographyStatusEl) {
+      demographyStatusEl.textContent = `Data wilayah belum dapat dimuat: ${error.message || "gagal memuat data"}`;
+    }
   }
 }
 
@@ -6559,7 +6954,7 @@ function buildKotaChecklist() {
     group.forEach(kota => {
       const item = document.createElement("label");
       item.className = "kec-item";
-      const checked = selectedKota.has(kota.key) ? "checked" : "";
+      const checked = kotaFilterTouched && selectedKota.has(kota.key) ? "checked" : "";
       item.innerHTML = `
         <input type="checkbox" ${checked} data-kota="${escapeAttribute(kota.key)}">
         <span>${escapeHtml(kota.name)}</span>
@@ -6567,6 +6962,7 @@ function buildKotaChecklist() {
       `;
       const checkbox = item.querySelector("input");
       checkbox.addEventListener("change", () => {
+        kotaFilterTouched = true;
         if (checkbox.checked) {
           selectedKota.add(kota.key);
         } else {
@@ -6592,7 +6988,7 @@ function rebuildKecamatanFromKota() {
 
   const featuresInKota = allDemographyFeatures.filter(f => {
     const kotaKey = `${f.properties.nama_prop}||${f.properties.nama_kab}`;
-    return selectedKota.has(kotaKey);
+    return !kotaFilterTouched || selectedKota.has(kotaKey);
   });
 
   // Build item map based on level
@@ -6686,7 +7082,7 @@ function filterAndRenderDemography() {
 
   const filtered = allDemographyFeatures.filter(f => {
     const kotaKey = `${f.properties.nama_prop}||${f.properties.nama_kab}`;
-    if (!selectedKota.has(kotaKey)) return false;
+    if (kotaFilterTouched && !selectedKota.has(kotaKey)) return false;
 
     if (isKelurahan) {
       const kelKey = `${f.properties.nama_prop}||${f.properties.nama_kab}||${f.properties.nama_kec}||${f.properties.nama_kel}`;
@@ -6701,6 +7097,17 @@ function filterAndRenderDemography() {
   renderDemographyLayer(filtered);
   updateDemographyStats(filtered);
   updateSesLayerPanel(filtered.length > 0);
+
+  // Keep the layer visible when selections were restored or changed while the
+  // checkbox was off. The user has already selected demographic areas, so the
+  // map should immediately show the resulting polygons.
+  if (filtered.length > 0 && !demographyVisible && demographyToggleEl) {
+    skipToggleHandler = true;
+    demographyToggleEl.checked = true;
+    demographyVisible = true;
+    skipToggleHandler = false;
+    renderDemographyLayer(filtered);
+  }
 
   // SES is calculated against the selected comparison universe. If the user
   // changes the polygon checklist afterwards, keep only matching results and
@@ -6738,6 +7145,7 @@ if (kotaSelectAllEl) {
       cb.checked = true;
       selectedKota.add(cb.dataset.kota);
     });
+    kotaFilterTouched = true;
     rebuildKecamatanFromKota();
     filterAndRenderDemography();
   });
@@ -6750,6 +7158,7 @@ if (kotaDeselectAllEl) {
       cb.checked = false;
       selectedKota.delete(cb.dataset.kota);
     });
+    kotaFilterTouched = true;
     rebuildKecamatanFromKota();
     filterAndRenderDemography();
   });
@@ -6782,6 +7191,7 @@ if (demoLevelEl) {
   demoLevelEl.addEventListener("change", () => {
     // Clear selections and rebuild when level changes
     selectedKecamatan.clear();
+    kotaFilterTouched = false;
     sesProxyData = [];
     sesProxyVisible = false;
     renderSesProxyLayer([]);
@@ -6940,6 +7350,576 @@ if (demoSearchInput) {
 if (demoSearchBtn) {
   demoSearchBtn.addEventListener("click", () => {
     filterKecamatanChecklist(demoSearchInput ? demoSearchInput.value : "");
+  });
+}
+
+// ==================== REKOMENDASI AREA / SES ====================
+const recommendationProvinceToggleEl = document.getElementById("recommendation-province-toggle");
+const recommendationProvinceMenuEl = document.getElementById("recommendation-province-menu");
+const recommendationProvinceChecklistEl = document.getElementById("recommendation-province-checklist");
+const recommendationProvinceSearchEl = document.getElementById("recommendation-province-search");
+const recommendationCityToggleEl = document.getElementById("recommendation-city-toggle");
+const recommendationCityMenuEl = document.getElementById("recommendation-city-menu");
+const recommendationCitySearchEl = document.getElementById("recommendation-city-search");
+const recommendationCityChecklistEl = document.getElementById("recommendation-city-checklist");
+const recommendationKecamatanToggleEl = document.getElementById("recommendation-kecamatan-toggle");
+const recommendationKecamatanMenuEl = document.getElementById("recommendation-kecamatan-menu");
+const recommendationKecamatanSearchEl = document.getElementById("recommendation-kecamatan-search");
+const recommendationKecamatanChecklistEl = document.getElementById("recommendation-kecamatan-checklist");
+const recommendationKecamatanSelectAllEl = document.getElementById("recommendation-kecamatan-select-all");
+const recommendationKecamatanDeselectAllEl = document.getElementById("recommendation-kecamatan-deselect-all");
+const recommendationCalculateEl = document.getElementById("recommendation-calculate");
+const recommendationStatusEl = document.getElementById("recommendation-status");
+const recommendationComponentsEl = document.getElementById("recommendation-components");
+const recommendationResultEl = document.getElementById("recommendation-result");
+const sesMapLoadingEl = document.getElementById("ses-map-loading");
+const sesMapLoadingTitleEl = document.getElementById("ses-map-loading-title");
+const sesMapLoadingTextEl = document.getElementById("ses-map-loading-text");
+const sesMapLoadingProgressEl = document.getElementById("ses-map-loading-progress");
+let recommendationFeatures = [];
+let recommendationSelectionRequestId = 0;
+let recommendationCityOptions = [];
+let recommendationSelectedProvinces = new Set();
+let recommendationKecamatanOptions = [];
+let recommendationSelectedKecamatan = new Set();
+
+function setRecommendationStatus(message, loading = false) {
+  if (!recommendationStatusEl) return;
+  recommendationStatusEl.textContent = message;
+  recommendationStatusEl.classList.toggle("is-loading", loading);
+}
+
+function setSesMapLoading(visible, title = "Menghitung SES...", text = "Sedang menghitung data demografi dan menyiapkan hexagon.") {
+  if (!sesMapLoadingEl) return;
+  sesMapLoadingEl.classList.toggle("hidden", !visible);
+  sesMapLoadingEl.setAttribute("aria-hidden", visible ? "false" : "true");
+  if (sesMapLoadingTitleEl) sesMapLoadingTitleEl.textContent = title;
+  if (sesMapLoadingTextEl) sesMapLoadingTextEl.textContent = text;
+  if (!visible && sesMapLoadingProgressEl) {
+    sesMapLoadingProgressEl.textContent = "";
+    sesMapLoadingProgressEl.classList.add("hidden");
+  }
+}
+
+function setSesMapLoadingProgress(message) {
+  if (!sesMapLoadingProgressEl) return;
+  sesMapLoadingProgressEl.textContent = message || "";
+  sesMapLoadingProgressEl.classList.toggle("hidden", !message);
+}
+
+function recommendationSelectedFeatures() {
+  if (!recommendationSelectedKecamatan.size) return [];
+  return recommendationFeatures.filter((feature) => recommendationSelectedKecamatan.has(recommendationKecamatanKey(feature)));
+}
+
+function recommendationKecamatanKey(feature) {
+  const properties = feature?.properties || {};
+  return [
+    properties.nama_prop || properties.province || "",
+    properties.nama_kab || properties.KABKOT || properties.kabupaten_kota || "",
+    properties.nama_kec || properties.KECAMATAN || properties.kecamatan || "",
+  ].map(normalizeDemographyCityName).join("||");
+}
+
+function updateRecommendationKecamatanToggle() {
+  if (!recommendationKecamatanToggleEl) return;
+  const count = recommendationSelectedKecamatan.size;
+  recommendationKecamatanToggleEl.textContent = count ? `${count} kecamatan dipilih` : "Pilih kecamatan...";
+}
+
+function renderRecommendationKecamatanOptions() {
+  if (!recommendationKecamatanChecklistEl) return;
+  if (!recommendationKecamatanOptions.length) {
+    recommendationKecamatanChecklistEl.innerHTML = `<div class="recommendation-city-loading">Pilih kota/kabupaten terlebih dahulu...</div>`;
+    if (recommendationKecamatanToggleEl) recommendationKecamatanToggleEl.disabled = true;
+    updateRecommendationKecamatanToggle();
+    return;
+  }
+  if (recommendationKecamatanToggleEl) recommendationKecamatanToggleEl.disabled = false;
+  if (recommendationKecamatanSelectAllEl) {
+    recommendationKecamatanSelectAllEl.checked = recommendationSelectedKecamatan.size === recommendationKecamatanOptions.length;
+  }
+  recommendationKecamatanChecklistEl.innerHTML = recommendationKecamatanOptions.map((item) => `
+    <label class="recommendation-city-item">
+      <input type="checkbox" value="${escapeAttribute(item.key)}"${recommendationSelectedKecamatan.has(item.key) ? " checked" : ""}>
+      <span>${escapeHtml(item.name)} <small>(${escapeHtml(item.city)})</small></span>
+    </label>`).join("");
+  recommendationKecamatanChecklistEl.querySelectorAll("input").forEach((input) => input.addEventListener("change", () => {
+    if (input.checked) recommendationSelectedKecamatan.add(input.value);
+    else recommendationSelectedKecamatan.delete(input.value);
+    updateRecommendationKecamatanToggle();
+    if (recommendationCalculateEl) recommendationCalculateEl.disabled = !recommendationSelectedFeatures().length;
+    setRecommendationStatus(recommendationSelectedKecamatan.size ? `${recommendationSelectedKecamatan.size} kecamatan dipilih.` : "Pilih minimal satu kecamatan.");
+  }));
+  updateRecommendationKecamatanToggle();
+  filterRecommendationChecklist(recommendationKecamatanChecklistEl, recommendationKecamatanSearchEl?.value || "");
+}
+
+function rebuildRecommendationKecamatanOptions() {
+  const seen = new Map();
+  recommendationFeatures.forEach((feature) => {
+    const properties = feature?.properties || {};
+    const name = String(properties.nama_kec || properties.KECAMATAN || properties.kecamatan || "").trim();
+    if (!name) return;
+    const key = recommendationKecamatanKey(feature);
+    if (!seen.has(key)) {
+      seen.set(key, {
+        key,
+        name,
+        city: String(properties.nama_kab || properties.KABKOT || properties.kabupaten_kota || "").trim(),
+      });
+    }
+  });
+  recommendationKecamatanOptions = [...seen.values()].sort((a, b) => a.name.localeCompare(b.name, "id"));
+  recommendationSelectedKecamatan = new Set(recommendationKecamatanOptions.map((item) => item.key));
+  renderRecommendationKecamatanOptions();
+}
+
+function normalizeDemographyCityName(value) {
+  return String(value || "")
+    .toUpperCase()
+    .replace(/KABUPATEN|KAB\.?|KOTA|ADMINISTRASI|ADM\.?/g, "")
+    .replace(/[^A-Z0-9]/g, "")
+    .trim();
+}
+
+function displayDemographyCityName(value, province = "") {
+  const name = String(value || "").trim();
+  const upper = name.toUpperCase();
+  if (!name || upper.startsWith("KOTA ") || upper.startsWith("KAB") || upper.startsWith("JAKARTA ") || upper === "KEPULAUAN SERIBU") return name;
+  // The KAB layer often returns TANGERANG instead of KABUPATEN TANGERANG.
+  return `Kab. ${name}`;
+}
+
+function renderRecommendationComponents(properties = {}) {
+  if (!recommendationComponentsEl) return;
+  const domains = [
+    ["economic_capacity", "Kapasitas ekonomi", "Data pendapatan/pengeluaran belum ada di layer aktif."],
+    ["education", "Pendidikan", "SLTA+, diploma+, dan S1+ dari data Dukcapil."],
+    ["employment", "Pekerjaan", "Profesional/terampil, usaha/perdagangan, dan belum/tidak bekerja."],
+    ["household_housing", "Rumah tangga & hunian", "Saat ini memakai proxy ukuran rumah tangga."],
+    ["consumption", "Konsumsi / daya beli", "Belum ada angka konsumsi atau daya beli resmi."],
+    ["demography", "Demografi usia", "Komposisi usia 0-14, usia produktif 15-64, dan usia 65+."],
+  ];
+  const rows = domains.map(([key, label, note]) => {
+    const score = Number(properties[`ses_component_${key}_score`]);
+    const weight = Number(properties[`ses_component_${key}_weight_pct`]);
+    const available = Number.isFinite(score);
+    return `<div class="recommendation-component-row">
+      <div><strong>${escapeHtml(label)}</strong><small>${escapeHtml(note)}</small></div>
+      <span>${Number.isFinite(weight) ? `${formatSesNumber(weight, 0)}% bobot` : "—"}<br><strong>${available ? `${formatSesNumber(score)}%` : "—"}</strong></span>
+      <span class="${available ? "recommendation-data-ok" : "recommendation-data-missing"}">${available ? "ADA" : "TIDAK ADA"}</span>
+    </div>`;
+  }).join("");
+  const indicators = `
+    <div style="margin-top:9px;color:var(--muted);font-size:10px;line-height:1.55;">
+      Indikator tersedia: SLTA+ ${formatSesComponentValue(properties.ses_pct_high_school_plus, "%")},
+      diploma+ ${formatSesComponentValue(properties.ses_pct_diploma_plus, "%")},
+      S1+ ${formatSesComponentValue(properties.ses_pct_bachelor_plus, "%")},
+      profesional/terampil ${formatSesComponentValue(properties.ses_pct_professional_skilled, "%")},
+      usaha/perdagangan ${formatSesComponentValue(properties.ses_pct_business, "%")},
+      ukuran rumah tangga ${formatSesComponentValue(properties.ses_household_size, " orang/KK")}.
+      <br>Demografi: usia 0-14 ${formatSesComponentValue(properties.ses_pct_children_0_14, "%")}, usia produktif 15-64 ${formatSesComponentValue(properties.ses_pct_working_age_15_64, "%")}, usia 65+ ${formatSesComponentValue(properties.ses_pct_elderly_65_plus, "%")}.
+      <br>Persentase tiap kelompok usia: ${[
+        ["0-4", "0_4"], ["5-9", "5_9"], ["10-14", "10_14"], ["15-19", "15_19"],
+        ["20-24", "20_24"], ["25-29", "25_29"], ["30-34", "30_34"], ["35-39", "35_39"],
+        ["40-44", "40_44"], ["45-49", "45_49"], ["50-54", "50_54"], ["55-59", "55_59"],
+        ["60-64", "60_64"], ["65-69", "65_69"], ["70-74", "70_74"], ["75+", "75_plus"],
+      ].map(([label, key]) => `${label}: ${formatSesComponentValue(properties[`ses_pct_age_${key}`], "%")}`).join(" · ")}.
+    </div>`;
+  const areaRows = [
+    ["Anak usia 0–5 (proxy)", properties.area_target_children_0_5, "orang", "target_demand"],
+    ["Proporsi anak 0–14", properties.area_child_share, "%", "child_share"],
+    ["Jumlah penduduk", properties.area_population, "orang", "population"],
+    ["Hak milik", properties.area_freehold_share, "%", "tenure_security"],
+    ["Perumahan padat", properties.area_dense_residential_share, "%", "residential_density"],
+    ["Perumahan formal/padat BHUMI", properties.area_bhumi_formal_residential_share ?? properties.bhumi_formal_residential_share, "%", "residential_density"],
+    ["Nilai tanah BHUMI", properties.area_bhumi_land_value_average ?? properties.bhumi_land_value_average, "", "land_market"],
+    ["Kelahiran 2020-2024", properties.area_birth_count_2020_2024, "", "birth_signal"],
+    ["Pertumbuhan penduduk", properties.area_population_growth_average, "%", "growth_signal"],
+  ].map(([label, value, suffix, domain]) => {
+    const available = Number.isFinite(Number(value));
+    const score = properties[`area_component_${domain}_score`];
+    return `<div class="recommendation-component-row"><div><strong>${label}</strong><small>Nilai: ${available ? `${formatSesNumber(value)}${suffix}` : "belum tersedia"}</small></div><span>${Number.isFinite(Number(score)) ? `${formatSesNumber(score)}%` : "—"}</span><span class="${available ? "recommendation-data-ok" : "recommendation-data-missing"}">${available ? "ADA" : "TIDAK ADA"}</span></div>`;
+  }).join("");
+  recommendationComponentsEl.innerHTML = `<strong>Komponen SES dan ketersediaan data</strong>${rows}${indicators}<div style="border-top:1px solid rgba(148,163,184,.25);margin-top:10px;padding-top:9px;"><strong>Potensi Area / kecocokan pasar</strong>${areaRows}<div style="margin-top:8px;color:#0f766e;font-weight:700;">Index Potensi Area: ${formatSesComponentValue(properties.area_potential_index, "%")} · Coverage: ${formatSesComponentValue(properties.area_potential_data_coverage, "%")}</div></div>`;
+  recommendationComponentsEl.classList.remove("hidden");
+}
+
+function fitRecommendationFeature(feature) {
+  const map = getMaplibreMap();
+  const ring = feature?.geometry?.coordinates?.[0] || [];
+  if (!map || ring.length < 3) return;
+  const bounds = ring.reduce((result, point) => result.extend(point), new maplibregl.LngLatBounds(ring[0], ring[0]));
+  map.fitBounds(bounds, { padding: 80, maxZoom: 11, duration: 700 });
+}
+
+async function loadRecommendationSelection() {
+  const requestId = ++recommendationSelectionRequestId;
+  recommendationFeatures = [];
+  recommendationKecamatanOptions = [];
+  recommendationSelectedKecamatan.clear();
+  renderRecommendationKecamatanOptions();
+  if (recommendationCalculateEl) recommendationCalculateEl.disabled = true;
+  const selected = Array.from(recommendationCityChecklistEl?.querySelectorAll("input:checked") || []).map((input) => input.value);
+  if (!selected.length) {
+    setRecommendationStatus("Pilih wilayah untuk memulai.");
+    return;
+  }
+  setRecommendationStatus("Memuat seluruh kelurahan/kecamatan kota terpilih...", true);
+  try {
+    const groups = new Map();
+    selected.forEach((value) => {
+      const parts = value.split("||");
+      const province = parts[1];
+      const city = parts.slice(2).join("||");
+      if (!groups.has(province)) groups.set(province, new Set());
+      groups.get(province).add(city);
+    });
+    const responses = await Promise.all([...groups.entries()].map(async ([province, cities]) => {
+      try {
+        const cityQuery = [...cities].join("||");
+        const response = await fetch(`${API_BASE}/api/demography-polygons?province=${encodeURIComponent(province)}&cities=${encodeURIComponent(cityQuery)}&level=kelurahan&limit=5000`);
+        let payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload.error) {
+          payload = await fetchDukcapilPolygonsDirect(province, "kelurahan");
+        } else if (payload.meta?.source === "local_geojson_fallback") {
+          try {
+            payload = await fetchDukcapilPolygonsDirect(province, "kelurahan");
+          } catch {
+            // Keep the local fallback if direct browser access is unavailable.
+          }
+        }
+        const features = Array.isArray(payload.features) ? payload.features : [];
+        const normalizedCities = new Set([...cities].map(normalizeDemographyCityName));
+        return {
+          province,
+          features: cities
+            ? features.filter((feature) => normalizedCities.has(normalizeDemographyCityName(
+              feature.properties?.nama_kab || feature.properties?.KABKOT || feature.properties?.kabupaten_kota,
+            )))
+            : features,
+          error: features.length ? null : "Tidak ada polygon kelurahan yang diterima",
+        };
+      } catch (error) {
+        return { province, features: [], error: error.message || "Gagal mengambil data" };
+      }
+    }));
+    if (requestId !== recommendationSelectionRequestId) return;
+    recommendationFeatures = responses.flatMap((result) => result.features);
+    if (!recommendationFeatures.length) throw new Error("Tidak ada data kecamatan untuk wilayah tersebut.");
+    rebuildRecommendationKecamatanOptions();
+    if (recommendationCalculateEl) recommendationCalculateEl.disabled = false;
+    const failedProvinces = responses.filter((result) => result.error).map((result) => result.province);
+    setRecommendationStatus(`${recommendationFeatures.length} kelurahan dimuat. Klik hitung SES.${failedProvinces.length ? ` Data belum tersedia: ${failedProvinces.join(", ")}.` : ""}`);
+  } catch (error) {
+    setRecommendationStatus(`Gagal memuat wilayah: ${error.message}`);
+  }
+}
+
+async function loadRecommendationCityOptions() {
+  if (!recommendationCityChecklistEl) return;
+  try {
+    const response = await fetch(`${API_BASE}/api/demography-cities`);
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+    recommendationCityChecklistEl.innerHTML = "";
+    (payload.data || []).forEach((item) => {
+      const label = document.createElement("label");
+      label.className = "recommendation-city-item";
+      label.innerHTML = `<input type="checkbox" value="CITY||${escapeAttribute(item.province)}||${escapeAttribute(item.city)}"><span>${escapeHtml(item.city)} — ${escapeHtml(item.province)}</span>`;
+      recommendationCityChecklistEl.appendChild(label);
+    });
+    recommendationCityChecklistEl.querySelectorAll("input").forEach((input) => input.addEventListener("change", loadRecommendationSelection));
+  } catch (error) {
+    recommendationCityChecklistEl.innerHTML = `<div class="recommendation-city-loading">Daftar kota gagal dimuat: ${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function renderRecommendationCityOptions() {
+  if (!recommendationCityChecklistEl) return;
+  const selectedProvinces = recommendationSelectedProvinces;
+  const selectedCities = new Set(Array.from(recommendationCityChecklistEl.querySelectorAll("input:checked")).map((input) => input.value));
+  if (!selectedProvinces.size) {
+    recommendationCityChecklistEl.innerHTML = `<div class="recommendation-city-loading">Pilih provinsi terlebih dahulu...</div>`;
+    if (recommendationCityToggleEl) {
+      recommendationCityToggleEl.textContent = "Pilih provinsi terlebih dahulu...";
+      recommendationCityToggleEl.disabled = true;
+    }
+    setRecommendationStatus("Pilih provinsi untuk memulai.");
+    if (recommendationCalculateEl) recommendationCalculateEl.disabled = true;
+    return;
+  }
+  const cities = recommendationCityOptions
+    .filter((item) => selectedProvinces.has(item.province))
+    .sort((a, b) => a.city.localeCompare(b.city, "id"));
+  recommendationCityChecklistEl.innerHTML = "";
+  if (recommendationCityToggleEl) recommendationCityToggleEl.disabled = false;
+  cities.forEach((item) => {
+    const label = document.createElement("label");
+    label.className = "recommendation-city-item";
+    const value = `CITY||${item.province}||${item.city}`;
+    label.innerHTML = `<input type="checkbox" value="${escapeAttribute(value)}"${selectedCities.has(value) ? " checked" : ""}><span>${escapeHtml(displayDemographyCityName(item.city, item.province))} <small>(${escapeHtml(item.province)})</small></span>`;
+    recommendationCityChecklistEl.appendChild(label);
+  });
+  recommendationCityChecklistEl.querySelectorAll("input").forEach((input) => input.addEventListener("change", () => {
+    updateRecommendationCityToggle();
+    loadRecommendationSelection();
+  }));
+  updateRecommendationCityToggle();
+  filterRecommendationChecklist(recommendationCityChecklistEl, recommendationCitySearchEl?.value || "");
+}
+
+function updateRecommendationProvinceToggle() {
+  if (!recommendationProvinceToggleEl) return;
+  const count = recommendationSelectedProvinces.size;
+  recommendationProvinceToggleEl.textContent = count ? `${count} provinsi dipilih` : "Pilih provinsi...";
+}
+
+function updateRecommendationCityToggle() {
+  if (!recommendationCityToggleEl || !recommendationCityChecklistEl) return;
+  const count = recommendationCityChecklistEl.querySelectorAll("input:checked").length;
+  recommendationCityToggleEl.textContent = count ? `${count} kota/kabupaten dipilih` : "Pilih kota/kabupaten...";
+}
+
+function filterRecommendationChecklist(checklist, query) {
+  if (!checklist) return;
+  const needle = String(query || "").trim().toLocaleLowerCase("id-ID");
+  checklist.querySelectorAll(".recommendation-city-item").forEach((item) => {
+    item.classList.toggle("hidden", Boolean(needle) && !item.textContent.toLocaleLowerCase("id-ID").includes(needle));
+  });
+}
+
+function setupRecommendationDropdown(toggle, menu) {
+  if (!toggle || !menu) return;
+  toggle.addEventListener("click", (event) => {
+    event.stopPropagation();
+    document.querySelectorAll(".recommendation-dropdown-menu").forEach((otherMenu) => {
+      if (otherMenu !== menu) otherMenu.classList.add("hidden");
+    });
+    menu.classList.toggle("hidden");
+  });
+  menu.addEventListener("click", (event) => event.stopPropagation());
+}
+
+if (recommendationProvinceSearchEl) {
+  recommendationProvinceSearchEl.addEventListener("input", () => filterRecommendationChecklist(recommendationProvinceChecklistEl, recommendationProvinceSearchEl.value));
+}
+if (recommendationCitySearchEl) {
+  recommendationCitySearchEl.addEventListener("input", () => filterRecommendationChecklist(recommendationCityChecklistEl, recommendationCitySearchEl.value));
+}
+setupRecommendationDropdown(recommendationProvinceToggleEl, recommendationProvinceMenuEl);
+setupRecommendationDropdown(recommendationCityToggleEl, recommendationCityMenuEl);
+setupRecommendationDropdown(recommendationKecamatanToggleEl, recommendationKecamatanMenuEl);
+document.addEventListener("click", () => {
+  recommendationProvinceMenuEl?.classList.add("hidden");
+  recommendationCityMenuEl?.classList.add("hidden");
+  recommendationKecamatanMenuEl?.classList.add("hidden");
+});
+
+if (recommendationKecamatanSearchEl) {
+  recommendationKecamatanSearchEl.addEventListener("input", () => filterRecommendationChecklist(recommendationKecamatanChecklistEl, recommendationKecamatanSearchEl.value));
+}
+if (recommendationKecamatanSelectAllEl) {
+  recommendationKecamatanSelectAllEl.addEventListener("change", () => {
+    recommendationSelectedKecamatan = recommendationKecamatanSelectAllEl.checked
+      ? new Set(recommendationKecamatanOptions.map((item) => item.key))
+      : new Set();
+    renderRecommendationKecamatanOptions();
+    if (recommendationCalculateEl) recommendationCalculateEl.disabled = !recommendationSelectedFeatures().length;
+    setRecommendationStatus(recommendationSelectedKecamatan.size ? `${recommendationSelectedKecamatan.size} kecamatan dipilih.` : "Pilih minimal satu kecamatan.");
+  });
+}
+if (recommendationKecamatanDeselectAllEl) {
+  recommendationKecamatanDeselectAllEl.addEventListener("click", () => {
+    recommendationSelectedKecamatan.clear();
+    renderRecommendationKecamatanOptions();
+    if (recommendationCalculateEl) recommendationCalculateEl.disabled = true;
+    setRecommendationStatus("Semua kecamatan dikosongkan. Pilih minimal satu.");
+  });
+}
+
+async function loadRecommendationProvinceCityOptions() {
+  if (!recommendationCityChecklistEl || !recommendationProvinceChecklistEl) return;
+  try {
+    const response = await fetch(`${API_BASE}/api/demography-cities`);
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+    recommendationCityOptions = Array.isArray(payload.data) ? payload.data : [];
+    if (payload.meta?.source === "local_geojson_fallback") {
+      try {
+        const directCities = await fetchDukcapilCitiesDirect();
+        if (directCities.length) recommendationCityOptions = directCities;
+      } catch {
+        // Keep local fallback when the browser also cannot reach Dukcapil.
+      }
+    }
+    const provinces = [...new Set(recommendationCityOptions.map((item) => item.province).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, "id"));
+    recommendationProvinceChecklistEl.innerHTML = provinces.map((province) =>
+      `<label class="recommendation-city-item"><input type="checkbox" value="${escapeAttribute(province)}"><span>${escapeHtml(province)}</span></label>`
+    ).join("");
+    recommendationProvinceChecklistEl.querySelectorAll("input").forEach((input) => input.addEventListener("change", () => {
+      if (input.checked) recommendationSelectedProvinces.add(input.value);
+      else recommendationSelectedProvinces.delete(input.value);
+      updateRecommendationProvinceToggle();
+      renderRecommendationCityOptions();
+    }));
+    updateRecommendationProvinceToggle();
+    renderRecommendationCityOptions();
+  } catch (error) {
+    recommendationProvinceChecklistEl.innerHTML = `<div class="recommendation-city-loading">Gagal memuat provinsi: ${escapeHtml(error.message)}</div>`;
+    recommendationCityChecklistEl.innerHTML = `<div class="recommendation-city-loading">Daftar wilayah gagal dimuat: ${escapeHtml(error.message)}</div>`;
+  }
+}
+
+loadRecommendationProvinceCityOptions();
+
+if (recommendationCalculateEl) {
+  recommendationCalculateEl.addEventListener("click", async () => {
+    const selectedFeatures = recommendationSelectedFeatures();
+    if (!selectedFeatures.length) return;
+    recommendationCalculateEl.disabled = true;
+    if (recommendationComponentsEl) recommendationComponentsEl.classList.add("hidden");
+    if (recommendationResultEl) recommendationResultEl.classList.add("hidden");
+    setSesMapLoading(true, "Tahap 1/4 — Menghitung SES", "Mengolah data demografi kecamatan yang dipilih.");
+    setSesMapLoadingProgress("Menyiapkan data wilayah...");
+    setRecommendationStatus("Menghitung SES dari data Dukcapil...", true);
+    try {
+      const comparisonFeatures = recommendationFeatures;
+      // SES only needs attributes. Keep geometry for the later grid request,
+      // but omit it from the scoring payload to reduce upload, parsing, and
+      // response time for provinces with many kelurahan.
+      const sesInputFeatures = (comparisonFeatures.length ? comparisonFeatures : selectedFeatures).map((feature) => ({
+        type: "Feature",
+        properties: feature.properties || {},
+      }));
+      const sesResponse = await fetch(`${API_BASE}/api/ses/calculate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ features: sesInputFeatures }),
+      });
+      const sesPayload = await sesResponse.json();
+      if (!sesResponse.ok) throw new Error(sesPayload.error || `HTTP ${sesResponse.status}`);
+      const selectedKeys = new Set(selectedFeatures.map(sesFeatureKey));
+      const sesFeatures = (sesPayload.features || []).filter((feature) => selectedKeys.has(sesFeatureKey(feature)));
+      if (!sesFeatures.length) throw new Error("Hasil SES kosong.");
+      const componentProps = { ...(sesFeatures[0].properties || {}) };
+      ["economic_capacity", "education", "employment", "household_housing", "consumption",
+        "ses_pct_high_school_plus", "ses_pct_diploma_plus", "ses_pct_bachelor_plus",
+        "ses_pct_professional_skilled", "ses_pct_business", "ses_household_size"].forEach((key) => {
+        const field = key.startsWith("ses_") ? key : `ses_component_${key}_score`;
+        const values = sesFeatures.map((feature) => Number(feature.properties?.[field])).filter(Number.isFinite);
+        if (values.length) componentProps[field] = values.reduce((sum, value) => sum + value, 0) / values.length;
+      });
+      renderRecommendationComponents(componentProps);
+      setRecommendationStatus(`SES selesai untuk ${sesFeatures.length} wilayah relatif terhadap ${comparisonFeatures.length || selectedFeatures.length} wilayah. Membangun hexagon radius 1,5 km...`, true);
+      setSesMapLoading(true, "Tahap 2/4 — Membangun hexagon", "Membuat grid radius 1,5 km dari hasil SES.");
+      setSesMapLoadingProgress("Grid hexagon sedang dibuat...");
+
+      const gridResponse = await fetch(`${API_BASE}/api/ses/grid`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          features: comparisonFeatures.length ? comparisonFeatures : selectedFeatures,
+          selectedKeys: selectedFeatures.map(sesFeatureKey),
+          cellSizeM: 1500,
+          coverageRadiusM: 1500,
+        }),
+      });
+      const gridPayload = await gridResponse.json();
+      if (!gridResponse.ok) throw new Error(gridPayload.error || `HTTP ${gridResponse.status}`);
+      let enrichedGridFeatures = gridPayload.features || [];
+      let bhumiEnrichmentSucceeded = false;
+      const totalHexagons = enrichedGridFeatures.length;
+      // Tampilkan grid SES dasar segera setelah selesai dibuat. Enrichment
+      // BHUMI sampling berjalan setelahnya dan akan memperbarui warna serta skor.
+      sesProxyData = enrichedGridFeatures;
+      sesProxyVisible = true;
+      renderSesProxyLayer(sesProxyData);
+      setSesGridControlState(sesProxyData.length > 0, sesProxyData.length > 0);
+      if (sesProxyLegendEl) sesProxyLegendEl.classList.remove("hidden");
+      setRecommendationStatus(`Grid awal tampil: ${totalHexagons} hexagon. Memperkaya data BHUMI...`, true);
+      setRecommendationStatus(`Mengambil sampling BHUMI untuk ${totalHexagons} hexagon...`, true);
+      setSesMapLoading(true, "Tahap 3/4 — Sampling BHUMI", `Mengambil sampling BHUMI pada ${totalHexagons} hexagon.`);
+      setSesMapLoadingProgress(`Hexagon selesai: 0/${totalHexagons} (0%)`);
+      try {
+        const enriched = [];
+        const batchSize = 8;
+        for (let offset = 0; offset < totalHexagons; offset += batchSize) {
+          const batch = enrichedGridFeatures.slice(offset, offset + batchSize);
+          const batchEnd = Math.min(offset + batch.length, totalHexagons);
+          const batchNumber = Math.floor(offset / batchSize) + 1;
+          const totalBatches = Math.ceil(totalHexagons / batchSize);
+          setSesMapLoadingProgress(`Memproses BHUMI batch ${batchNumber}/${totalBatches} (hexagon ${offset + 1}-${batchEnd}/${totalHexagons})...`);
+          setRecommendationStatus(`BHUMI sedang memproses hexagon ${offset + 1}-${batchEnd} dari ${totalHexagons}...`, true);
+          const bhumiResponse = await fetch(`${API_BASE}/api/bhumi-enrich-hexagons`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ features: batch }),
+          });
+          const bhumiPayload = await bhumiResponse.json();
+          if (!bhumiResponse.ok || !Array.isArray(bhumiPayload.features)) {
+            throw new Error(bhumiPayload.error || `HTTP ${bhumiResponse.status}`);
+          }
+          enriched.push(...bhumiPayload.features);
+          // Perbarui peta setiap batch; hexagon yang belum selesai tetap
+          // memakai skor dasar sehingga peta tidak menunggu seluruh proses.
+          sesProxyData = [...enriched, ...enrichedGridFeatures.slice(offset + batch.length)];
+          renderSesProxyLayer(sesProxyData);
+          const completed = Math.min(offset + batch.length, totalHexagons);
+          const percent = totalHexagons ? Math.round((completed / totalHexagons) * 100) : 100;
+          setSesMapLoadingProgress(`Hexagon selesai: ${completed}/${totalHexagons} (${percent}%)`);
+          setRecommendationStatus(`BHUMI: hexagon ${completed}/${totalHexagons} selesai (${percent}%).`, true);
+        }
+        enrichedGridFeatures = enriched;
+        bhumiEnrichmentSucceeded = true;
+      } catch (bhumiError) {
+        setRecommendationStatus(`Hexagon tampil; BHUMI belum tersedia: ${bhumiError.message}`, false);
+      }
+      setSesMapLoading(true, "Tahap 4/5 — Menghitung ulang SES", "Menggabungkan hasil sampling BHUMI ke skor hexagon.");
+      setSesMapLoadingProgress(`Menghitung ulang ${enrichedGridFeatures.length} hexagon...`);
+      try {
+        const recalculationResponse = await fetch(`${API_BASE}/api/ses/calculate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ features: enrichedGridFeatures }),
+        });
+        const recalculationPayload = await recalculationResponse.json();
+        if (!recalculationResponse.ok || !Array.isArray(recalculationPayload.features)) {
+          throw new Error(recalculationPayload.error || `HTTP ${recalculationResponse.status}`);
+        }
+        enrichedGridFeatures = recalculationPayload.features;
+        setRecommendationStatus("SES diperbarui dengan hasil sampling BHUMI.", true);
+      } catch (recalculationError) {
+        setRecommendationStatus(`Hexagon tampil; SES BHUMI belum masuk: ${recalculationError.message}`, false);
+      }
+      setSesMapLoading(true, "Tahap 5/5 — Menampilkan hasil", "Menerapkan warna SES dan data BHUMI ke peta.");
+      setSesMapLoadingProgress(`Menampilkan ${enrichedGridFeatures.length} hexagon...`);
+      sesProxyData = enrichedGridFeatures;
+      sesProxyVisible = true;
+      renderSesProxyLayer(sesProxyData);
+      setSesGridControlState(sesProxyData.length > 0, sesProxyData.length > 0);
+      if (sesProxyLegendEl) sesProxyLegendEl.classList.remove("hidden");
+      selectedFeatures.forEach(fitRecommendationFeature);
+      const p = sesFeatures[0].properties || {};
+      if (recommendationResultEl) {
+        const resultRows = sesFeatures.map((feature) => {
+          const props = feature.properties || {};
+          return `<div style="padding:4px 0;border-bottom:1px solid rgba(148,163,184,.2);"><strong>${escapeHtml(props.nama_kec || "Wilayah terpilih")}</strong> · SES ${formatSesNumber(props.ses_index)} · Potensi Area ${formatSesNumber(props.area_potential_index)} · Kelas ${escapeHtml(props.ses_class || "-")} · Confidence ${formatSesNumber(props.ses_confidence, 0)}%</div>`;
+        }).join("");
+        recommendationResultEl.innerHTML = `<strong>Hasil wilayah terpilih</strong>${resultRows}<div style="margin-top:6px;">${sesProxyData.length} hexagon radius 1,5 km ditampilkan.</div>`;
+        recommendationResultEl.classList.remove("hidden");
+      }
+      setRecommendationStatus(bhumiEnrichmentSucceeded
+        ? `Selesai: ${sesProxyData.length} hexagon radius 1,5 km ditampilkan dengan data BHUMI.`
+        : `Selesai: ${sesProxyData.length} hexagon radius 1,5 km ditampilkan; data BHUMI belum tersedia.`);
+    } catch (error) {
+      setRecommendationStatus(`Perhitungan gagal: ${error.message}`);
+    } finally {
+      setSesMapLoading(false);
+      recommendationCalculateEl.disabled = !recommendationSelectedFeatures().length;
+    }
   });
 }
 
