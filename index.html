@@ -22,6 +22,20 @@
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
         </button>
 
+        <div class="sidebar-item-wrap">
+          <button class="sidebar-item sidebar-item-reset" id="hard-reset-button" type="button" title="Bersihkan cache dan muat ulang aplikasi">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v6h6"></path></svg>
+          </button>
+          <span class="sidebar-label">Hard Reset</span>
+        </div>
+
+        <div class="sidebar-item-wrap">
+          <button class="sidebar-item" data-drawer="drawer-recommendation" id="sidebar-btn-recommendation" aria-pressed="false" onclick="toggleDrawer('drawer-recommendation')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"></path><path d="M5 10v10h14V10"></path><path d="M9 20v-6h6v6"></path></svg>
+          </button>
+          <span class="sidebar-label">Rekomendasi Area</span>
+        </div>
+
         <div class="sidebar-item-wrap sidebar-item-wrap-toggle">
           <button class="sidebar-item" data-drawer="drawer-search" id="sidebar-btn-search" aria-pressed="false" onclick="toggleDrawer('drawer-search')">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
@@ -89,6 +103,54 @@
       </aside>
 
       <!-- FLOATING SLIDING DRAWERS / MODALS -->
+
+      <!-- Drawer: Rekomendasi Area -->
+      <div class="drawer-container recommendation-drawer" id="drawer-recommendation">
+        <div class="drawer-header">
+          <h3>📍 Rekomendasi Area</h3>
+          <button class="drawer-close-btn" onclick="toggleDrawer('drawer-recommendation')" title="Minimize drawer">&minus;</button>
+        </div>
+        <section class="panel recommendation-panel">
+          <div class="recommendation-field">
+            <label>Provinsi <small>(pilih satu atau beberapa)</small></label>
+            <div class="recommendation-dropdown" id="recommendation-province-dropdown">
+              <button type="button" class="recommendation-dropdown-toggle" id="recommendation-province-toggle">Memuat provinsi...</button>
+              <div class="recommendation-dropdown-menu hidden" id="recommendation-province-menu">
+                <input type="search" class="recommendation-search" id="recommendation-province-search" placeholder="Cari provinsi..." autocomplete="off">
+                <div class="recommendation-checklist" id="recommendation-province-checklist"><div class="recommendation-city-loading">Memuat provinsi...</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="recommendation-field">
+            <label>Kota / Kabupaten <small>(pilih satu atau beberapa)</small></label>
+            <div class="recommendation-dropdown" id="recommendation-city-dropdown">
+              <button type="button" class="recommendation-dropdown-toggle" id="recommendation-city-toggle" disabled>Pilih provinsi terlebih dahulu...</button>
+              <div class="recommendation-dropdown-menu hidden" id="recommendation-city-menu">
+                <input type="search" class="recommendation-search" id="recommendation-city-search" placeholder="Cari kota/kabupaten..." autocomplete="off">
+                <div id="recommendation-city-checklist" class="recommendation-checklist"><div class="recommendation-city-loading">Pilih provinsi terlebih dahulu...</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="recommendation-field">
+            <label>Kecamatan <small>(pilih satu atau beberapa)</small></label>
+            <div class="recommendation-dropdown" id="recommendation-kecamatan-dropdown">
+              <button type="button" class="recommendation-dropdown-toggle" id="recommendation-kecamatan-toggle" disabled>Pilih kota/kabupaten terlebih dahulu...</button>
+              <div class="recommendation-dropdown-menu hidden" id="recommendation-kecamatan-menu">
+                <input type="search" class="recommendation-search" id="recommendation-kecamatan-search" placeholder="Cari kecamatan..." autocomplete="off">
+                <div class="recommendation-check-actions">
+                  <label><input type="checkbox" id="recommendation-kecamatan-select-all"> Pilih semua kecamatan</label>
+                  <button type="button" id="recommendation-kecamatan-deselect-all">Kosongkan</button>
+                </div>
+                <div id="recommendation-kecamatan-checklist" class="recommendation-checklist"><div class="recommendation-city-loading">Pilih kota/kabupaten terlebih dahulu...</div></div>
+              </div>
+            </div>
+          </div>
+          <button type="button" id="recommendation-calculate" class="button button-primary" disabled>Hitung SES &amp; Tampilkan Hexagon</button>
+          <div id="recommendation-status" class="recommendation-status">Pilih wilayah untuk memulai.</div>
+          <div id="recommendation-components" class="recommendation-components hidden"></div>
+          <div id="recommendation-result" class="recommendation-result hidden"></div>
+        </section>
+      </div>
 
       <!-- Drawer 1: Input Lokasi -->
       <div class="drawer-container" id="drawer-search">
@@ -259,7 +321,6 @@
           <div id="loaded-provinces" class="loaded-provinces"></div>
           <div class="demo-province-row">
             <select id="demo-province-select" class="demo-province-select">
-              <option value="JABODETABEK">Jabodetabek (data kelurahan)</option>
               <option value="">— Pilih provinsi —</option>
               <option value="ACEH">Aceh</option>
               <option value="SUMATERA UTARA">Sumatera Utara</option>
@@ -331,7 +392,7 @@
                 <span class="cgis-layer-swatch cgis-grid-swatch"></span>
                 <span class="cgis-layer-copy">
                   <strong>Grid SES</strong>
-                  <small>Sel hexagon 3 km</small>
+                  <small>Sel hexagon radius 1,5 km</small>
                 </span>
               </label>
             </div>
@@ -345,13 +406,19 @@
             <span class="pill pill-muted" id="ses-grid-status">Belum dibuat</span>
             <span class="cgis-grid-size-badge">Sel 3 KM · mengikuti extent wilayah</span>
           </div>
-          <div id="ses-proxy-note" class="ses-proxy-note">
-              Klik Data Polygon Wilayah untuk melihat batas sumber. Klik Grid SES untuk menampilkan hexagon 3 km yang mengikuti seluruh extent polygon Dukcapil terpilih.
+            <div id="ses-proxy-note" class="ses-proxy-note">
+              Klik Data Polygon Wilayah untuk melihat batas sumber. Klik Grid SES untuk menampilkan hexagon radius 1,5 km yang mengikuti seluruh extent polygon Dukcapil terpilih.
+            </div>
+            <div class="ses-proxy-legend demography-color-legend" aria-label="Legenda klasifikasi demografi">
+              <div><span class="ses-legend-swatch ses-class-c"></span>Demografi rendah</div>
+              <div><span class="ses-legend-swatch ses-class-b"></span>Demografi menengah</div>
+              <div><span class="ses-legend-swatch ses-class-a"></span>Demografi tinggi</div>
+              <small>Gabungan relatif anak 0-4, pertumbuhan penduduk, dan kelahiran 2020-2024.</small>
             </div>
             <div id="ses-proxy-legend" class="ses-proxy-legend hidden" aria-label="Legenda SES Proxy">
-              <div><span class="ses-legend-swatch ses-class-a"></span>A · relatif lebih tinggi</div>
-              <div><span class="ses-legend-swatch ses-class-b"></span>B · relatif menengah</div>
-              <div><span class="ses-legend-swatch ses-class-c"></span>C · relatif lebih rendah</div>
+              <div><span class="ses-legend-swatch ses-class-c"></span>Rendah</div>
+              <div><span class="ses-legend-swatch ses-class-b"></span>Menengah</div>
+              <div><span class="ses-legend-swatch ses-class-a"></span>Tinggi</div>
             </div>
           </div>
           <div id="demography-summary" class="foot-traffic-summary">
@@ -364,21 +431,29 @@
             <div class="heatmap-header">
               <div>
                 <h3 id="bhumi-layers-title">🗺️ Layer Nilai Tanah BHUMI</h3>
-                <p class="cgis-control-caption">Aktifkan layer untuk menampilkan data spasial ATR/BPN pada peta.</p>
+                <p class="cgis-control-caption">Pilih sumber tampilan: WMS BHUMI atau polygon JSON BIG.</p>
               </div>
               <span class="pill pill-muted" id="bhumi-layer-status">Siap</span>
             </div>
-            <div class="cgis-layer-toggles" aria-label="Layer nilai tanah BHUMI">
+            <div class="cgis-layer-toggles" aria-label="Pilihan sumber layer nilai tanah">
               <label class="cgis-layer-toggle">
                 <input type="checkbox" id="bhumi-all-toggle">
                 <span class="cgis-layer-swatch" style="background:linear-gradient(90deg,#f59e0b,#22c55e,#ef4444);"></span>
                 <span class="cgis-layer-copy">
-                  <strong>Nilai Tanah</strong>
-                  <small>Zona, penggunaan, dan nilai bidang tanah</small>
+                  <strong>BHUMI (WMS)</strong>
+                  <small>Zona, penggunaan, dan nilai bidang tanah ATR/BPN</small>
                 </span>
               </label>
-              <button type="button" id="bhumi-hide-btn" class="kec-action-btn">Sembunyikan</button>
+              <label class="cgis-layer-toggle">
+                <input type="checkbox" id="big-json-toggle">
+                <span class="cgis-layer-swatch" style="background:linear-gradient(90deg,#2563eb,#7c3aed,#dc2626);"></span>
+                <span class="cgis-layer-copy">
+                  <strong>JSON BIG</strong>
+                  <small>Polygon ZNT BIG dari endpoint query JSON</small>
+                </span>
+              </label>
             </div>
+            <span class="pill pill-muted" id="big-json-status">Nonaktif</span>
           </section>
 
           <section class="bps-explorer" aria-labelledby="bps-explorer-title">
@@ -597,7 +672,7 @@
           <div class="panel-title-row">
             <h2 class="brand-title">⚡ SMART FINDER</h2>
             <div class="panel-title-pills">
-              <span class="pill pill-accent">Radius 3 km</span>
+              <span class="pill pill-accent">Hexagon radius 1,5 km</span>
               <div class="map-mode-toggle">
                 <button type="button" id="map-mode-2d" class="map-mode-btn active" onclick="setMapMode('2d')" aria-pressed="true" title="Peta 2D Vektor Dark (OpenFreeMap)">🗺️ 2D</button>
                 <button type="button" id="map-mode-3d" class="map-mode-btn" onclick="setMapMode('3d')" aria-pressed="false" title="Peta 3D Perspektif Gedung (OpenFreeMap)">🏙️ 3D</button>
@@ -613,6 +688,14 @@
               <div class="spinner"></div>
               <strong>Peta sedang dimuat</strong>
               <p>Crawler Google Maps sedang mengumpulkan titik POI.</p>
+            </div>
+          </div>
+          <div id="ses-map-loading" class="panel-loading hidden" aria-hidden="true">
+            <div class="panel-loading-card">
+              <div class="spinner"></div>
+              <strong id="ses-map-loading-title">Menghitung SES...</strong>
+              <p id="ses-map-loading-text">Sedang menghitung data demografi dan menyiapkan hexagon.</p>
+              <div id="ses-map-loading-progress" class="ses-map-loading-progress hidden" aria-live="polite"></div>
             </div>
           </div>
           <div id="map" aria-label="Peta lokasi"></div>
@@ -742,7 +825,7 @@
   </div>
 
   <script src="./hotspot%20map%20V.2/xlsx.full.min.js"></script>
-  <script src="./app.js?v=20260918sesgrid9" type="module"></script>
+  <script src="./app.js?v=20260920sesgrid13" type="module"></script>
   <script type="module">
     // === MAPLIBRE GL JS: 2 MODE (2D & SATELIT) ===
     import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.7.0/dist/maplibre-gl.mjs';
@@ -904,6 +987,8 @@
       'bhumi-landvalue': { layer: 'umum:nbt3', label: 'Peta Nilai Bidang Tanah', color: '#ef4444' },
     };
     const bhumiLayerState = Object.fromEntries(Object.keys(BHUMI_RASTER_LAYERS).map((id) => [id, false]));
+    const BIG_ZNT_JSON_QUERY = 'https://kspservices.big.go.id/satupeta/rest/services/PUBLIK/PERIZINAN_DAN_PERTANAHAN/MapServer/60/query';
+    let bigJsonRequestId = 0;
 
     function bhumiWmsTileUrl(layer) {
       // Placeholder bbox harus tetap literal agar diganti MapLibre untuk setiap tile.
@@ -914,6 +999,9 @@
       const map = window.maplibreMap;
       if (!map || !map.isStyleLoaded || !map.isStyleLoaded()) return;
       Object.entries(BHUMI_RASTER_LAYERS).forEach(([id, config]) => {
+        // The ATR/BPN WMS currently responds with 403 from browsers. The
+        // land-value layer is rendered from BIG ZNT JSON below instead.
+        if (id === 'bhumi-landvalue') return;
         const sourceId = `${id}-source`;
         const layerId = `${id}-raster`;
         if (!map.getSource(sourceId)) {
@@ -931,6 +1019,11 @@
       if (!BHUMI_RASTER_LAYERS[id]) return;
       bhumiLayerState[id] = Boolean(enabled);
       syncBhumiLayers();
+      if (id === 'bhumi-landvalue') {
+        const bigToggle = document.getElementById('big-json-toggle');
+        if (bigToggle) bigToggle.checked = Boolean(enabled);
+        refreshBigJsonLayer();
+      }
       const active = Object.values(bhumiLayerState).filter(Boolean).length;
       const status = document.getElementById('bhumi-layer-status');
       if (status) status.textContent = active ? `${active} layer aktif` : 'Siap';
@@ -942,14 +1035,82 @@
       const toggle = document.getElementById('bhumi-all-toggle');
       const status = document.getElementById('bhumi-layer-status');
       if (toggle) toggle.checked = Boolean(enabled);
-      if (status) status.textContent = enabled ? '3 layer aktif' : 'Tersembunyi';
+      const bigToggle = document.getElementById('big-json-toggle');
+      if (bigToggle) bigToggle.checked = Boolean(enabled);
+      refreshBigJsonLayer();
+      if (status) status.textContent = enabled ? 'BHUMI aktif · nilai tanah via BIG ZNT' : 'Tersembunyi';
+    }
+
+    function arcgisPolygonToGeoJson(feature) {
+      const rings = feature?.geometry?.rings;
+      if (!Array.isArray(rings) || !rings.length) return null;
+      return { type: 'Feature', properties: feature.attributes || {}, geometry: { type: 'Polygon', coordinates: rings } };
+    }
+
+    async function refreshBigJsonLayer() {
+      const map = window.maplibreMap;
+      const toggle = document.getElementById('big-json-toggle');
+      const status = document.getElementById('big-json-status');
+      if (!map || !toggle) return;
+      const requestId = ++bigJsonRequestId;
+      const sourceId = 'big-json-znt-source';
+      const layerId = 'big-json-znt-fill';
+      if (!toggle.checked) {
+        if (map.getLayer(layerId)) map.setLayoutProperty(layerId, 'visibility', 'none');
+        if (status) status.textContent = 'Nonaktif';
+        return;
+      }
+      if (status) status.textContent = 'Memuat JSON...';
+      const bounds = map.getBounds();
+      const params = new URLSearchParams({
+        f: 'json', where: '1=1',
+        geometry: JSON.stringify({ xmin: bounds.getWest(), ymin: bounds.getSouth(), xmax: bounds.getEast(), ymax: bounds.getNorth(), spatialReference: { wkid: 4326 } }),
+        geometryType: 'esriGeometryEnvelope', inSR: '4326', spatialRel: 'esriSpatialRelIntersects',
+        outFields: 'range,kelasnilai,nozn,kanwil,kantah', returnGeometry: 'true', resultRecordCount: '1000',
+      });
+      try {
+        const response = await fetch(`/api/big-znt?${params}`);
+        const payload = await response.json();
+        if (requestId !== bigJsonRequestId) return;
+        if (!response.ok || payload.error) throw new Error(payload.error?.message || `HTTP ${response.status}`);
+        const geojson = { type: 'FeatureCollection', features: (payload.features || []).map(arcgisPolygonToGeoJson).filter(Boolean) };
+        if (!map.getSource(sourceId)) map.addSource(sourceId, { type: 'geojson', data: geojson });
+        else map.getSource(sourceId).setData(geojson);
+        if (!map.getLayer(layerId)) {
+          map.addLayer({
+            id: layerId,
+            type: 'fill',
+            source: sourceId,
+            paint: {
+              // Kelas 1 = nilai rendah, kelas 9+ = nilai tinggi. Support
+              // both BIG's lowercase fields and BHUMI cache field names.
+              'fill-color': ['interpolate', ['linear'], ['to-number', ['coalesce', ['get', 'kelasnilai'], ['get', 'KELASNILAI']], 6], 1, '#2563eb', 3, '#06b6d4', 5, '#22c55e', 7, '#f59e0b', 9, '#ef4444'],
+              'fill-opacity': 0.58,
+              'fill-outline-color': '#7c2d12',
+            },
+            layout: { visibility: 'visible' },
+          });
+        } else {
+          map.setPaintProperty(layerId, 'fill-color', ['interpolate', ['linear'], ['to-number', ['coalesce', ['get', 'kelasnilai'], ['get', 'KELASNILAI']], 6], 1, '#2563eb', 3, '#06b6d4', 5, '#22c55e', 7, '#f59e0b', 9, '#ef4444']);
+          map.setPaintProperty(layerId, 'fill-opacity', 0.58);
+          map.setPaintProperty(layerId, 'fill-outline-color', '#7c2d12');
+          map.setLayoutProperty(layerId, 'visibility', 'visible');
+        }
+        if (status) status.textContent = `${geojson.features.length} polygon JSON`;
+      } catch (error) {
+        if (status) status.textContent = `Gagal: ${error.message}`;
+      }
+    }
+
+    function setupBigJsonToggle() {
+      const toggle = document.getElementById('big-json-toggle');
+      if (toggle) toggle.addEventListener('change', refreshBigJsonLayer);
+      if (maplibreMap) maplibreMap.on('moveend', () => { if (toggle?.checked) refreshBigJsonLayer(); });
     }
 
     function setupBhumiLayerToggles() {
       const toggle = document.getElementById('bhumi-all-toggle');
-      const hideButton = document.getElementById('bhumi-hide-btn');
       if (toggle) toggle.addEventListener('change', () => setAllBhumiLayers(toggle.checked));
-      if (hideButton) hideButton.addEventListener('click', () => setAllBhumiLayers(false));
       window.refreshBhumiLayers = syncBhumiLayers;
     }
 
@@ -988,6 +1149,8 @@
         ['NOMORZONE', 'Nomor Zone'],
         ['TAHUNDIBUAT', 'Tahun'],
         ['RANGENILAI', 'Range Nilai'],
+        ['range', 'Range Nilai BIG'],
+        ['kelasnilai', 'Kelas Nilai BIG'],
         ['KELAS', 'Kelas'],
       ],
       'umum:PenggunaanTanah': [
@@ -1001,6 +1164,8 @@
         ['tipehak', 'Tipe Hak'],
         ['zonasi', 'Zonasi'],
         ['luasbidang', 'Luas Bidang'],
+        ['range', 'Range Nilai BIG'],
+        ['kelasnilai', 'Kelas Nilai BIG'],
       ],
     };
 
@@ -1040,6 +1205,7 @@
               query_layers: config.layer,
               width, height, bbox,
               x: Math.round(event.point.x), y: Math.round(event.point.y),
+              lng: event.lngLat.lng, lat: event.lngLat.lat,
             }),
           });
           const payload = await response.json().catch(() => ({}));
@@ -1085,6 +1251,7 @@
 
       maplibreMap.on('load', () => {
         syncBhumiLayers();
+        setupBigJsonToggle();
         // Set UI button ke mode 2D
         const btn2d = document.getElementById('map-mode-2d');
         const btnSat = document.getElementById('map-mode-sat');

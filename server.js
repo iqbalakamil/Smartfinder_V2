@@ -125,11 +125,13 @@ const BIG_LAND_USE_QUERY_URL = "https://kspservices.big.go.id/satupeta/rest/serv
 const BIG_ZNT_TIMEOUT_MS = Number(process.env.BIG_ZNT_TIMEOUT_MS || 20000);
 const BIG_LAND_USE_TIMEOUT_MS = Number(process.env.BIG_LAND_USE_TIMEOUT_MS || 20000);
 const BHUMI_REQUEST_TIMEOUT_MS = Number(process.env.BHUMI_REQUEST_TIMEOUT_MS || 15000);
+let bhumiLocalFeatureIndex = null;
+let bhumiPersistentWriteTimer = null;
 // BIG now supplies polygons for land-use and ZNT, so BHUMI only needs a
 // lighter lattice to estimate the ownership signal.
 // BHUMI-only enrichment uses a small lattice for faster exploratory analysis.
 // Increase this to 5 or 7 when higher spatial sampling accuracy is needed.
-const BHUMI_RIGHTS_GRID_SIZE = Math.max(3, Math.min(7, Number(process.env.BHUMI_RIGHTS_GRID_SIZE || 3)));
+const BHUMI_RIGHTS_GRID_SIZE = Math.max(3, Math.min(7, Number(process.env.BHUMI_RIGHTS_GRID_SIZE || 5)));
 const BIG_FREEHOLD_LAYER_BY_PROVINCE = {
   "NUSA TENGGARA BARAT": 11, "JAWA TIMUR": 12, "DAERAH ISTIMEWA YOGYAKARTA": 13,
   "KALIMANTAN BARAT": 14, "SULAWESI BARAT": 15, "KALIMANTAN UTARA": 16,
@@ -147,6 +149,10 @@ const BPS_AGE_SHARE_REFERENCE_URL = "https://sensus.bps.go.id/topik/tabular/sp20
 const INDONESIA_AGE_0_14_SHARE = (22094426 + 22013768 + 22088673) / 275773774;
 const INDONESIA_AGE_2_7_SHARE = ((22094426 * (3 / 5)) + (22013768 * (3 / 5))) / 275773774;
 const PUBLIC_DIR = __dirname;
+// Local BHUMI GeoJSON files are checked before live ATR requests. The
+// persistent cache is populated automatically as Banten areas are analyzed.
+const BHUMI_LOCAL_DATA_ROOT = path.join(PUBLIC_DIR, "data");
+const BHUMI_CACHE_FILE = path.join(BHUMI_LOCAL_DATA_ROOT, "bhumi-banten.cache.json");
 const poiCache = new Map();
 let importedHotmapPois = [];
 let importedHotmapMeta = {
@@ -438,6 +444,154 @@ async function fetchBhumiPersil(body) {
   return payload.encrypted && payload.data ? decryptBhumiPayload(payload.data) : payload;
 }
 
+function readBhumiJsonFeatures(filePath) {
+  try {
+    const payload = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    return Array.isArray(payload?.features) ? payload.features : [];
+  } catch (error) {
+    console.warn(`[BHUMI JSON] Gagal membaca ${filePath}: ${error.message}`);
+    return [];
+  }
+}
+
+function loadBhumiLocalFeatureIndex() {
+  if (bhumiLocalFeatureIndex) return bhumiLocalFeatureIndex;
+  const files = [];
+  try {
+    if (fs.existsSync(BHUMI_LOCAL_DATA_ROOT)) {
+      for (const name of fs.readdirSync(BHUMI_LOCAL_DATA_ROOT)) {
+        if (/^bhumi.*\.json$/i.test(name) && name !== path.basename(BHUMI_CACHE_FILE)) {
+          files.push(path.join(BHUMI_LOCAL_DATA_ROOT, name));
+        }
+      }
+    }
+  } catch (error) {
+    console.warn(`[BHUMI JSON] Direktori cache tidak dapat dibaca: ${error.message}`);
+  }
+  if (fs.existsSync(BHUMI_CACHE_FILE)) files.push(BHUMI_CACHE_FILE);
+  const seen = new Set();
+  const features = files.flatMap(readBhumiJsonFeatures)
+    .filter((feature) => feature?.geometry)
+    .filter((feature) => {
+      const key = `${feature.properties?.bhumi_layer || feature.properties?.layer || ""}|${feature.id || JSON.stringify(feature.geometry)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  bhumiLocalFeatureIndex = features;
+  console.log(`[BHUMI JSON] ${features.length} feature lokal dimuat dari ${files.length} file.`);
+  return features;
+}
+
+function pointInRing(point, ring) {
+  if (!Array.isArray(ring) || ring.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = Number(ring[i]?.[0]);
+    const yi = Number(ring[i]?.[1]);
+    const xj = Number(ring[j]?.[0]);
+    const yj = Number(ring[j]?.[1]);
+    if (![xi, yi, xj, yj].every(Number.isFinite)) continue;
+    const intersects = ((yi > point[1]) !== (yj > point[1]))
+      && (point[0] < ((xj - xi) * (point[1] - yi)) / ((yj - yi) || Number.EPSILON) + xi);
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function pointInBhumiGeometry(point, geometry) {
+  if (!geometry || !Array.isArray(geometry.coordinates)) return false;
+  if (geometry.type === "Polygon") {
+    const [outer, ...holes] = geometry.coordinates;
+    return pointInRing(point, outer) && !holes.some((ring) => pointInRing(point, ring));
+  }
+  if (geometry.type === "MultiPolygon") {
+    return geometry.coordinates.some((polygon) => pointInBhumiGeometry(point, { type: "Polygon", coordinates: polygon }));
+  }
+  return false;
+}
+
+function findLocalBhumiResult(layer, point) {
+  const features = loadBhumiLocalFeatureIndex().filter((candidate) => {
+    const candidateLayer = candidate?.properties?.bhumi_layer || candidate?.properties?.layer;
+    return candidateLayer === layer && pointInBhumiGeometry(point, candidate.geometry);
+  });
+  return features.length ? { type: "FeatureCollection", features } : null;
+}
+
+function scheduleBhumiPersistentWrite() {
+  if (bhumiPersistentWriteTimer) return;
+  bhumiPersistentWriteTimer = setTimeout(() => {
+    bhumiPersistentWriteTimer = null;
+    try {
+      fs.mkdirSync(BHUMI_LOCAL_DATA_ROOT, { recursive: true });
+      const features = loadBhumiLocalFeatureIndex();
+      fs.writeFileSync(BHUMI_CACHE_FILE, JSON.stringify({
+        type: "FeatureCollection",
+        name: "bhumi-banten-cache",
+        metadata: { provider: "ATR/BPN BHUMI", scope: "Banten", updatedAt: new Date().toISOString() },
+        features,
+      }));
+    } catch (error) {
+      console.warn(`[BHUMI JSON] Cache persisten tidak tersimpan: ${error.message}`);
+    }
+  }, 250);
+}
+
+function rememberBhumiResult(layer, result) {
+  const sourceFeatures = Array.isArray(result?.features) ? result.features : [];
+  if (!sourceFeatures.length) return;
+  const normalized = sourceFeatures.map((feature) => {
+    const geometry = feature.geometry || feature.bbox || null;
+    return geometry ? {
+      type: "Feature",
+      id: feature.id || `${layer}:${JSON.stringify(geometry).slice(0, 100)}`,
+      properties: { ...(feature.properties || {}), bhumi_layer: layer },
+      geometry,
+    } : null;
+  }).filter(Boolean);
+  if (!normalized.length) return;
+  const known = new Set(loadBhumiLocalFeatureIndex().map((feature) => `${feature.properties?.bhumi_layer}|${feature.id}`));
+  for (const feature of normalized) {
+    const key = `${layer}|${feature.id}`;
+    if (!known.has(key)) {
+      loadBhumiLocalFeatureIndex().push(feature);
+      known.add(key);
+    }
+  }
+  scheduleBhumiPersistentWrite();
+}
+
+async function fetchBhumiPersilForPoint(layer, body, point) {
+  const local = findLocalBhumiResult(layer, point);
+  if (local) return local;
+  const result = await fetchBhumiPersil(body);
+  rememberBhumiResult(layer, result);
+  return result;
+}
+
+async function fetchBigZntForPoint(lon, lat) {
+  const params = new URLSearchParams({
+    f: "json",
+    where: "1=1",
+    geometry: JSON.stringify({ x: Number(lon), y: Number(lat), spatialReference: { wkid: 4326 } }),
+    geometryType: "esriGeometryPoint",
+    inSR: "4326",
+    spatialRel: "esriSpatialRelIntersects",
+    outFields: "range,kelasnilai,nozn,kanwil,kantah,tglsk,akhirsk,thnsk,blnsk",
+    returnGeometry: "false",
+    resultRecordCount: "20",
+  });
+  const response = await withTimeout(
+    fetch(`${BIG_ZNT_QUERY_URL}?${params}`, { headers: { Accept: "application/json" } }),
+    BIG_ZNT_TIMEOUT_MS,
+    "BIG ZNT point query",
+  );
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.error) throw new Error(payload.error?.message || `BIG ZNT HTTP ${response.status}`);
+  return (payload.features || []).map((item) => item?.attributes || {}).filter((attributes) => Object.keys(attributes).length);
+}
+
 async function handleBhumiIdentify(req, res) {
   try {
     const body = await parseBody(req);
@@ -446,10 +600,89 @@ async function handleBhumiIdentify(req, res) {
       sendJson(res, 400, { error: "Layer BHUMI tidak didukung." });
       return;
     }
-    const result = await fetchBhumiPersil(body);
-    sendJson(res, 200, { layer, result });
+    const point = [Number(body.lng), Number(body.lat)];
+    const hasPoint = point.every(Number.isFinite);
+    try {
+      const result = hasPoint
+        ? await fetchBhumiPersilForPoint(layer, body, point)
+        : await fetchBhumiPersil(body);
+      sendJson(res, 200, { layer, result, source: hasPoint ? "local-json-first-live-fallback" : "bhumi-live" });
+    } catch (error) {
+      // BHUMI currently rejects public requests when its short-lived token
+      // expires. BIG publishes the same ZNT polygons without that token and
+      // is a safe fallback for the land-value layers.
+      if (hasPoint && ["umum:ZNTRANGE", "umum:nbt3"].includes(layer)) {
+        const attributes = await fetchBigZntForPoint(point[0], point[1]);
+        sendJson(res, 200, {
+          layer,
+          result: { features: attributes.map((properties) => ({ type: "Feature", properties })) },
+          source: "big-znt-fallback",
+          warning: `BHUMI tidak tersedia (${error.message}); memakai BIG ZNT.`,
+        });
+        return;
+      }
+      throw error;
+    }
   } catch (error) {
     sendJson(res, 502, { error: error.message || "Gagal mengambil informasi objek BHUMI." });
+  }
+}
+
+async function handleBigZntProxy(req, res, url) {
+  try {
+    const target = new URL(BIG_ZNT_QUERY_URL);
+    for (const [key, value] of url.searchParams) target.searchParams.set(key, value);
+    if (!target.searchParams.has("f")) target.searchParams.set("f", "json");
+    const response = await withTimeout(
+      fetch(target, { headers: { Accept: "application/json" } }),
+      BIG_ZNT_TIMEOUT_MS,
+      "BIG ZNT proxy",
+    );
+    const contentType = response.headers.get("content-type") || "application/json; charset=utf-8";
+    const payload = await response.json().catch(() => null);
+    let responsePayload = payload;
+    // BIG's public ZNT service does not cover every province. Reuse the
+    // local BHUMI cache collected by identify/enrichment for those areas.
+    if (payload && Array.isArray(payload.features) && payload.features.length === 0) {
+      let geometry = null;
+      try { geometry = JSON.parse(target.searchParams.get("geometry") || "null"); } catch {}
+      const xmin = Number(geometry?.xmin), xmax = Number(geometry?.xmax);
+      const ymin = Number(geometry?.ymin), ymax = Number(geometry?.ymax);
+      if ([xmin, xmax, ymin, ymax].every(Number.isFinite)) {
+        const intersectsBounds = (feature) => {
+          const coordinates = [];
+          const visit = (value) => {
+            if (!Array.isArray(value)) return;
+            if (value.length >= 2 && Number.isFinite(Number(value[0])) && Number.isFinite(Number(value[1]))) {
+              coordinates.push([Number(value[0]), Number(value[1])]);
+              return;
+            }
+            value.forEach(visit);
+          };
+          visit(feature.geometry?.coordinates);
+          return coordinates.some(([lon, lat]) => lon >= xmin && lon <= xmax && lat >= ymin && lat <= ymax);
+        };
+        const localFeatures = loadBhumiLocalFeatureIndex()
+          .filter((feature) => (feature.properties?.bhumi_layer || feature.properties?.layer) === "umum:ZNTRANGE")
+          .filter(intersectsBounds)
+          .map((feature) => ({
+            type: "Feature",
+            id: feature.id,
+            attributes: feature.properties || {},
+            geometry: feature.geometry?.type === "Polygon"
+              ? { rings: feature.geometry.coordinates, spatialReference: { wkid: 4326 } }
+              : null,
+          }))
+          .filter((feature) => feature.geometry);
+        if (localFeatures.length) responsePayload = { ...payload, features: localFeatures, source: "local-bhumi-znt-cache" };
+      }
+    }
+    const body = Buffer.from(JSON.stringify(responsePayload ?? payload ?? {}));
+    const outputContentType = responsePayload ? "application/json; charset=utf-8" : contentType;
+    res.writeHead(response.status, { "Content-Type": outputContentType, "Cache-Control": "no-store" });
+    res.end(body);
+  } catch (error) {
+    sendJson(res, 502, { error: error.message || "BIG ZNT gagal diakses." });
   }
 }
 
@@ -459,6 +692,19 @@ function bhumiFeatureProperties(result) {
   if (Array.isArray(result?.data)) return result.data[0] || null;
   if (result?.data && typeof result.data === "object") return result.data;
   return result && typeof result === "object" ? result : null;
+}
+
+function bhumiFeaturePropertiesList(result) {
+  const features = result?.features || result?.data?.features;
+  if (Array.isArray(features)) {
+    return features.map((feature) => feature?.properties)
+      .filter((properties) => properties && typeof properties === "object");
+  }
+  if (Array.isArray(result?.data)) {
+    return result.data.filter((properties) => properties && typeof properties === "object");
+  }
+  const properties = bhumiFeatureProperties(result);
+  return properties && typeof properties === "object" ? [properties] : [];
 }
 
 function bhumiValue(properties, names) {
@@ -646,27 +892,35 @@ async function handleBhumiEnrichHexagons(req, res) {
     const enrichFeature = async (feature) => {
       // Exploratory SES mode intentionally uses BHUMI sampling only. This
       // avoids four BIG polygon queries per hexagon before sampling starts.
-      const bigZntAttributes = [];
+      let bigZntAttributes = [];
+      let bigZntError = null;
       const bigLandUseAttributes = [];
       const bigFreeholdAttributes = [];
       const bigSlumAttributes = [];
       const layers = ["umum:nbt3", "umum:PenggunaanTanah", "umum:ZNTRANGE"];
       const points = bhumiSamplePoints(feature);
-      const sampledResults = await Promise.all(points.map(async (point) => {
+      try {
+        bigZntAttributes = await fetchBigZntForHexagon(feature);
+      } catch (error) {
+        bigZntError = error.message;
+      }
+      const sampledResults = [];
+      const pointConcurrency = Math.max(2, Math.min(6, Number(process.env.BHUMI_SAMPLE_CONCURRENCY || 4)));
+      for (let pointOffset = 0; pointOffset < points.length; pointOffset += pointConcurrency) {
+        const pointBatch = await Promise.all(points.slice(pointOffset, pointOffset + pointConcurrency).map(async (point) => {
         const delta = 0.0008;
         const bbox = [point[0] - delta, point[1] - delta, point[0] + delta, point[1] + delta].join(",");
         const results = await Promise.allSettled(layers.map((layer) => {
           const cacheKey = `${layer}|${bbox}`;
           if (!bhumiSampleCache.has(cacheKey)) {
-            const request = fetchBhumiPersil({
+            const request = fetchBhumiPersilForPoint(layer, {
               service_layer_name: layer,
               query_layers: layer,
               width: 512,
               height: 512,
               bbox,
               x: 256,
-              y: 256,
-            }).catch((error) => {
+            }, point).catch((error) => {
               bhumiSampleCache.delete(cacheKey);
               throw error;
             });
@@ -677,18 +931,27 @@ async function handleBhumiEnrichHexagons(req, res) {
         }));
         return results.map((result, index) => {
           if (result.status === "fulfilled") {
-            const properties = bhumiFeatureProperties(result.value);
-            if (properties && Object.keys(properties).length) return { layer: layers[index], properties };
+            const propertiesList = bhumiFeaturePropertiesList(result.value);
+            return propertiesList
+              .filter((properties) => Object.keys(properties).length)
+              .map((properties) => ({ layer: layers[index], properties }));
           }
           return null;
-        }).filter(Boolean);
-      }));
+        }).flat().filter(Boolean);
+        }));
+        sampledResults.push(...pointBatch);
+      }
       const observations = sampledResults.flat();
+      const observationLayerCounts = observations.reduce((counts, item) => {
+        counts[item.layer] = (counts[item.layer] || 0) + 1;
+        return counts;
+      }, {});
 
       const rights = observations.map((item) => bhumiValue(item.properties, ["tipehak", "hak", "jenis_hak"])).filter(Boolean);
       const bigRights = bigFreeholdAttributes.map((attributes) => attributes.tipehak || "Hak Milik").filter(Boolean);
       const bigLandUses = bigLandUseAttributes.map((attributes) => bhumiValue(attributes, ["ptnobjname", "ptnsbjname", "namobj", "fcode", "ptnremarks"])).filter(Boolean);
       const landUses = [...bigLandUses, ...observations.map((item) => bhumiValue(item.properties, ["GUNATANAH", "NAMAOBJ", "landuse"])).filter(Boolean)];
+      const zonings = observations.map((item) => bhumiValue(item.properties, ["zonasi", "ZONASI", "zona", "ZONA", "zonation"])).filter(Boolean);
       const bigZntLandValues = bigZntAttributes.map((attributes) => bhumiValue(attributes, ["range", "kelasnilai"]))
         .map(parseBhumiNumber).filter((value) => value != null);
       const sampledLandValues = observations.map((item) => bhumiValue(item.properties, ["RANGENILAI", "nilai_tanah", "nilai", "landvalue"]))
@@ -703,11 +966,45 @@ async function handleBhumiEnrichHexagons(req, res) {
           && !/kampung|pedesaan|perkampungan/i.test(text);
       }).length;
       const formalResidentialShare = landUses.length ? (formalResidentialCount / landUses.length) * 100 : null;
+      const classifyLandUse = (value) => {
+        const text = String(value || "").toLowerCase();
+        if (/mewah|luxury|premium|eksklusif/.test(text)) return "residential_luxury";
+        if (/menengah|middle|madya/.test(text)) return "residential_middle";
+        if (/perumahan|permukiman|hunian|residential|cluster|komplek|real\s*estate|apartemen|rusun|residence/.test(text)
+          && !/kampung|pedesaan|perkampungan/.test(text)) return "residential_formal";
+        if (/kampung|pedesaan|perkampungan/.test(text)) return "kampung";
+        if (/komersial|perdagangan|jasa|mall|ruko|pertokoan|commercial/.test(text)) return "commercial";
+        if (/industri|pabrik|gudang|industrial/.test(text)) return "industrial";
+        if (/sawah|pertanian|perkebunan|tegal|tambak|agriculture/.test(text)) return "agriculture";
+        return "other";
+      };
+      const landUseClassCounts = landUses.reduce((counts, value) => {
+        const category = classifyLandUse(value);
+        counts[category] = (counts[category] || 0) + 1;
+        return counts;
+      }, {});
+      const landUseShare = (category) => landUses.length ? ((landUseClassCounts[category] || 0) / landUses.length) * 100 : null;
+      const rightTypeCounts = rights.reduce((counts, value) => {
+        const key = String(value).trim();
+        counts[key] = (counts[key] || 0) + 1;
+        return counts;
+      }, {});
+      const zoningCounts = zonings.reduce((counts, value) => {
+        const key = String(value).trim();
+        counts[key] = (counts[key] || 0) + 1;
+        return counts;
+      }, {});
+      const housingZoningCount = zonings.filter((value) => /perumahan|permukiman|hunian|residential|rumah/i.test(String(value))).length;
+      const primaryValue = (counts) => Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])[0]?.[0] || null;
       const properties = {
         ...(feature.properties || {}),
         bhumi_data_available: observations.length > 0 || bigZntAttributes.length > 0 || bigLandUseAttributes.length > 0 || bigFreeholdAttributes.length > 0 || bigSlumAttributes.length > 0,
         bhumi_sample_count: points.length,
         bhumi_observation_count: observations.length + bigZntAttributes.length + bigLandUseAttributes.length + bigFreeholdAttributes.length + bigSlumAttributes.length,
+        bhumi_observation_layer_counts: JSON.stringify(observationLayerCounts),
+        bhumi_missing_layers: layers.filter((layer) => !observationLayerCounts[layer]).join(","),
+        bhumi_sample_points: points.map(([lon, lat]) => [Number(lon.toFixed(7)), Number(lat.toFixed(7))]),
         bhumi_znt_feature_count: bigZntAttributes.length,
         bhumi_znt_source: bigZntAttributes.length ? "BIG PUBLIK/PERIZINAN_DAN_PERTANAHAN/MapServer/60" : null,
         bhumi_znt_ranges: [...new Set(bigZntAttributes.map((attributes) => attributes.range || attributes.kelasnilai).filter(Boolean))].slice(0, 8).join(", "),
@@ -725,14 +1022,27 @@ async function handleBhumiEnrichHexagons(req, res) {
         bhumi_land_value_median: landValues.length ? landValues.sort((a, b) => a - b)[Math.floor(landValues.length / 2)] : null,
         bhumi_right_types: [...new Set([...bigRights, ...rights].map(String))].slice(0, 8).join(", "),
         bhumi_land_use_types: [...new Set(landUses.map(String))].slice(0, 8).join(", "),
+        bhumi_right_type_counts: JSON.stringify(rightTypeCounts),
+        bhumi_right_observation_count: rights.length + bigRights.length,
+        bhumi_zoning_types: [...new Set(zonings.map(String))].slice(0, 8).join(", "),
+        bhumi_zoning_primary: primaryValue(zoningCounts),
+        bhumi_zoning_observation_count: zonings.length,
+        bhumi_zoning_type_counts: JSON.stringify(zoningCounts),
+        bhumi_zoning_housing_share: zonings.length ? (housingZoningCount / zonings.length) * 100 : null,
+        bhumi_land_use_class_counts: JSON.stringify(landUseClassCounts),
+        bhumi_residential_middle_share: landUseShare("residential_middle"),
+        bhumi_residential_luxury_share: landUseShare("residential_luxury"),
+        bhumi_formal_residential_class_share: landUseShare("residential_formal"),
+        bhumi_commercial_share: landUseShare("commercial"),
+        bhumi_industrial_share: landUseShare("industrial"),
         freehold_share: (rights.length + bigRights.length) ? (freeholdCount / (rights.length + bigRights.length)) * 100 : null,
         // Keep the source area indicator separate from the BHUMI formal-
         // residential indicator so the two do not get counted twice.
         dense_residential_share: formalResidentialShare ?? feature.properties?.dense_residential_share ?? null,
         area_freehold_share: (rights.length + bigRights.length) ? (freeholdCount / (rights.length + bigRights.length)) * 100 : null,
         area_dense_residential_share: formalResidentialShare ?? feature.properties?.area_dense_residential_share ?? null,
-        big_query_errors: null,
-        enrichment_source: "bhumi_sampling_only",
+        big_query_errors: bigZntError,
+        enrichment_source: bigZntAttributes.length ? "big-znt-plus-bhumi-sampling" : "bhumi-sampling-only",
       };
       return { ...feature, properties };
     };
@@ -740,12 +1050,19 @@ async function handleBhumiEnrichHexagons(req, res) {
     // Process several hexagons concurrently instead of waiting for every
     // hexagon sequentially.
     const enriched = [];
-    const concurrency = Math.max(4, Math.min(10, Number(process.env.SES_ENRICH_CONCURRENCY || 8)));
+    const concurrency = Math.max(1, Math.min(4, Number(process.env.SES_ENRICH_CONCURRENCY || 2)));
     for (let index = 0; index < inputFeatures.length; index += concurrency) {
       const batch = await Promise.all(inputFeatures.slice(index, index + concurrency).map(enrichFeature));
       enriched.push(...batch);
     }
-    sendJson(res, 200, { type: "FeatureCollection", features: enriched, meta: { source: "bhumi_sampled_per_hexagon", hexagons: enriched.length, sampling: `${BHUMI_RIGHTS_GRID_SIZE}x${BHUMI_RIGHTS_GRID_SIZE} regular grid inside every hexagon`, provider_mode: "BHUMI-only" } });
+    sendJson(res, 200, { type: "FeatureCollection", features: enriched, meta: {
+      source: "bhumi_sampled_per_hexagon",
+      hexagons: enriched.length,
+      sampling: `${BHUMI_RIGHTS_GRID_SIZE}x${BHUMI_RIGHTS_GRID_SIZE} regular grid inside every hexagon`,
+      provider_mode: "local-json-first-live-fallback",
+      local_cache_features: loadBhumiLocalFeatureIndex().length,
+      local_cache_scope: "Banten",
+    } });
   } catch (error) {
     sendJson(res, 502, { error: error.message || "Gagal menggabungkan data BHUMI ke hexagon." });
   }
@@ -9341,6 +9658,11 @@ function handleRequest(req, res) {
 
   if (req.method === "POST" && pathname === "/api/bhumi-identify") {
     handleBhumiIdentify(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/big-znt") {
+    handleBigZntProxy(req, res, url);
     return;
   }
 
