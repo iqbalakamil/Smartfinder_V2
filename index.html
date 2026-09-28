@@ -1001,6 +1001,9 @@
         } else {
           map.setLayoutProperty(layerId, 'visibility', bhumiLayerState[id] ? 'visible' : 'none');
         }
+        // Keep the BHUMI rasters above demographic fills and boundaries so
+        // activating all BHUMI layers does not make them appear missing.
+        try { map.moveLayer(layerId); } catch {}
       });
     }
 
