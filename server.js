@@ -444,6 +444,55 @@ async function fetchBhumiPersil(body) {
   return payload.encrypted && payload.data ? decryptBhumiPayload(payload.data) : payload;
 }
 
+async function loginBhumi(force = false) {
+  if (bhumiTokenCache && !force) return bhumiTokenCache;
+  const loginResponse = await withTimeout(fetch("https://bhumi.atrbpn.go.id/expapi/loginApi", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: "https://bhumi.atrbpn.go.id",
+      Referer: "https://bhumi.atrbpn.go.id/peta",
+      "User-Agent": "Mozilla/5.0",
+    },
+    body: JSON.stringify({ username: "user", password: "password" }),
+  }), BHUMI_REQUEST_TIMEOUT_MS, "BHUMI login request");
+  if (!loginResponse.ok) throw new Error(`BHUMI login HTTP ${loginResponse.status}`);
+  const rawToken = await loginResponse.text();
+  try { bhumiTokenCache = JSON.parse(rawToken); } catch { bhumiTokenCache = rawToken.trim().replace(/^"|"$/g, ""); }
+  if (!bhumiTokenCache) throw new Error("BHUMI login tidak mengembalikan token.");
+  return bhumiTokenCache;
+}
+
+async function handleBhumiWms(req, res, url) {
+  try {
+    const upstreamUrl = new URL("https://bhumi.atrbpn.go.id/expapi/bhumigeos/umum/wms");
+    for (const [key, value] of url.searchParams) upstreamUrl.searchParams.set(key, value);
+    const requestWms = (token) => withTimeout(fetch(upstreamUrl, {
+      headers: {
+        Authorization: token,
+        Origin: "https://bhumi.atrbpn.go.id",
+        Referer: "https://bhumi.atrbpn.go.id/peta",
+        "User-Agent": "Mozilla/5.0",
+        Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+      },
+    }), BHUMI_REQUEST_TIMEOUT_MS, "BHUMI WMS request");
+    let token = await loginBhumi();
+    let response = await requestWms(token);
+    if (response.status === 401 || response.status === 403) {
+      token = await loginBhumi(true);
+      response = await requestWms(token);
+    }
+    const body = Buffer.from(await response.arrayBuffer());
+    res.writeHead(response.status, {
+      "Content-Type": response.headers.get("content-type") || "image/png",
+      "Cache-Control": "no-store",
+    });
+    res.end(body);
+  } catch (error) {
+    sendJson(res, 502, { error: error.message || "BHUMI WMS gagal diakses." });
+  }
+}
+
 function readBhumiJsonFeatures(filePath) {
   try {
     const payload = JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -9658,6 +9707,11 @@ function handleRequest(req, res) {
 
   if (req.method === "POST" && pathname === "/api/bhumi-identify") {
     handleBhumiIdentify(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/bhumi-wms") {
+    handleBhumiWms(req, res, url);
     return;
   }
 

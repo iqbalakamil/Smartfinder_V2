@@ -971,7 +971,7 @@
       addRadiusCircle(lon, lat, radiusKm);
     }
 
-    const BHUMI_WMS_BASE = 'https://bhumi.atrbpn.go.id/expapi/bhumigeos/umum/wms';
+    const BHUMI_WMS_BASE = '/api/bhumi-wms';
     const BHUMI_RASTER_LAYERS = {
       'bhumi-znt': { layer: 'umum:ZNTRANGE', label: 'Zona Nilai Tanah', color: '#f59e0b' },
       'bhumi-landuse': { layer: 'umum:PenggunaanTanah', label: 'Penggunaan Tanah', color: '#22c55e' },
@@ -991,9 +991,6 @@
       const map = window.maplibreMap;
       if (!map || !map.isStyleLoaded || !map.isStyleLoaded()) return;
       Object.entries(BHUMI_RASTER_LAYERS).forEach(([id, config]) => {
-        // The ATR/BPN WMS currently responds with 403 from browsers. The
-        // land-value layer is rendered from BIG ZNT JSON below instead.
-        if (id === 'bhumi-landvalue') return;
         const sourceId = `${id}-source`;
         const layerId = `${id}-raster`;
         if (!map.getSource(sourceId)) {
