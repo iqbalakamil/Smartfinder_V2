@@ -431,7 +431,7 @@
             <div class="heatmap-header">
               <div>
                 <h3 id="bhumi-layers-title">🗺️ Layer Nilai Tanah BHUMI</h3>
-                <p class="cgis-control-caption">Pilih sumber tampilan: WMS BHUMI atau polygon JSON BIG.</p>
+                <p class="cgis-control-caption">Layer nilai tanah BHUMI dengan fallback data polygon internal.</p>
               </div>
               <span class="pill pill-muted" id="bhumi-layer-status">Siap</span>
             </div>
@@ -440,20 +440,11 @@
                 <input type="checkbox" id="bhumi-all-toggle">
                 <span class="cgis-layer-swatch" style="background:linear-gradient(90deg,#f59e0b,#22c55e,#ef4444);"></span>
                 <span class="cgis-layer-copy">
-                  <strong>BHUMI (WMS)</strong>
+                  <strong>BHUMI / Nilai Tanah</strong>
                   <small>Zona, penggunaan, dan nilai bidang tanah ATR/BPN</small>
                 </span>
               </label>
-              <label class="cgis-layer-toggle">
-                <input type="checkbox" id="big-json-toggle">
-                <span class="cgis-layer-swatch" style="background:linear-gradient(90deg,#2563eb,#7c3aed,#dc2626);"></span>
-                <span class="cgis-layer-copy">
-                  <strong>JSON BIG</strong>
-                  <small>Polygon ZNT BIG dari endpoint query JSON</small>
-                </span>
-              </label>
             </div>
-            <span class="pill pill-muted" id="big-json-status">Nonaktif</span>
           </section>
 
           <section class="bps-explorer" aria-labelledby="bps-explorer-title">
@@ -989,6 +980,7 @@
     const bhumiLayerState = Object.fromEntries(Object.keys(BHUMI_RASTER_LAYERS).map((id) => [id, false]));
     const BIG_ZNT_JSON_QUERY = 'https://kspservices.big.go.id/satupeta/rest/services/PUBLIK/PERIZINAN_DAN_PERTANAHAN/MapServer/60/query';
     let bigJsonRequestId = 0;
+    let bigJsonEnabled = false;
 
     function bhumiWmsTileUrl(layer) {
       // Placeholder bbox harus tetap literal agar diganti MapLibre untuk setiap tile.
@@ -1020,8 +1012,7 @@
       bhumiLayerState[id] = Boolean(enabled);
       syncBhumiLayers();
       if (id === 'bhumi-landvalue') {
-        const bigToggle = document.getElementById('big-json-toggle');
-        if (bigToggle) bigToggle.checked = Boolean(enabled);
+        bigJsonEnabled = Boolean(enabled);
         refreshBigJsonLayer();
       }
       const active = Object.values(bhumiLayerState).filter(Boolean).length;
@@ -1035,8 +1026,7 @@
       const toggle = document.getElementById('bhumi-all-toggle');
       const status = document.getElementById('bhumi-layer-status');
       if (toggle) toggle.checked = Boolean(enabled);
-      const bigToggle = document.getElementById('big-json-toggle');
-      if (bigToggle) bigToggle.checked = Boolean(enabled);
+      bigJsonEnabled = Boolean(enabled);
       refreshBigJsonLayer();
       if (status) status.textContent = enabled ? 'BHUMI aktif · nilai tanah via BIG ZNT' : 'Tersembunyi';
     }
@@ -1049,18 +1039,16 @@
 
     async function refreshBigJsonLayer() {
       const map = window.maplibreMap;
-      const toggle = document.getElementById('big-json-toggle');
-      const status = document.getElementById('big-json-status');
-      if (!map || !toggle) return;
+      const status = document.getElementById('bhumi-layer-status');
+      if (!map) return;
       const requestId = ++bigJsonRequestId;
       const sourceId = 'big-json-znt-source';
       const layerId = 'big-json-znt-fill';
-      if (!toggle.checked) {
+      if (!bigJsonEnabled) {
         if (map.getLayer(layerId)) map.setLayoutProperty(layerId, 'visibility', 'none');
-        if (status) status.textContent = 'Nonaktif';
         return;
       }
-      if (status) status.textContent = 'Memuat JSON...';
+      if (status) status.textContent = 'Memuat layer nilai tanah...';
       const bounds = map.getBounds();
       const params = new URLSearchParams({
         f: 'json', where: '1=1',
@@ -1096,16 +1084,14 @@
           map.setPaintProperty(layerId, 'fill-outline-color', '#7c2d12');
           map.setLayoutProperty(layerId, 'visibility', 'visible');
         }
-        if (status) status.textContent = `${geojson.features.length} polygon JSON`;
+        if (status) status.textContent = `${geojson.features.length} polygon nilai tanah`;
       } catch (error) {
-        if (status) status.textContent = `Gagal: ${error.message}`;
+        if (status) status.textContent = `Layer nilai tanah gagal: ${error.message}`;
       }
     }
 
     function setupBigJsonToggle() {
-      const toggle = document.getElementById('big-json-toggle');
-      if (toggle) toggle.addEventListener('change', refreshBigJsonLayer);
-      if (maplibreMap) maplibreMap.on('moveend', () => { if (toggle?.checked) refreshBigJsonLayer(); });
+      if (maplibreMap) maplibreMap.on('moveend', () => { if (bigJsonEnabled) refreshBigJsonLayer(); });
     }
 
     function setupBhumiLayerToggles() {
