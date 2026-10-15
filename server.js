@@ -84,7 +84,7 @@ async function launchConfiguredBrowser(launchOptions = {}) {
 
 const DEFAULT_PORT = Number(process.env.PORT || 3000);
 const HOST = "127.0.0.1";
-const POI_CACHE_VERSION = "v13-affiliate-brand-keywords";
+const POI_CACHE_VERSION = "v15-radius-grid-crawler-after-kelurahan-scope";
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 15000);
 const LITELLM_BASE_URL = "https://litellm.koboi2026.biz.id/v1";
 const LITELLM_MODEL = "gpt-4o-mini";
@@ -131,7 +131,7 @@ let bhumiPersistentWriteTimer = null;
 // lighter lattice to estimate the ownership signal.
 // BHUMI-only enrichment uses a small lattice for faster exploratory analysis.
 // Increase this to 5 or 7 when higher spatial sampling accuracy is needed.
-const BHUMI_RIGHTS_GRID_SIZE = Math.max(3, Math.min(7, Number(process.env.BHUMI_RIGHTS_GRID_SIZE || 5)));
+const BHUMI_RIGHTS_GRID_SIZE = Math.max(3, Math.min(7, Number(process.env.BHUMI_RIGHTS_GRID_SIZE || 7)));
 const BIG_FREEHOLD_LAYER_BY_PROVINCE = {
   "NUSA TENGGARA BARAT": 11, "JAWA TIMUR": 12, "DAERAH ISTIMEWA YOGYAKARTA": 13,
   "KALIMANTAN BARAT": 14, "SULAWESI BARAT": 15, "KALIMANTAN UTARA": 16,
@@ -153,6 +153,8 @@ const PUBLIC_DIR = __dirname;
 // persistent cache is populated automatically as Banten areas are analyzed.
 const BHUMI_LOCAL_DATA_ROOT = path.join(PUBLIC_DIR, "data");
 const BHUMI_CACHE_FILE = path.join(BHUMI_LOCAL_DATA_ROOT, "bhumi-banten.cache.json");
+const BHUMI_ZNT_EXPORT_ROOT = path.join(BHUMI_LOCAL_DATA_ROOT, "bhumi-znt");
+const BHUMI_ZNT_EXPORT_FILE = path.join(BHUMI_ZNT_EXPORT_ROOT, "data_tanah.geojson");
 const poiCache = new Map();
 let importedHotmapPois = [];
 let importedHotmapMeta = {
@@ -496,11 +498,44 @@ async function handleBhumiWms(req, res, url) {
 function readBhumiJsonFeatures(filePath) {
   try {
     const payload = JSON.parse(fs.readFileSync(filePath, "utf8"));
-    return Array.isArray(payload?.features) ? payload.features : [];
+    return Array.isArray(payload?.features)
+      ? payload.features.map((feature) => normalizeBhumiFeatureCoordinates(feature))
+      : [];
   } catch (error) {
     console.warn(`[BHUMI JSON] Gagal membaca ${filePath}: ${error.message}`);
     return [];
   }
+}
+
+// GeoJSON uses [longitude, latitude], while the dashboard input uses
+// latitude, longitude. Tolerate locally saved files written in input order.
+function normalizeBhumiPosition(position) {
+  if (!Array.isArray(position) || position.length < 2) return position;
+  const first = Number(position[0]);
+  const second = Number(position[1]);
+  const looksLatLon = first >= -11.5 && first <= 6.5 && second >= 94 && second <= 141.5;
+  const looksLonLat = first >= 94 && first <= 141.5 && second >= -11.5 && second <= 6.5;
+  if (looksLatLon && !looksLonLat) return [second, first, ...position.slice(2)];
+  return position;
+}
+
+function normalizeBhumiCoordinates(value) {
+  if (!Array.isArray(value)) return value;
+  if (value.length >= 2 && Number.isFinite(Number(value[0])) && Number.isFinite(Number(value[1]))) {
+    return normalizeBhumiPosition(value);
+  }
+  return value.map(normalizeBhumiCoordinates);
+}
+
+function normalizeBhumiFeatureCoordinates(feature) {
+  if (!feature?.geometry) return feature;
+  return {
+    ...feature,
+    geometry: {
+      ...feature.geometry,
+      coordinates: normalizeBhumiCoordinates(feature.geometry.coordinates),
+    },
+  };
 }
 
 function loadBhumiLocalFeatureIndex() {
@@ -512,6 +547,11 @@ function loadBhumiLocalFeatureIndex() {
         if (/^bhumi.*\.json$/i.test(name) && name !== path.basename(BHUMI_CACHE_FILE)) {
           files.push(path.join(BHUMI_LOCAL_DATA_ROOT, name));
         }
+      }
+    }
+    if (fs.existsSync(BHUMI_ZNT_EXPORT_ROOT)) {
+      for (const name of fs.readdirSync(BHUMI_ZNT_EXPORT_ROOT)) {
+        if (/^(?:bhumi-znt-.*|data_tanah)\.geojson$/i.test(name)) files.push(path.join(BHUMI_ZNT_EXPORT_ROOT, name));
       }
     }
   } catch (error) {
@@ -532,6 +572,107 @@ function loadBhumiLocalFeatureIndex() {
   return features;
 }
 
+function featureCoordinateBounds(geometry) {
+  const coordinates = [];
+  const visit = (value) => {
+    if (!Array.isArray(value)) return;
+    if (value.length >= 2 && Number.isFinite(Number(value[0])) && Number.isFinite(Number(value[1]))) {
+      coordinates.push([Number(value[0]), Number(value[1])]);
+      return;
+    }
+    value.forEach(visit);
+  };
+  visit(geometry?.coordinates);
+  if (!coordinates.length) return null;
+  return {
+    minX: Math.min(...coordinates.map((point) => point[0])),
+    maxX: Math.max(...coordinates.map((point) => point[0])),
+    minY: Math.min(...coordinates.map((point) => point[1])),
+    maxY: Math.max(...coordinates.map((point) => point[1])),
+  };
+}
+
+function boundsOverlap(first, second) {
+  return first && second && first.minX <= second.maxX && first.maxX >= second.minX
+    && first.minY <= second.maxY && first.maxY >= second.minY;
+}
+
+function localBhumiAttributesForHexagon(feature, requestedLayer) {
+  const hexGeometry = feature?.geometry;
+  const hexBounds = featureCoordinateBounds(hexGeometry);
+  if (!hexBounds) return [];
+  const hexPoints = hexGeometry.coordinates?.[0] || [];
+  const localFeatures = loadBhumiLocalFeatureIndex().filter((candidate) => {
+    const layer = candidate?.properties?.bhumi_layer || candidate?.properties?.layer;
+    if (layer !== requestedLayer) return false;
+    const candidateBounds = featureCoordinateBounds(candidate.geometry);
+    if (!boundsOverlap(hexBounds, candidateBounds)) return false;
+    const candidatePoint = candidate.geometry?.type === "Point"
+      ? candidate.geometry.coordinates
+      : candidate.geometry?.coordinates?.[0]?.[0];
+    return pointInBhumiGeometry(candidatePoint, hexGeometry)
+      || hexPoints.some((point) => pointInBhumiGeometry(point, candidate.geometry));
+  });
+  return localFeatures.map((candidate) => candidate.properties || {})
+    .filter((properties) => Object.keys(properties).length);
+}
+
+function localZntAttributesForHexagon(feature) {
+  return localBhumiAttributesForHexagon(feature, "umum:ZNTRANGE");
+}
+
+async function handleBhumiZntSave(req, res) {
+  try {
+    const body = await parseBody(req);
+    if (String(body.password || "") !== "311293") {
+      sendJson(res, 403, { error: "Password download tidak valid." });
+      return;
+    }
+    const features = Array.isArray(body.geojson?.features) ? body.geojson.features.slice(0, 100000) : [];
+    if (!features.length) {
+      sendJson(res, 400, { error: "Tidak ada polygon nilai tanah untuk disimpan." });
+      return;
+    }
+    const normalizedFeatures = features.filter((feature) => feature?.geometry).map((feature, index) => {
+      const normalized = normalizeBhumiFeatureCoordinates(feature);
+      return {
+        type: "Feature",
+        id: feature.id || `saved-znt-${Date.now()}-${index}`,
+        properties: { ...(feature.properties || {}), bhumi_layer: feature.properties?.bhumi_layer || "umum:ZNTRANGE" },
+        geometry: normalized.geometry,
+      };
+    });
+    if (!normalizedFeatures.length) {
+      sendJson(res, 400, { error: "GeoJSON tidak berisi geometry polygon yang valid." });
+      return;
+    }
+    fs.mkdirSync(BHUMI_ZNT_EXPORT_ROOT, { recursive: true });
+    const fileName = "data_tanah.geojson";
+    const filePath = BHUMI_ZNT_EXPORT_FILE;
+    fs.writeFileSync(filePath, JSON.stringify({
+      type: "FeatureCollection",
+      name: "bhumi-znt-export",
+      metadata: {
+        provider: "BIG ZNT / ATR-BPN BHUMI",
+        savedAt: new Date().toISOString(),
+        featureCount: normalizedFeatures.length,
+        ...(body.metadata && typeof body.metadata === "object" ? body.metadata : {}),
+      },
+      features: normalizedFeatures,
+    }));
+    bhumiLocalFeatureIndex = null;
+    sendJson(res, 200, {
+      saved: true,
+      fileName,
+      featureCount: normalizedFeatures.length,
+      folder: "data/bhumi-znt",
+      absoluteFolder: filePath,
+    });
+  } catch (error) {
+    sendJson(res, 500, { error: `GeoJSON nilai tanah gagal disimpan: ${error.message}` });
+  }
+}
+
 function pointInRing(point, ring) {
   if (!Array.isArray(ring) || ring.length < 3) return false;
   let inside = false;
@@ -550,6 +691,7 @@ function pointInRing(point, ring) {
 
 function pointInBhumiGeometry(point, geometry) {
   if (!geometry || !Array.isArray(geometry.coordinates)) return false;
+  if (geometry.type === "Point") return Number(point?.[0]) === Number(geometry.coordinates[0]) && Number(point?.[1]) === Number(geometry.coordinates[1]);
   if (geometry.type === "Polygon") {
     const [outer, ...holes] = geometry.coordinates;
     return pointInRing(point, outer) && !holes.some((ring) => pointInRing(point, ring));
@@ -563,7 +705,18 @@ function pointInBhumiGeometry(point, geometry) {
 function findLocalBhumiResult(layer, point) {
   const features = loadBhumiLocalFeatureIndex().filter((candidate) => {
     const candidateLayer = candidate?.properties?.bhumi_layer || candidate?.properties?.layer;
-    return candidateLayer === layer && pointInBhumiGeometry(point, candidate.geometry);
+    if (candidateLayer !== layer) return false;
+    if (candidate.geometry?.type === "Point") {
+      const [candidateLon, candidateLat] = candidate.geometry.coordinates || [];
+      const deltaLon = Number(candidateLon) - Number(point[0]);
+      const deltaLat = Number(candidateLat) - Number(point[1]);
+      // Point fallback exports represent a grid sample. A small tolerance
+      // lets recommendation hexagons reuse nearby cached samples instead of
+      // calling BHUMI again when the exact sample coordinates differ.
+      return Number.isFinite(deltaLon) && Number.isFinite(deltaLat)
+        && Math.hypot(deltaLon, deltaLat) <= 0.0015;
+    }
+    return pointInBhumiGeometry(point, candidate.geometry);
   });
   return features.length ? { type: "FeatureCollection", features } : null;
 }
@@ -816,6 +969,8 @@ function parseBhumiNumber(value) {
 async function fetchBigZntForHexagon(feature) {
   const ring = feature?.geometry?.coordinates?.[0];
   if (!Array.isArray(ring) || ring.length < 4) return [];
+  const localAttributes = localZntAttributesForHexagon(feature);
+  if (localAttributes.length) return localAttributes;
   const geometry = {
     rings: [ring],
     spatialReference: { wkid: 4326 },
@@ -939,27 +1094,55 @@ async function handleBhumiEnrichHexagons(req, res) {
       return;
     }
     const enrichFeature = async (feature) => {
-      // Exploratory SES mode intentionally uses BHUMI sampling only. This
-      // avoids four BIG polygon queries per hexagon before sampling starts.
+      // Local exported BHUMI data is authoritative for the covered geometry.
+      // Only layers with no local coverage continue to live sampling.
       let bigZntAttributes = [];
       let bigZntError = null;
-      const bigLandUseAttributes = [];
-      const bigFreeholdAttributes = [];
-      const bigSlumAttributes = [];
+      let bigLandUseAttributes = [];
+      let bigFreeholdAttributes = [];
+      let bigSlumAttributes = [];
+      const externalQueryErrors = [];
       const layers = ["umum:nbt3", "umum:PenggunaanTanah", "umum:ZNTRANGE"];
       const points = bhumiSamplePoints(feature);
-      try {
-        bigZntAttributes = await fetchBigZntForHexagon(feature);
-      } catch (error) {
-        bigZntError = error.message;
+      const localLayerAttributes = Object.fromEntries(layers.map((layer) => [
+        layer,
+        localBhumiAttributesForHexagon(feature, layer),
+      ]));
+      const localZntAttributes = localLayerAttributes["umum:ZNTRANGE"] || [];
+      if (localZntAttributes.length) {
+        bigZntAttributes = localZntAttributes;
+      } else {
+        try {
+          bigZntAttributes = await fetchBigZntForHexagon(feature);
+        } catch (error) {
+          bigZntError = error.message;
+        }
       }
+      // These indicators are part of the Area Potential model but are not
+      // included in the three standard BHUMI export layers. Query BIG only
+      // for the missing external layers so the recommendation fields are
+      // populated instead of silently remaining empty.
+      const externalResults = await Promise.allSettled([
+        fetchBigLandUseForHexagon(feature),
+        fetchBigFreeholdForHexagon(feature),
+        fetchBigSlumForHexagon(feature),
+      ]);
+      [bigLandUseAttributes, bigFreeholdAttributes, bigSlumAttributes] = externalResults.map((result, index) => {
+        if (result.status === "fulfilled") return result.value;
+        externalQueryErrors.push(["BIG land-use", "BIG freehold", "BIG slum"][index] + ": " + result.reason.message);
+        return [];
+      });
       const sampledResults = [];
+      Object.entries(localLayerAttributes).forEach(([layer, propertiesList]) => {
+        propertiesList.forEach((properties) => sampledResults.push({ layer, properties }));
+      });
+      const layersNeedingSampling = layers.filter((layer) => !localLayerAttributes[layer].length);
       const pointConcurrency = Math.max(2, Math.min(6, Number(process.env.BHUMI_SAMPLE_CONCURRENCY || 4)));
       for (let pointOffset = 0; pointOffset < points.length; pointOffset += pointConcurrency) {
         const pointBatch = await Promise.all(points.slice(pointOffset, pointOffset + pointConcurrency).map(async (point) => {
         const delta = 0.0008;
         const bbox = [point[0] - delta, point[1] - delta, point[0] + delta, point[1] + delta].join(",");
-        const results = await Promise.allSettled(layers.map((layer) => {
+        const results = await Promise.allSettled(layersNeedingSampling.map((layer) => {
           const cacheKey = `${layer}|${bbox}`;
           if (!bhumiSampleCache.has(cacheKey)) {
             const request = fetchBhumiPersilForPoint(layer, {
@@ -983,7 +1166,7 @@ async function handleBhumiEnrichHexagons(req, res) {
             const propertiesList = bhumiFeaturePropertiesList(result.value);
             return propertiesList
               .filter((properties) => Object.keys(properties).length)
-              .map((properties) => ({ layer: layers[index], properties }));
+              .map((properties) => ({ layer: layersNeedingSampling[index], properties }));
           }
           return null;
         }).flat().filter(Boolean);
@@ -1001,7 +1184,7 @@ async function handleBhumiEnrichHexagons(req, res) {
       const bigLandUses = bigLandUseAttributes.map((attributes) => bhumiValue(attributes, ["ptnobjname", "ptnsbjname", "namobj", "fcode", "ptnremarks"])).filter(Boolean);
       const landUses = [...bigLandUses, ...observations.map((item) => bhumiValue(item.properties, ["GUNATANAH", "NAMAOBJ", "landuse"])).filter(Boolean)];
       const zonings = observations.map((item) => bhumiValue(item.properties, ["zonasi", "ZONASI", "zona", "ZONA", "zonation"])).filter(Boolean);
-      const bigZntLandValues = bigZntAttributes.map((attributes) => bhumiValue(attributes, ["range", "kelasnilai"]))
+      const bigZntLandValues = bigZntAttributes.map((attributes) => bhumiValue(attributes, ["range", "kelasnilai", "RANGENILAI", "nilai_tanah", "nilai", "landvalue"]))
         .map(parseBhumiNumber).filter((value) => value != null);
       const sampledLandValues = observations.map((item) => bhumiValue(item.properties, ["RANGENILAI", "nilai_tanah", "nilai", "landvalue"]))
         .map(parseBhumiNumber).filter((value) => value != null);
@@ -1055,8 +1238,10 @@ async function handleBhumiEnrichHexagons(req, res) {
         bhumi_missing_layers: layers.filter((layer) => !observationLayerCounts[layer]).join(","),
         bhumi_sample_points: points.map(([lon, lat]) => [Number(lon.toFixed(7)), Number(lat.toFixed(7))]),
         bhumi_znt_feature_count: bigZntAttributes.length,
-        bhumi_znt_source: bigZntAttributes.length ? "BIG PUBLIK/PERIZINAN_DAN_PERTANAHAN/MapServer/60" : null,
-        bhumi_znt_ranges: [...new Set(bigZntAttributes.map((attributes) => attributes.range || attributes.kelasnilai).filter(Boolean))].slice(0, 8).join(", "),
+        bhumi_znt_source: bigZntAttributes.length
+          ? (localZntAttributes.length ? "local data/bhumi-znt/data_tanah.geojson" : "BIG PUBLIK/PERIZINAN_DAN_PERTANAHAN/MapServer/60")
+          : null,
+        bhumi_znt_ranges: [...new Set(bigZntAttributes.map((attributes) => attributes.range || attributes.kelasnilai || attributes.RANGENILAI).filter(Boolean))].slice(0, 8).join(", "),
         big_land_use_feature_count: bigLandUseAttributes.length,
         big_land_use_source: bigLandUseAttributes.length ? "BIG PUBLIK/SUMBER_DAYA_ALAM_DAN_LINGKUNGAN/MapServer/3" : null,
         big_freehold_feature_count: bigFreeholdAttributes.length,
@@ -1090,8 +1275,14 @@ async function handleBhumiEnrichHexagons(req, res) {
         dense_residential_share: formalResidentialShare ?? feature.properties?.dense_residential_share ?? null,
         area_freehold_share: (rights.length + bigRights.length) ? (freeholdCount / (rights.length + bigRights.length)) * 100 : null,
         area_dense_residential_share: formalResidentialShare ?? feature.properties?.area_dense_residential_share ?? null,
-        big_query_errors: bigZntError,
-        enrichment_source: bigZntAttributes.length ? "big-znt-plus-bhumi-sampling" : "bhumi-sampling-only",
+        big_query_errors: [bigZntError, ...externalQueryErrors].filter(Boolean).join(" | ") || null,
+        bhumi_local_layer_counts: JSON.stringify(Object.fromEntries(Object.entries(localLayerAttributes).map(([layer, values]) => [layer, values.length]))),
+        bhumi_sampling_layers: layersNeedingSampling.join(","),
+        bhumi_sampling_skipped_layers: layers.filter((layer) => !layersNeedingSampling.includes(layer)).join(","),
+        enrichment_source: [
+          localZntAttributes.length ? "local-znt" : bigZntAttributes.length ? "big-znt" : null,
+          sampledResults.length ? (layersNeedingSampling.length ? "local-plus-sampling" : "local-only") : null,
+        ].filter(Boolean).join("+") || "unavailable",
       };
       return { ...feature, properties };
     };
@@ -1131,6 +1322,14 @@ function toFiniteNumber(value) {
 function toInteger(value) {
   const parsed = toFiniteNumber(value);
   return parsed == null ? null : Math.round(parsed);
+}
+
+function ratioPercentOfPopulation(value, population) {
+  const numerator = toFiniteNumber(value);
+  const denominator = toFiniteNumber(population);
+  return numerator != null && denominator != null && denominator > 0
+    ? Number(((numerator / denominator) * 100).toFixed(4))
+    : null;
 }
 
 function sumNumbers(values) {
@@ -6187,7 +6386,13 @@ async function buildStructuredAnalysisResult({ latitude, longitude, businessInpu
 async function gatherPoiAndResearchPayload(lat, lon, location = {}) {
   const radius = 3000;
   const areaCoverage = await discoverAreaCoverage(lat, lon, radius, location).catch(() => []);
-  const searchLocation = { ...location, searchAreas: areaCoverage.length ? areaCoverage : [location], areaCoverage };
+  const searchLocation = {
+    ...location,
+    targetLat: lat,
+    targetLon: lon,
+    searchAreas: areaCoverage.length ? areaCoverage : [location],
+    areaCoverage,
+  };
   const crawlPlan = buildBackendCrawlPlan(searchLocation.searchAreas, location);
   const [googleHousingPois, externalResearch] = await Promise.all([
     fetchGoogleHousingPois(lat, lon, radius, searchLocation).catch(() => []),
@@ -6198,9 +6403,19 @@ async function gatherPoiAndResearchPayload(lat, lon, location = {}) {
   const googleHousingPoisWithCoords = googleHousingPois.filter((poi) => poi.lat && poi.lon);
   const googleHousingPoisInRadius = googleHousingPoisWithCoords.filter((poi) => calculateDistanceMeters(lat, lon, poi.lat, poi.lon) <= radius);
   const fallbackUsed = !googleHousingPois.length;
+  // Kelurahan dipakai untuk menyusun query crawler, tetapi batas aman marker
+  // tetap harus dihitung dari titik target. Sebuah kelurahan bisa memanjang
+  // melewati radius 3 km, sehingga seluruh POI di dalam kelurahan tidak boleh
+  // otomatis dianggap berada di sekitar titik.
   const poisToReturn = fallbackUsed
     ? buildSyntheticPoiFallback(lat, lon, areaCoverage, crawlPlan)
-    : googleHousingPois;
+    : googleHousingPois.filter((poi) => {
+      const poiLat = Number(poi?.lat);
+      const poiLon = Number(poi?.lon);
+      return !Number.isFinite(poiLat) || !Number.isFinite(poiLon)
+        ? true
+        : calculateDistanceMeters(lat, lon, poiLat, poiLon) <= radius;
+    });
   syncBackendHotmapPois(googleHousingPoisInRadius);
   return {
     items: dedupePois([...poisToReturn]),
@@ -7407,11 +7622,14 @@ async function handlePois(req, res) {
     const areaCoverage = await discoverAreaCoverage(lat, lon, radius, location).catch(() => []);
     const searchLocation = {
       ...location,
+      targetLat: lat,
+      targetLon: lon,
       searchAreas: areaCoverage.length ? areaCoverage : [location],
       areaCoverage,
     };
     const crawlPlan = useOpenStreetMap || useArcgisPlaces ? [] : buildBackendCrawlPlan(searchLocation.searchAreas, location);
     console.log(`POI_AREA_SCOPE kelurahan=${areaCoverage.length} queries=${crawlPlan.length}`);
+    console.log(`POI_AREA_SCOPE_NAMES ${areaCoverage.map((area) => [area.village, area.subdistrict || area.district, area.city].filter(Boolean).join(", ")).filter(Boolean).join(" | ") || "-"}`);
 
     const cached = poiCache.get(cacheKey);
     if (cached && !cached.fallbackUsed && Date.now() - cached.createdAt < 1000 * 60 * 30) {
@@ -7443,11 +7661,10 @@ async function handlePois(req, res) {
     const googleHousingPoisInRadius = googleHousingPoisWithCoords.filter((item) => calculateDistanceMeters(lat, lon, item.lat, item.lon) <= radius);
     const googleHousingPoisOutsideRadius = googleHousingPoisWithCoords.filter((item) => calculateDistanceMeters(lat, lon, item.lat, item.lon) > radius).length;
     const googleHousingPoisWithoutCoords = googleHousingPois.length - googleHousingPoisWithCoords.length;
-    // Radius 3 km menentukan kelurahan Dukcapil yang menjadi cakupan pencarian.
-    // Semua POI berkoordinat valid dari kelurahan-kelurahan tersebut dikirim ke
-    // peta; jangan membuangnya hanya karena titik POI berada di sisi kelurahan
-    // yang secara geometri melewati batas lingkaran.
-    const googleHousingPoisWithinSelectedAreas = googleHousingPoisWithCoords;
+    // Kelurahan menentukan cakupan query crawler. Setelah crawler selesai,
+    // setiap koordinat tetap divalidasi terhadap titik target agar marker tidak
+    // ikut terbawa hanya karena masih berada di polygon kelurahan yang sama.
+    const googleHousingPoisWithinSelectedAreas = googleHousingPoisInRadius;
     const overpassPois = overpassPipelineResult.status === "fulfilled"
       ? overpassPipelineResult.value
       : [];
@@ -7462,10 +7679,15 @@ async function handlePois(req, res) {
       Number.isFinite(Number(item.lon)) &&
       calculateDistanceMeters(lat, lon, item.lat, item.lon) <= radius
     );
+    const arcgisPlacesPoisInRadius = arcgisPlacesPois.filter((item) =>
+      Number.isFinite(Number(item.lat)) &&
+      Number.isFinite(Number(item.lon)) &&
+      calculateDistanceMeters(lat, lon, item.lat, item.lon) <= radius
+    );
     const realPoisInSelectedKelurahan = dedupePois([
       ...googleHousingPoisWithinSelectedAreas,
       ...overpassPoisInRadius,
-      ...arcgisPlacesPois,
+      ...arcgisPlacesPoisInRadius,
     ]);
     const fallbackUsed = googleHousingPois.length === 0 && overpassPoisInRadius.length === 0;
     // Jangan pernah mengembalikan titik sintetis. Jika sumber nyata gagal,
@@ -7487,14 +7709,15 @@ async function handlePois(req, res) {
         overpassTotal: overpassPois.length,
         overpassInRadius: overpassPoisInRadius.length,
         arcgisPlacesTotal: arcgisPlacesPois.length,
+        arcgisPlacesWithinRadius: arcgisPlacesPoisInRadius.length,
         arcgisPlacesError,
         arcgisPlacesByGroup: arcgisPlacesPois.reduce((groups, place) => {
           groups[place.category] = (groups[place.category] || 0) + 1;
           return groups;
         }, {}),
         realPoisInRadius: realPoisInSelectedKelurahan.length,
-        radiusFilterApplied: false,
-        radiusFilterNote: "Radius 3 km dipakai untuk memilih kelurahan dari polygon Dukcapil; seluruh POI berkoordinat valid dari kelurahan terpilih ditampilkan.",
+        radiusFilterApplied: true,
+        radiusFilterNote: "Kelurahan dipetakan lebih dulu untuk menyusun query crawler; setiap POI berkoordinat kemudian divalidasi ulang dan hanya titik dalam radius 3 km yang dikirim ke peta.",
         googleMapsCoordSources: googleHousingPoisWithCoords.reduce((accumulator, item) => {
           const key = item.tags?.coord_source || "unknown";
           accumulator[key] = (accumulator[key] || 0) + 1;
@@ -8050,7 +8273,18 @@ async function handleDemographyPolygons(req, res, url) {
           u0: toInteger(a.u0),
           u5: toInteger(a.u5),
           u10: toInteger(a.u10),
+          u25: toInteger(a.u25),
+          u35: toInteger(a.u35),
+          u40: toInteger(a.u40),
+          u45: toInteger(a.u45),
           usia_0_14: sumNumbers([a.u0, a.u5, a.u10]),
+          rasio_usia_0_4_persen: ratioPercentOfPopulation(a.u0, a.jumlah_penduduk),
+          rasio_usia_5_9_persen: ratioPercentOfPopulation(a.u5, a.jumlah_penduduk),
+          rasio_usia_10_14_persen: ratioPercentOfPopulation(a.u10, a.jumlah_penduduk),
+          rasio_usia_25_29_persen: ratioPercentOfPopulation(a.u25, a.jumlah_penduduk),
+          rasio_usia_35_39_persen: ratioPercentOfPopulation(a.u35, a.jumlah_penduduk),
+          rasio_usia_40_44_persen: ratioPercentOfPopulation(a.u40, a.jumlah_penduduk),
+          rasio_usia_45_49_persen: ratioPercentOfPopulation(a.u45, a.jumlah_penduduk),
           estimasi_usia_2_7: earlyChildhood,
           lhr_2020: toInteger(a.lhr_2020),
           lhr_2021: toInteger(a.lhr_2021),
@@ -9717,6 +9951,11 @@ function handleRequest(req, res) {
 
   if (req.method === "GET" && pathname === "/api/big-znt") {
     handleBigZntProxy(req, res, url);
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/api/bhumi-znt/save") {
+    handleBhumiZntSave(req, res);
     return;
   }
 

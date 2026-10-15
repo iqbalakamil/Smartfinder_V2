@@ -69,6 +69,7 @@ const MAX_CRAWL_TASKS = VERCEL_MODE ? 3 : 999;
 // cukup agar task selesai pada desktop/local backend, bukan berhenti di tengah
 // saat cakupan area menghasilkan banyak kelurahan.
 const CRAWL_DEADLINE_MS = Number(process.env.POI_CRAWL_DEADLINE_MS || 600000);
+const GRID_SEARCH_RADIUS_KM = 2.2;
 
 async function launchConfiguredBrowser(launchOptions = {}) {
   if (chromium) {
@@ -115,9 +116,31 @@ function buildSearchAreas(location = {}) {
   return Array.from(unique.values());
 }
 
+function buildGridSearchPoints(location = {}) {
+  const lat = Number(location.targetLat ?? location.lat);
+  const lon = Number(location.targetLon ?? location.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return [];
+
+  // Google Maps tidak selalu mengembalikan semua tempat saat query hanya
+  // memakai nama kelurahan. Sebarkan query ke pusat dan delapan arah supaya
+  // koridor/perumahan yang berada di sisi radius tidak terlewat.
+  const points = [{ lat, lon, label: "center" }];
+  const latitudeKm = GRID_SEARCH_RADIUS_KM / 111.32;
+  const longitudeKm = GRID_SEARCH_RADIUS_KM / (111.32 * Math.max(0.2, Math.cos((lat * Math.PI) / 180)));
+  for (let index = 0; index < 8; index += 1) {
+    const angle = (index * Math.PI) / 4;
+    points.push({
+      lat: lat + latitudeKm * Math.sin(angle),
+      lon: lon + longitudeKm * Math.cos(angle),
+      label: `grid-${index + 1}`,
+    });
+  }
+  return points;
+}
+
 function buildQueries(location = {}) {
   const areas = buildSearchAreas(location);
-  return areas.flatMap((area) => {
+  const areaQueries = areas.flatMap((area) => {
     const locationLabel = buildLocationLabel(area);
     return Object.entries(CATEGORY_CONFIG).flatMap(([mode, config]) => {
       // Hunian memakai seluruh variasi keyword agar cluster/perumahan/apartment
@@ -134,6 +157,30 @@ function buildQueries(location = {}) {
       }));
     });
   });
+
+  const gridPoints = buildGridSearchPoints(location);
+  const gridQueries = gridPoints.flatMap((point) => Object.entries(CATEGORY_CONFIG).flatMap(([mode, config]) => {
+    const keywords = mode === "hunian" || mode === "affiliate"
+      ? config.keywords
+      : config.keywords.slice(0, KEYWORDS_PER_CATEGORY);
+    return keywords.map((keyword) => ({
+      mode,
+      keyword,
+      area: areas[0] || {},
+      query: `${keyword} near ${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}`,
+      searchScope: point.label,
+      searchPoint: point,
+    }));
+  }));
+
+  const unique = new Map();
+  // Prioritaskan hasil berbasis titik target supaya batas 100 POI per kategori
+  // tidak habis lebih dulu oleh hasil query kelurahan yang biasanya lebih luas.
+  [...gridQueries, ...areaQueries].forEach((task) => {
+    const key = `${task.mode}|${task.keyword}|${task.query}`.toLowerCase();
+    if (!unique.has(key)) unique.set(key, task);
+  });
+  return Array.from(unique.values());
 }
 
 function normalizePhone(value) {
@@ -605,9 +652,9 @@ async function crawlGoogleMapsPois(location = {}) {
           const taskIndex = nextTaskIndex;
           const task = tasks[taskIndex];
           nextTaskIndex += 1;
-          console.log(`GOOGLE_MAPS_TASK_START ${taskIndex + 1}/${tasks.length} ${task.mode} ${task.area?.village || ""}`);
+          console.log(`GOOGLE_MAPS_TASK_START ${taskIndex + 1}/${tasks.length} ${task.mode} ${task.searchScope || task.area?.village || ""}`);
           const rows = await crawlQuery(page, task.query).catch(() => []);
-          console.log(`GOOGLE_MAPS_TASK_DONE ${taskIndex + 1}/${tasks.length} rows=${rows.length} ${task.mode} ${task.area?.village || ""}`);
+          console.log(`GOOGLE_MAPS_TASK_DONE ${taskIndex + 1}/${tasks.length} rows=${rows.length} ${task.mode} ${task.searchScope || task.area?.village || ""}`);
           for (const row of rows) {
             if (!shouldKeepRow(row, task)) {
               continue;

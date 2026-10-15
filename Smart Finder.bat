@@ -131,18 +131,23 @@ if not exist "node_modules\playwright\.local-chromium" (
   )
 )
 
-set "APP_PORT="
-for /f "delims=" %%P in ('powershell -NoProfile -Command "$port=3000; while (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue) { $port++ }; Write-Output $port"') do set "APP_PORT=%%P"
-if not defined APP_PORT set "APP_PORT=3000"
-set "PORT=%APP_PORT%"
-echo [INFO] Port aplikasi: %PORT%
->> "%LOG_FILE%" echo [%date% %time%] Selected application port %PORT%.
+rem Smart Finder selalu menggunakan port 3000. Jika masih terpakai,
+rem server akan memberi pesan agar instance lama dihentikan.
+set "APP_PORT=3000"
+set "PORT=3000"
+echo [INFO] Port aplikasi: 3000
+>> "%LOG_FILE%" echo [%date% %time%] Fixed application port 3000.
 
 rem Beri crawler Google Maps waktu sampai 10 menit; pipeline backend 11 menit.
 rem Nilai environment ini mengalahkan default aplikasi tanpa mengubah .env.
 set "POI_CRAWL_DEADLINE_MS=600000"
 set "POI_GOOGLE_HOUSING_TIMEOUT_MS=660000"
 >> "%LOG_FILE%" echo [%date% %time%] POI timeout: crawl 600000ms, pipeline 660000ms.
+
+rem Bersihkan listener lama milik Smart Finder agar launcher tidak gagal EADDRINUSE.
+echo [INFO] Membersihkan instance Smart Finder lama pada port 3000...
+>> "%LOG_FILE%" echo [%date% %time%] Cleaning old Smart Finder listener on port 3000.
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$listeners = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue; foreach ($listener in $listeners) { try { Stop-Process -Id $listener.OwningProcess -Force -ErrorAction Stop } catch {} }; Start-Sleep -Milliseconds 800" >nul 2>&1
 
 echo [INFO] Menjalankan Smart Finder...
 >> "%LOG_FILE%" echo [%date% %time%] Starting Node.js application.

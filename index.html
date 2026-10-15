@@ -77,6 +77,13 @@
         </div>
 
         <div class="sidebar-item-wrap">
+          <button class="sidebar-item" data-drawer="drawer-bhumi-export" aria-pressed="false" onclick="toggleDrawer('drawer-bhumi-export')" title="Export JSON BHUMI">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path><path d="M5 3h4"></path><path d="M15 3h4v5"></path></svg>
+          </button>
+          <span class="sidebar-label">Export BHUMI</span>
+        </div>
+
+        <div class="sidebar-item-wrap">
           <button class="sidebar-item" data-drawer="drawer-shortlist" aria-pressed="false" onclick="toggleDrawer('drawer-shortlist')">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><path d="M9 22v-4h6v4"></path><path d="M8 6h.01"></path><path d="M16 6h.01"></path><path d="M12 6h.01"></path><path d="M12 10h.01"></path><path d="M16 10h.01"></path><path d="M16 14h.01"></path><path d="M8 10h.01"></path><path d="M8 14h.01"></path></svg>
             <span id="shortlist-notification-badge" class="nav-badge-notify hidden">!</span>
@@ -392,7 +399,7 @@
                 <span class="cgis-layer-swatch cgis-grid-swatch"></span>
                 <span class="cgis-layer-copy">
                   <strong>Grid SES</strong>
-                  <small>Sel hexagon radius 1,5 km</small>
+                  <small>Sel hexagon radius 750 m</small>
                 </span>
               </label>
             </div>
@@ -407,13 +414,13 @@
             <span class="cgis-grid-size-badge">Sel 3 KM · mengikuti extent wilayah</span>
           </div>
             <div id="ses-proxy-note" class="ses-proxy-note">
-              Klik Data Polygon Wilayah untuk melihat batas sumber. Klik Grid SES untuk menampilkan hexagon radius 1,5 km yang mengikuti seluruh extent polygon Dukcapil terpilih.
+              Klik Data Polygon Wilayah untuk melihat batas sumber. Klik Grid SES untuk menampilkan hexagon radius 750 m yang mengikuti seluruh extent polygon Dukcapil terpilih.
             </div>
             <div class="ses-proxy-legend demography-color-legend" aria-label="Legenda klasifikasi demografi">
               <div><span class="ses-legend-swatch ses-class-c"></span>Demografi rendah</div>
               <div><span class="ses-legend-swatch ses-class-b"></span>Demografi menengah</div>
               <div><span class="ses-legend-swatch ses-class-a"></span>Demografi tinggi</div>
-              <small>Gabungan relatif anak 0-4, pertumbuhan penduduk, dan kelahiran 2020-2024.</small>
+              <small>Klasifikasi memakai jumlah anak usia 0-4 tahun dan rasionya terhadap total penduduk. Biru rendah, kuning menengah, merah tinggi.</small>
             </div>
             <div id="ses-proxy-legend" class="ses-proxy-legend hidden" aria-label="Legenda SES Proxy">
               <div><span class="ses-legend-swatch ses-class-c"></span>Rendah</div>
@@ -473,6 +480,42 @@
             </div>
           </section>
         </div>
+      </div>
+
+      <!-- Drawer: Export JSON BHUMI -->
+      <div class="drawer-container" id="drawer-bhumi-export" style="width: 520px;">
+        <div class="drawer-header">
+          <h3>⬇️ Export JSON BHUMI</h3>
+          <button class="drawer-close-btn" onclick="toggleDrawer('drawer-bhumi-export')" title="Minimize drawer">&minus;</button>
+        </div>
+        <section class="panel" style="padding:14px; border:none; box-shadow:none;">
+          <div class="heatmap-header">
+            <div>
+              <h3>Download sesuai wilayah</h3>
+              <p class="cgis-control-caption">Pilih provinsi, kota/kabupaten, dan kecamatan. File hanya disimpan setelah seluruh layer BHUMI selesai dimuat.</p>
+            </div>
+            <span class="pill pill-muted" id="bhumi-export-status">Siap</span>
+          </div>
+          <div class="bhumi-export-controls bhumi-area-controls">
+            <select id="bhumi-province-select" class="demo-province-select" aria-label="Pilih provinsi">
+              <option value="">Pilih provinsi...</option>
+            </select>
+            <div id="bhumi-city-list" class="bhumi-city-list">Pilih provinsi terlebih dahulu.</div>
+          </div>
+          <div id="bhumi-kecamatan-list" class="bhumi-kecamatan-list">Pilih provinsi dan kota/kabupaten terlebih dahulu.</div>
+          <div class="bhumi-export-controls">
+            <select id="bhumi-grid-size" class="demo-province-select" aria-label="Resolusi grid">
+              <option value="0.1">0,1 km/grid (ekstrem detail)</option>
+              <option value="0.25" selected>0,25 km/grid (sangat detail)</option>
+              <option value="0.5">0,5 km/grid (detail)</option>
+            </select>
+          </div>
+          <div class="cgis-action-row bhumi-download-row">
+            <button type="button" id="bhumi-load-island-btn" class="kec-action-btn kec-add-btn" disabled>Download JSON wilayah terpilih</button>
+            <span class="pill pill-muted" id="bhumi-download-status">Menunggu pilihan wilayah</span>
+          </div>
+          <div id="bhumi-island-progress" class="bhumi-island-progress">Belum ada wilayah yang dipilih.</div>
+        </section>
       </div>
 
       <!-- Drawer 5: Shortlist Ruko -->
@@ -663,7 +706,7 @@
           <div class="panel-title-row">
             <h2 class="brand-title">⚡ SMART FINDER</h2>
             <div class="panel-title-pills">
-              <span class="pill pill-accent">Hexagon radius 1,5 km</span>
+              <span class="pill pill-accent">Hexagon radius 750 m</span>
               <div class="map-mode-toggle">
                 <button type="button" id="map-mode-2d" class="map-mode-btn active" onclick="setMapMode('2d')" aria-pressed="true" title="Peta 2D Vektor Dark (OpenFreeMap)">🗺️ 2D</button>
                 <button type="button" id="map-mode-3d" class="map-mode-btn" onclick="setMapMode('3d')" aria-pressed="false" title="Peta 3D Perspektif Gedung (OpenFreeMap)">🏙️ 3D</button>
@@ -981,6 +1024,9 @@
     const BIG_ZNT_JSON_QUERY = 'https://kspservices.big.go.id/satupeta/rest/services/PUBLIK/PERIZINAN_DAN_PERTANAHAN/MapServer/60/query';
     let bigJsonRequestId = 0;
     let bigJsonEnabled = false;
+    let bigJsonGeoJson = null;
+    let bhumiAreaCities = [];
+    let bhumiAreaFeatures = [];
 
     function bhumiWmsTileUrl(layer) {
       // Placeholder bbox harus tetap literal agar diganti MapLibre untuk setiap tile.
@@ -1062,6 +1108,7 @@
         if (requestId !== bigJsonRequestId) return;
         if (!response.ok || payload.error) throw new Error(payload.error?.message || `HTTP ${response.status}`);
         const geojson = { type: 'FeatureCollection', features: (payload.features || []).map(arcgisPolygonToGeoJson).filter(Boolean) };
+        bigJsonGeoJson = geojson;
         if (!map.getSource(sourceId)) map.addSource(sourceId, { type: 'geojson', data: geojson });
         else map.getSource(sourceId).setData(geojson);
         if (!map.getLayer(layerId)) {
@@ -1090,6 +1137,320 @@
       }
     }
 
+    function bhumiGeometryCoordinates(geometry) {
+      const points = [];
+      const visit = (value) => {
+        if (!Array.isArray(value)) return;
+        if (value.length >= 2 && Number.isFinite(Number(value[0])) && Number.isFinite(Number(value[1]))) {
+          points.push([Number(value[0]), Number(value[1])]);
+          return;
+        }
+        value.forEach(visit);
+      };
+      visit(geometry?.coordinates);
+      return points;
+    }
+
+    function bhumiPointInRing(point, ring) {
+      if (!Array.isArray(ring) || ring.length < 3) return false;
+      let inside = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const xi = Number(ring[i]?.[0]), yi = Number(ring[i]?.[1]);
+        const xj = Number(ring[j]?.[0]), yj = Number(ring[j]?.[1]);
+        const intersects = ((yi > point[1]) !== (yj > point[1]))
+          && (point[0] < ((xj - xi) * (point[1] - yi)) / ((yj - yi) || Number.EPSILON) + xi);
+        if (intersects) inside = !inside;
+      }
+      return inside;
+    }
+
+    function bhumiPointInGeometry(point, geometry) {
+      if (!geometry) return false;
+      if (geometry.type === 'Polygon') {
+        const [outer, ...holes] = geometry.coordinates || [];
+        return bhumiPointInRing(point, outer) && !holes.some((ring) => bhumiPointInRing(point, ring));
+      }
+      if (geometry.type === 'MultiPolygon') return (geometry.coordinates || []).some((coordinates) => bhumiPointInGeometry(point, { type: 'Polygon', coordinates }));
+      return false;
+    }
+
+    function bhumiGeometryBounds(features) {
+      const points = features.flatMap((feature) => bhumiGeometryCoordinates(feature.geometry));
+      if (!points.length) return null;
+      return [Math.min(...points.map((point) => point[0])), Math.min(...points.map((point) => point[1])), Math.max(...points.map((point) => point[0])), Math.max(...points.map((point) => point[1]))];
+    }
+
+    function bhumiKecamatanName(feature) {
+      const properties = feature?.properties || {};
+      return String(properties.nama_kec || properties.KECAMATAN || properties.kecamatan || '').trim();
+    }
+
+    async function loadBhumiAreaCities() {
+      const provinceSelect = document.getElementById('bhumi-province-select');
+      const cityList = document.getElementById('bhumi-city-list');
+      const list = document.getElementById('bhumi-kecamatan-list');
+      if (!provinceSelect || !cityList) return;
+      try {
+        const response = await fetch('/api/demography-cities');
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+        bhumiAreaCities = Array.isArray(payload.data) ? payload.data : [];
+        const provinces = [...new Set(bhumiAreaCities.map((item) => item.province).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'id'));
+        provinceSelect.innerHTML = '<option value="">Pilih provinsi...</option>' + provinces.map((province) => `<option value="${escapeBhumiHtml(province)}">${escapeBhumiHtml(province)}</option>`).join('');
+        provinceSelect.addEventListener('change', () => {
+          const province = provinceSelect.value;
+          const cities = bhumiAreaCities.filter((item) => item.province === province).sort((a, b) => a.city.localeCompare(b.city, 'id'));
+          cityList.innerHTML = province
+            ? cities.map((item) => `<label><input type="checkbox" value="${escapeBhumiHtml(item.city)}"> <span>${escapeBhumiHtml(item.city)}</span></label>`).join('')
+            : 'Pilih provinsi terlebih dahulu.';
+          bhumiAreaFeatures = [];
+          list.textContent = province ? 'Centang satu atau beberapa kota/kabupaten terlebih dahulu.' : 'Pilih provinsi dan kota/kabupaten terlebih dahulu.';
+          document.getElementById('bhumi-load-island-btn').disabled = true;
+          cityList.querySelectorAll('input').forEach((input) => input.addEventListener('change', loadBhumiAreaKecamatan));
+        });
+      } catch (error) {
+        provinceSelect.innerHTML = '<option value="">Daftar provinsi gagal dimuat</option>';
+        cityList.textContent = error.message;
+        if (list) list.textContent = error.message;
+      }
+    }
+
+    async function loadBhumiAreaKecamatan() {
+      const province = document.getElementById('bhumi-province-select')?.value || '';
+      const selectedCities = [...document.querySelectorAll('#bhumi-city-list input:checked')].map((input) => input.value);
+      const cityQuery = selectedCities.join('||');
+      const city = selectedCities.join(', ');
+      const list = document.getElementById('bhumi-kecamatan-list');
+      const button = document.getElementById('bhumi-load-island-btn');
+      if (!province || !selectedCities.length) {
+        if (list) list.textContent = 'Centang satu atau beberapa kota/kabupaten terlebih dahulu.';
+        if (button) button.disabled = true;
+        return;
+      }
+      if (list) list.textContent = 'Memuat daftar kecamatan...';
+      if (button) button.disabled = true;
+      try {
+        const response = await fetch(`/api/demography-polygons?province=${encodeURIComponent(province)}&cities=${encodeURIComponent(cityQuery)}&level=kelurahan&limit=5000`);
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+        bhumiAreaFeatures = Array.isArray(payload.features) ? payload.features.filter((feature) => feature?.geometry && bhumiKecamatanName(feature)) : [];
+        const kecamatan = [...new Set(bhumiAreaFeatures.map(bhumiKecamatanName))].sort((a, b) => a.localeCompare(b, 'id'));
+        if (list) list.innerHTML = kecamatan.length ? kecamatan.map((name) => `<label><input type="checkbox" value="${escapeBhumiHtml(name)}" checked> <span>${escapeBhumiHtml(name)}</span></label>`).join('') : 'Tidak ada kecamatan pada wilayah tersebut.';
+        if (button) button.disabled = !kecamatan.length;
+      } catch (error) {
+        bhumiAreaFeatures = [];
+        if (list) list.textContent = `Gagal memuat kecamatan: ${error.message}`;
+      }
+    }
+
+    async function buildBhumiRecommendationScreening(sourceFeatures) {
+      if (!Array.isArray(sourceFeatures) || !sourceFeatures.length) {
+        throw new Error('Polygon sumber untuk screening tidak tersedia.');
+      }
+
+      // Keep this export on the same spatial pipeline as Recommendation Area:
+      // Dukcapil polygons -> 750 m hexagons -> BHUMI enrichment -> SES/Area
+      // Potential recalculation.
+      const gridResponse = await fetch('/api/ses/grid', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ features: sourceFeatures, cellSizeM: 750, coverageRadiusM: 750 }),
+      });
+      const gridPayload = await gridResponse.json().catch(() => ({}));
+      if (!gridResponse.ok) throw new Error(gridPayload.error || `Grid screening HTTP ${gridResponse.status}`);
+
+      let screeningFeatures = Array.isArray(gridPayload.features) ? gridPayload.features : [];
+      const enriched = [];
+      for (let offset = 0; offset < screeningFeatures.length; offset += 8) {
+        const batch = screeningFeatures.slice(offset, offset + 8);
+        const response = await fetch('/api/bhumi-enrich-hexagons', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ features: batch }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !Array.isArray(payload.features)) {
+          throw new Error(payload.error || `BHUMI screening HTTP ${response.status}`);
+        }
+        enriched.push(...payload.features);
+      }
+
+      if (enriched.length) {
+        const sesResponse = await fetch('/api/ses/calculate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ features: enriched }),
+        });
+        const sesPayload = await sesResponse.json().catch(() => ({}));
+        if (!sesResponse.ok || !Array.isArray(sesPayload.features)) {
+          throw new Error(sesPayload.error || `Perhitungan screening HTTP ${sesResponse.status}`);
+        }
+        screeningFeatures = sesPayload.features;
+      }
+
+      return {
+        method: 'recommendation-area-pipeline',
+        comparison_universe: sourceFeatures.length,
+        source_polygon_count: sourceFeatures.length,
+        grid: {
+          cell_size_m: 750,
+          coverage_radius_m: 750,
+          ...gridPayload.meta,
+        },
+        stages: [
+          'Dukcapil source polygons',
+          '750 m hexagon grid',
+          'BHUMI/BIG enrichment per hexagon',
+          'SES and Potensi Area recalculation',
+        ],
+        formulas: {
+          normalization: 'P5-P95 clipped normalization relatif terhadap comparison_universe',
+          missing_data: 'Domain tanpa indikator tersedia dikeluarkan lalu bobot dinormalisasi ulang',
+          area_potential: 'target demand, child share, population, tenure, residential density, land market, birth, growth, risk',
+          bhumi_role: 'Proxy lokasi untuk Potensi Area; bukan pendapatan rumah tangga',
+        },
+        hexagon_count: screeningFeatures.length,
+        features: screeningFeatures,
+      };
+    }
+
+    async function loadBhumiIslandGrid() {
+      const button = document.getElementById('bhumi-load-island-btn');
+      const status = document.getElementById('bhumi-download-status');
+      const progress = document.getElementById('bhumi-island-progress');
+      const province = document.getElementById('bhumi-province-select')?.value || '';
+      const selectedCities = [...document.querySelectorAll('#bhumi-city-list input:checked')].map((input) => input.value);
+      const city = selectedCities.join(', ');
+      const selectedNames = new Set([...document.querySelectorAll('#bhumi-kecamatan-list input:checked')].map((input) => input.value));
+      const selectedFeatures = bhumiAreaFeatures.filter((feature) => selectedNames.has(bhumiKecamatanName(feature)));
+      const gridKm = Number(document.getElementById('bhumi-grid-size')?.value || 0.25);
+      const password = window.prompt('Masukkan password untuk memuat dan menyimpan GeoJSON BHUMI:');
+      if (password === null) return;
+      if (password !== '311293') {
+        if (status) status.textContent = 'Password salah';
+        return;
+      }
+      const bounds = bhumiGeometryBounds(selectedFeatures);
+      if (!bounds) return;
+      const [minLon, minLat, maxLon, maxLat] = bounds;
+      const latStep = gridKm / 111;
+      const lonStep = gridKm / (111 * Math.max(0.2, Math.cos(((minLat + maxLat) / 2) * Math.PI / 180)));
+      const cells = [];
+      for (let lat = minLat; lat < maxLat; lat += latStep) {
+        for (let lon = minLon; lon < maxLon; lon += lonStep) {
+          const center = [lon + lonStep / 2, lat + latStep / 2];
+          if (!selectedFeatures.some((feature) => bhumiPointInGeometry(center, feature.geometry))) continue;
+          cells.push({
+            minLon: lon, minLat: lat,
+            maxLon: Math.min(lon + lonStep, maxLon), maxLat: Math.min(lat + latStep, maxLat),
+            lng: center[0], lat: center[1],
+          });
+        }
+      }
+      try {
+        if (button) button.disabled = true;
+        if (progress) progress.textContent = `Menyiapkan ${cells.length.toLocaleString('id-ID')} grid ${gridKm.toLocaleString('id-ID')} km untuk ${province} · ${city}...`;
+        if (status) status.textContent = 'Memuat data BHUMI...';
+        const features = [];
+        const seen = new Set();
+        let failedLayerRequests = 0;
+        const failedLayerErrors = [];
+        const concurrency = 2;
+        let completed = 0;
+        let savedFileName = '';
+        let screening = null;
+        const saveCheckpoint = async () => {
+          if (!features.length) return;
+          const response = await fetch('/api/bhumi-znt/save', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password, fileName: savedFileName, geojson: { type: 'FeatureCollection', features }, metadata: {
+              source: 'bhumi-area-grid', layers: ['umum:ZNTRANGE', 'umum:PenggunaanTanah', 'umum:nbt3'], province, city, kecamatan: [...selectedNames], grid_km: gridKm,
+              recommendation_cell_size_m: 750,
+              screening: screening || undefined,
+            } }),
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload.error || `Gagal menyimpan GeoJSON (HTTP ${response.status})`);
+          savedFileName = payload.fileName || savedFileName;
+        };
+        for (let offset = 0; offset < cells.length; offset += concurrency) {
+          const batch = cells.slice(offset, offset + concurrency);
+          const results = await Promise.all(batch.map(async (cell) => {
+            const bbox = [cell.minLon, cell.minLat, cell.maxLon, cell.maxLat].join(',');
+            const layers = ['umum:ZNTRANGE', 'umum:PenggunaanTanah', 'umum:nbt3'];
+            const layerResults = await Promise.all(layers.map(async (layer) => {
+              try {
+                const response = await fetch('/api/bhumi-identify', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    service_layer_name: layer, query_layers: layer,
+                    width: 512, height: 512, bbox, x: 256, y: 256, lng: cell.lng, lat: cell.lat,
+                  }),
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                  failedLayerRequests += 1;
+                  failedLayerErrors.push(`${layer} HTTP ${response.status}`);
+                  return [];
+                }
+                if (payload.error) {
+                  failedLayerRequests += 1;
+                  failedLayerErrors.push(`${layer}: ${payload.error.message || 'response error'}`);
+                  return [];
+                }
+                return (payload.result?.features || payload.result?.data?.features || []).map((feature) => ({ feature, layer }));
+              } catch (error) {
+                failedLayerRequests += 1;
+                failedLayerErrors.push(`${layer}: ${error.message}`);
+                return [];
+              }
+            }));
+            return { cell, features: layerResults.flat() };
+          }));
+          results.forEach(({ cell, features: cellFeatures }) => cellFeatures.forEach(({ feature, layer }) => {
+            const geometry = feature?.geometry || { type: 'Point', coordinates: [cell.lng, cell.lat] };
+            const key = `${layer}|${feature?.id || JSON.stringify(geometry)}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            features.push({
+              type: 'Feature', id: key,
+              properties: { ...(feature?.properties || {}), bhumi_layer: layer, province, city, kecamatan: [...selectedNames].join(', '), grid_km: gridKm },
+              geometry,
+            });
+          }));
+          completed += batch.length;
+          if (progress) progress.textContent = `BHUMI ${province} · ${city}: ${completed.toLocaleString('id-ID')}/${cells.length.toLocaleString('id-ID')} grid selesai · ${features.length.toLocaleString('id-ID')} hasil ditemukan`;
+        }
+        bigJsonGeoJson = { type: 'FeatureCollection', features };
+        if (!features.length) throw new Error('Tidak ada polygon BHUMI yang berhasil dikembalikan.');
+        if (failedLayerRequests > 0) {
+          throw new Error(`${failedLayerRequests} request layer BHUMI gagal. Tidak ada file disimpan. ${failedLayerErrors.slice(0, 3).join(' | ')}`);
+        }
+
+        if (progress) progress.textContent = 'Menjalankan screening Potensi Area seperti modul Rekomendasi...';
+        try {
+          screening = await buildBhumiRecommendationScreening(selectedFeatures);
+        } catch (screeningError) {
+          // Raw BHUMI detail remains useful even when the optional screening
+          // stage is unavailable; record the reason in the exported metadata.
+          screening = {
+            method: 'recommendation-area-pipeline',
+            status: 'failed',
+            error: screeningError.message,
+            source_polygon_count: selectedFeatures.length,
+          };
+        }
+        await saveCheckpoint();
+        if (status) status.textContent = `${features.length.toLocaleString('id-ID')} detail + ${screening.hexagon_count || 0} hexagon screening tersimpan`;
+        if (progress) progress.textContent = `Selesai: detail BHUMI dan screening Potensi Area tersimpan di data/bhumi-znt/`;
+      } catch (error) {
+        if (status) status.textContent = `BHUMI gagal: ${error.message}`;
+        if (progress) progress.textContent = 'Proses gagal; file tidak disimpan karena seluruh layer belum selesai.';
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+
     function setupBigJsonToggle() {
       if (maplibreMap) maplibreMap.on('moveend', () => { if (bigJsonEnabled) refreshBigJsonLayer(); });
     }
@@ -1097,6 +1458,8 @@
     function setupBhumiLayerToggles() {
       const toggle = document.getElementById('bhumi-all-toggle');
       if (toggle) toggle.addEventListener('change', () => setAllBhumiLayers(toggle.checked));
+      document.getElementById('bhumi-load-island-btn')?.addEventListener('click', loadBhumiIslandGrid);
+      loadBhumiAreaCities();
       window.refreshBhumiLayers = syncBhumiLayers;
     }
 

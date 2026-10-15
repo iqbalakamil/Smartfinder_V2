@@ -814,9 +814,9 @@ function ensureMapLayers() {
         type: 'circle',
         source: 'poi-markers',
         paint: {
-          'circle-radius': ['case', 
-            ['==', ['get', 'source'], 'google-maps-crawl'], 6,
-            5
+          'circle-radius': ['case',
+            ['==', ['get', 'source'], 'google-maps-crawl'], 8,
+            7
           ],
           'circle-color': ['coalesce', ['get', '_markerColor'], ['case',
             ['==', ['get', 'category'], 'residential'], '#16a34a',
@@ -825,13 +825,10 @@ function ensureMapLayers() {
             ['==', ['get', 'signal'], 'risk'], '#9f2d2d',
             '#0f766e'
           ]],
-          // Review < 20: transparan 50%; review >= 20: warna penuh.
-          'circle-opacity': ['case',
-            ['<', ['coalesce', ['get', 'reviewCount'], 0], 20], 0.5,
-            1
-          ],
-          'circle-stroke-width': 1,
-          'circle-stroke-color': 'rgba(255,255,255,0.3)',
+          // Semua marker dibuat solid agar warna kategori tetap tajam.
+          'circle-opacity': 1,
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': 'rgba(255,255,255,0.85)',
         },
       });
       
@@ -899,12 +896,15 @@ function renderMapPois(lat, lon, radius, pois) {
   
   // Siapkan GeoJSON features untuk POI markers
   const withCoordinates = pois.filter((poi) => Number.isFinite(Number(poi.lat)) && Number.isFinite(Number(poi.lon)));
-  // Tampilkan seluruh POI berkordinat valid dari Google, Overpass, dan sumber
-  // hotmap yang sudah difilter backend; jangan menyembunyikan Overpass hanya
-  // karena ada satu hasil Google.
-  const markerCandidates = withCoordinates;
-  
-  console.log('RENDER_MAP_POIS: markerCandidates with coords:', markerCandidates.length);
+  // Backend sudah memvalidasi radius, tetapi filter kedua di frontend menjaga
+  // peta tetap aman jika ada cache lama atau sumber tambahan yang mengirim
+  // koordinat di luar radius aktif.
+  const markerCandidates = withCoordinates.filter((poi) => {
+    const distanceKm = haversineDistance(lat, lon, Number(poi.lat), Number(poi.lon));
+    return Number.isFinite(distanceKm) && distanceKm <= Number(radius) / 1000;
+  });
+
+  console.log('RENDER_MAP_POIS: markerCandidates in radius:', markerCandidates.length, 'of', withCoordinates.length);
   
   const categoryCounts = {
     residential: 0,
@@ -5594,6 +5594,7 @@ let demographyUserSelected = false;
 let allDemographyFeatures = [];
 let demographyPopup = null;
 let demographyEventsBound = false;
+let demographyChartCounter = 0;
 let loadedProvinces = new Set();
 let selectedKota = new Set();
 let selectedKecamatan = new Set();
@@ -5601,8 +5602,10 @@ let kotaFilterTouched = false;
 let sesProxyData = [];
 let sesProxyVisible = false;
 let sesProxyEventsBound = false;
-const SES_GRID_CELL_SIZE_M = 1500;
-const SES_GRID_RADIUS_M = 1500;
+// 750 m gives a finer screening resolution for ruko/preschool corridors
+// while keeping the same scoring and BHUMI enrichment pipeline.
+const SES_GRID_CELL_SIZE_M = 750;
+const SES_GRID_RADIUS_M = 750;
 const demographyToggleEl = document.getElementById("demography-toggle");
 const demographyStatusEl = document.getElementById("demography-status");
 const demoCountEl = document.getElementById("demo-count");
@@ -5784,11 +5787,47 @@ function getProvinceFromCoords(lat, lon) {
 function arcgisRingsToGeoJsonClient(rings = []) {
   const validRings = rings.filter((ring) => Array.isArray(ring) && ring.length >= 4);
   if (!validRings.length) return null;
-  // Keep each ArcGIS ring as a separate area part. Combining disjoint rings
-  // as one Polygon makes MapLibre render them as holes.
-  return validRings.length === 1
-    ? { type: "Polygon", coordinates: [validRings[0]] }
-    : { type: "MultiPolygon", coordinates: validRings.map((ring) => [ring]) };
+  const ringArea = (ring) => Math.abs(ring.reduce((area, point, index) => {
+    const next = ring[(index + 1) % ring.length];
+    return area + Number(point[0]) * Number(next[1]) - Number(next[0]) * Number(point[1]);
+  }, 0) / 2);
+  const containsPoint = (ring, point) => {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i];
+      const [xj, yj] = ring[j];
+      const crosses = (yi > point[1]) !== (yj > point[1])
+        && point[0] < ((xj - xi) * (point[1] - yi)) / (yj - yi) + xi;
+      if (crosses) inside = !inside;
+    }
+    return inside;
+  };
+
+  // ArcGIS supplies polygon rings as a flat list. Rebuild shell/hole nesting
+  // so holes stay empty and islands inside holes become independent polygons.
+  const ordered = validRings.map((ring) => ({ ring, area: ringArea(ring) }))
+    .sort((a, b) => b.area - a.area);
+  const nodes = ordered.map((item, index) => {
+    const point = item.ring[0];
+    let parent = null;
+    for (let candidateIndex = 0; candidateIndex < index; candidateIndex += 1) {
+      const candidate = ordered[candidateIndex];
+      if (candidate.area > item.area && containsPoint(candidate.ring, point)
+        && (!parent || candidate.area < parent.area)) parent = candidate;
+    }
+    return { ...item, parent, depth: 0, children: [] };
+  });
+  const nodeByRing = new Map(nodes.map((node) => [node.ring, node]));
+  nodes.forEach((node) => {
+    if (!node.parent) return;
+    node.depth = nodeByRing.get(node.parent.ring).depth + 1;
+    nodeByRing.get(node.parent.ring).children.push(node);
+  });
+  const polygons = nodes.filter((node) => node.depth % 2 === 0)
+    .map((shell) => [shell.ring, ...shell.children.filter((child) => child.depth % 2 === 1).map((child) => child.ring)]);
+  return polygons.length === 1
+    ? { type: "Polygon", coordinates: polygons[0] }
+    : { type: "MultiPolygon", coordinates: polygons };
 }
 
 async function fetchDukcapilPolygonsDirect(province, level = "kecamatan") {
@@ -6084,6 +6123,225 @@ function buildAllDemographyPopupHtml(properties = {}) {
   }).join("");
 }
 
+// Menyimpan data popup secara singkat agar tombol di HTML popup dapat
+// membuat grafik tanpa memasukkan seluruh objek properties ke atribut HTML.
+window.__demographyChartData = window.__demographyChartData || {};
+window.__demographyDistrictSelections = window.__demographyDistrictSelections || {};
+function getDemographyRatioRows(properties = {}) {
+  return [
+    ["0–4", properties.demography_kecamatan_avg_ratio_0_4],
+    ["5–9", properties.demography_kecamatan_avg_ratio_5_9],
+    ["10–14", properties.demography_kecamatan_avg_ratio_10_14],
+    ["25–29", properties.demography_kecamatan_avg_ratio_25_29],
+    ["35–39", properties.demography_kecamatan_avg_ratio_35_39],
+    ["40–44", properties.demography_kecamatan_avg_ratio_40_44],
+    ["45–49", properties.demography_kecamatan_avg_ratio_45_49],
+  ].map(([label, value]) => ({ label, value: Number(value) }));
+}
+window.toggleDemographyDistrictSelection = function toggleDemographyDistrictSelection(chartId, checked) {
+  const properties = window.__demographyChartData?.[chartId];
+  if (!properties) return;
+  const key = [properties.nama_prop, properties.nama_kab, properties.nama_kec]
+    .map((value) => String(value || "").trim().toUpperCase()).join("|");
+  if (checked) window.__demographyDistrictSelections[key] = properties;
+  else delete window.__demographyDistrictSelections[key];
+  document.querySelectorAll(".demography-selection-count").forEach((element) => {
+    element.textContent = `${Object.keys(window.__demographyDistrictSelections).length} kecamatan dipilih`;
+  });
+};
+window.clearDemographyDistrictSelections = function clearDemographyDistrictSelections() {
+  window.__demographyDistrictSelections = {};
+  document.querySelectorAll(".demography-selection-count").forEach((element) => {
+    element.textContent = "0 kecamatan dipilih";
+  });
+  document.querySelectorAll(".demography-district-checkbox").forEach((element) => { element.checked = false; });
+};
+window.downloadCombinedDemographyChart = function downloadCombinedDemographyChart() {
+  const selected = Object.values(window.__demographyDistrictSelections || {});
+  if (!selected.length) {
+    alert("Pilih minimal satu kecamatan melalui checkbox pada popup wilayah.");
+    return;
+  }
+  const ageBands = [
+    ["0–4", ["u0"]], ["5–9", ["u5"]], ["10–14", ["u10"]],
+    ["15–19", ["u15"]], ["20–24", ["u20"]], ["25–29", ["u25"]],
+    ["30–34", ["u30"]], ["35–39", ["u35"]], ["40–44", ["u40"]],
+    ["45–49", ["u45"]], ["50–54", ["u50"]], ["55–59", ["u55"]],
+    ["60+", ["u60", "u65", "u70", "u75"]],
+  ];
+  const getNumber = (properties, key) => {
+    const actualKey = Object.keys(properties || {}).find((candidate) => candidate.toLowerCase() === key.toLowerCase());
+    const value = Number(properties?.[actualKey || key]);
+    return Number.isFinite(value) ? value : 0;
+  };
+  const rows = selected.map((properties) => {
+    const population = getNumber(properties, "jumlah_penduduk");
+    return {
+      properties,
+      ratios: ageBands.map(([label, keys]) => ({
+        label,
+        value: population > 0 ? (keys.reduce((sum, key) => sum + getNumber(properties, key), 0) / population) * 100 : 0,
+      })),
+    };
+  });
+  const overall = ageBands.map(([label, keys], index) => {
+    const values = rows.map((row) => row.ratios[index]?.value).filter(Number.isFinite);
+    const populationCount = selected.reduce(
+      (sum, properties) => sum + keys.reduce((ageSum, key) => ageSum + getNumber(properties, key), 0),
+      0,
+    );
+    return {
+      label,
+      value: values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0,
+      populationCount,
+    };
+  });
+  const canvas = document.createElement("canvas");
+  canvas.width = 2300;
+  canvas.height = 390 + overall.length * 62;
+  const context = canvas.getContext("2d");
+  if (!context) return;
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = "#0f172a";
+  context.font = "700 38px Arial";
+  context.fillText("Grafik Batang Horizontal Demografi", 70, 65);
+  context.fillStyle = "#475569";
+  context.font = "20px Arial";
+  const selectedNames = selected.map((item) => String(item.nama_kec || item.nama_kel || "Wilayah"));
+  context.fillText(`${selected.length} kecamatan dipilih`, 70, 105);
+  context.fillText(`Daftar: ${selectedNames.join(", ")}`, 70, 137);
+  context.fillStyle = "#0f766e";
+  context.font = "700 26px Arial";
+  context.fillText("Rata-rata rasio kecamatan terpilih", 70, 185);
+  context.font = "20px Arial";
+  context.fillStyle = "#475569";
+  context.fillText(`Total penduduk: ${selected.reduce((sum, item) => sum + getNumber(item, "jumlah_penduduk"), 0).toLocaleString("id-ID")}`, 70, 218);
+
+  const chartLeft = 300;
+  const chartTop = 275;
+  const chartWidth = 1450;
+  const rowHeight = 62;
+  const maxRatio = Math.max(1, ...overall.map((row) => row.value));
+  context.font = "700 19px Arial";
+  overall.forEach((row, index) => {
+    const y = chartTop + index * rowHeight;
+    const width = (row.value / maxRatio) * chartWidth;
+    context.fillStyle = "#f1f5f9";
+    context.fillRect(chartLeft, y, chartWidth, 38);
+    context.fillStyle = row.value >= maxRatio * 0.66 ? "#dc2626" : row.value >= maxRatio * 0.33 ? "#f59e0b" : "#2563eb";
+    context.fillRect(chartLeft, y, width, 38);
+    context.fillStyle = "#0f172a";
+    context.fillText(`Usia ${row.label}`, 70, y + 26);
+    context.font = "700 19px Arial";
+    context.fillText(`${row.value.toFixed(2)}% (${row.populationCount.toLocaleString("id-ID")} jiwa)`, chartLeft + width + 12, y + 26);
+  });
+  context.fillStyle = "#94a3b8";
+  context.font = "16px Arial";
+  context.fillText("Sumber: CGIS/Dukcapil · Rasio = jumlah kelompok usia ÷ total penduduk × 100 · 60+ = U60–U75+", 70, canvas.height - 24);
+
+  const link = document.createElement("a");
+  link.download = "grafik-gabungan-demografi-kecamatan.png";
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+};
+window.downloadDemographyChart = function downloadDemographyChart(chartId) {
+  const properties = window.__demographyChartData?.[chartId];
+  if (!properties) return;
+
+  const ratioRows = [
+    ["0–4", properties.demography_kecamatan_avg_ratio_0_4],
+    ["5–9", properties.demography_kecamatan_avg_ratio_5_9],
+    ["10–14", properties.demography_kecamatan_avg_ratio_10_14],
+    ["25–29", properties.demography_kecamatan_avg_ratio_25_29],
+    ["35–39", properties.demography_kecamatan_avg_ratio_35_39],
+    ["40–44", properties.demography_kecamatan_avg_ratio_40_44],
+    ["45–49", properties.demography_kecamatan_avg_ratio_45_49],
+  ].map(([label, value]) => ({ label, value: Number(value) }))
+    .filter((row) => Number.isFinite(row.value));
+  if (!ratioRows.length) return;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 1500;
+  canvas.height = 900;
+  const context = canvas.getContext("2d");
+  if (!context) return;
+  const population = Number(properties.jumlah_penduduk);
+  const title = String(properties.nama_kel || properties.nama_kec || "Wilayah demografi");
+  const subtitle = [properties.nama_kec, properties.nama_kab, properties.nama_prop].filter(Boolean).join(", ");
+  const maxValue = Math.max(1, ...ratioRows.map((row) => row.value));
+  const chartLeft = 150;
+  const chartTop = 270;
+  const chartWidth = 1220;
+  const chartHeight = 480;
+  const barGap = 24;
+  const barWidth = (chartWidth - barGap * (ratioRows.length - 1)) / ratioRows.length;
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = "#0f172a";
+  context.font = "700 38px Arial";
+  context.fillText(title, 80, 75);
+  context.fillStyle = "#475569";
+  context.font = "24px Arial";
+  context.fillText(subtitle || "Data Dukcapil", 80, 115);
+  context.fillStyle = "#0f766e";
+  context.font = "700 30px Arial";
+  context.fillText(`Jumlah penduduk: ${Number.isFinite(population) ? population.toLocaleString("id-ID") : "-"}`, 80, 175);
+  context.fillStyle = "#64748b";
+  context.font = "20px Arial";
+  context.fillText("Rata-rata rasio kelompok usia berdasarkan kecamatan", 80, 215);
+
+  context.strokeStyle = "#cbd5e1";
+  context.lineWidth = 2;
+  context.beginPath();
+  context.moveTo(chartLeft, chartTop);
+  context.lineTo(chartLeft, chartTop + chartHeight);
+  context.lineTo(chartLeft + chartWidth, chartTop + chartHeight);
+  context.stroke();
+  context.font = "18px Arial";
+  context.fillStyle = "#64748b";
+  [0, 25, 50, 75, 100].forEach((tick) => {
+    const y = chartTop + chartHeight - (tick / 100) * chartHeight;
+    context.strokeStyle = "#e2e8f0";
+    context.beginPath();
+    context.moveTo(chartLeft, y);
+    context.lineTo(chartLeft + chartWidth, y);
+    context.stroke();
+    context.fillText(`${Math.round((tick / 100) * maxValue)}%`, 70, y + 6);
+  });
+
+  ratioRows.forEach((row, index) => {
+    const height = (row.value / maxValue) * chartHeight;
+    const x = chartLeft + index * (barWidth + barGap);
+    const y = chartTop + chartHeight - height;
+    const gradient = context.createLinearGradient(0, y, 0, chartTop + chartHeight);
+    gradient.addColorStop(0, "#dc2626");
+    gradient.addColorStop(0.5, "#f59e0b");
+    gradient.addColorStop(1, "#2563eb");
+    context.fillStyle = gradient;
+    context.fillRect(x, y, barWidth, height);
+    context.fillStyle = "#0f172a";
+    context.font = "700 20px Arial";
+    context.textAlign = "center";
+    context.fillText(`${row.value.toFixed(2)}%`, x + barWidth / 2, Math.max(chartTop - 8, y - 10));
+    context.fillStyle = "#475569";
+    context.font = "20px Arial";
+    context.fillText(`Usia ${row.label}`, x + barWidth / 2, chartTop + chartHeight + 42);
+  });
+  context.textAlign = "left";
+  context.fillStyle = "#94a3b8";
+  context.font = "16px Arial";
+  context.fillText("Sumber: CGIS/Dukcapil · Rasio = jumlah kelompok usia ÷ total penduduk × 100", 80, 850);
+
+  const filename = `grafik-demografi-${title.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "wilayah"}.png`;
+  const link = document.createElement("a");
+  link.download = filename;
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+};
+
 function numericDemographyValue(properties, key) {
   const actualKey = Object.keys(properties || {}).find((candidate) => candidate.toLowerCase() === String(key).toLowerCase());
   const value = Number(properties?.[actualKey || key]);
@@ -6118,56 +6376,64 @@ function enrichDemographyColorMetrics(features = []) {
     const population = firstDemographyNumber(p, ["jumlah_penduduk", "JUMLAH PENDUDUK"]);
     const u0 = firstDemographyNumber(p, ["u0", "U0"]);
     const u5 = firstDemographyNumber(p, ["u5", "U5"]);
+    const u10 = firstDemographyNumber(p, ["u10", "U10"]);
     const ageValues = (key) => firstDemographyNumber(p, [key, key.toUpperCase()]);
-    const children014 = [u0, u5, ageValues("u10")].filter((value) => value != null).reduce((sum, value) => sum + value, 0);
+    const children014 = [u0, u5, u10].filter((value) => value != null).reduce((sum, value) => sum + value, 0);
     const working1564 = ["u15", "u20", "u25", "u30", "u35", "u40", "u45", "u50", "u55", "u60"]
       .map(ageValues).filter((value) => value != null).reduce((sum, value) => sum + value, 0);
     return {
       feature,
       metrics: {
         children_0_4: u0,
+        children_0_4_count: u0,
         children_0_4_share: (() => {
           return u0 != null && population > 0 ? (u0 / population) * 100 : null;
         })(),
         children_5_9_share: u5 != null && population > 0 ? (u5 / population) * 100 : null,
+        age_10_14_share: u10 != null && population > 0 ? (u10 / population) * 100 : null,
+        age_25_29_share: (() => { const value = ageValues("u25"); return value != null && population > 0 ? (value / population) * 100 : null; })(),
+        age_35_39_share: (() => { const value = ageValues("u35"); return value != null && population > 0 ? (value / population) * 100 : null; })(),
+        age_40_44_share: (() => { const value = ageValues("u40"); return value != null && population > 0 ? (value / population) * 100 : null; })(),
+        age_45_49_share: (() => { const value = ageValues("u45"); return value != null && population > 0 ? (value / population) * 100 : null; })(),
         birth_rate_per_1000: births.length && population > 0 ? (births.reduce((sum, value) => sum + value, 0) / births.length / population) * 1000 : null,
         population_growth: growth.length ? growth.reduce((sum, value) => sum + value, 0) / growth.length : null,
         child_dependency_ratio: working1564 > 0 ? (children014 / working1564) * 100 : null,
       },
     };
   });
-  const metricKeys = ["children_0_4_share", "children_5_9_share", "birth_rate_per_1000", "population_growth", "child_dependency_ratio"];
-  const stats = Object.fromEntries(metricKeys.map((key) => {
-    const values = rows.map((row) => row.metrics[key]).filter((value) => value != null);
-    return [key, {
-      low: percentileValue(values, 0.05),
-      high: percentileValue(values, 0.95),
-      min: values.length ? Math.min(...values) : null,
-      max: values.length ? Math.max(...values) : null,
-    }];
-  }));
-  const normalizeMetric = (value, stat) => {
-    if (value == null || stat.low == null) return null;
-    const low = stat.low;
-    const high = stat.high > low ? stat.high : stat.max;
-    if (high === low) return 50;
-    return Math.max(0, Math.min(100, ((value - low) / (high - low)) * 100));
-  };
+  // Bagi kelurahan terpilih ke dalam lima kelas berdasarkan jumlah absolut
+  // anak usia 0-4 tahun (U0). Nilai seri masuk kelas yang sama.
+  const counts = rows.map(({ metrics }) => metrics.children_0_4_count).filter((value) => value != null);
+  const breaks = [0.2, 0.4, 0.6, 0.8].map((percentile) => percentileValue(counts, percentile));
   return rows.map(({ feature, metrics }) => {
-    const normalized = metricKeys.map((key) => normalizeMetric(metrics[key], stats[key])).filter((value) => value != null);
-    const score = normalized.length ? normalized.reduce((sum, value) => sum + value, 0) / normalized.length : null;
+    const count = metrics.children_0_4_count;
+    const colorClass = count == null ? null : breaks.reduce((level, threshold) => level + (count > threshold ? 1 : 0), 0);
     return {
       ...feature,
       properties: {
         ...(feature.properties || {}),
         demography_children_0_4: metrics.children_0_4,
+        demography_kecamatan_avg_children_0_4: count,
         demography_children_0_4_share: metrics.children_0_4_share,
         demography_children_5_9_share: metrics.children_5_9_share,
+        demography_age_10_14_share: metrics.age_10_14_share,
+        demography_age_25_29_share: metrics.age_25_29_share,
+        demography_age_35_39_share: metrics.age_35_39_share,
+        demography_age_40_44_share: metrics.age_40_44_share,
+        demography_age_45_49_share: metrics.age_45_49_share,
+        demography_kecamatan_avg_ratio_0_4: metrics.children_0_4_share,
+        demography_kecamatan_avg_ratio_5_9: metrics.children_5_9_share,
+        demography_kecamatan_avg_ratio_10_14: metrics.age_10_14_share,
+        demography_kecamatan_avg_ratio_25_29: metrics.age_25_29_share,
+        demography_kecamatan_avg_ratio_35_39: metrics.age_35_39_share,
+        demography_kecamatan_avg_ratio_40_44: metrics.age_40_44_share,
+        demography_kecamatan_avg_ratio_45_49: metrics.age_45_49_share,
         demography_birth_rate_per_1000: metrics.birth_rate_per_1000,
         demography_growth_average: metrics.population_growth,
         demography_child_dependency_ratio: metrics.child_dependency_ratio,
-        demography_color_score: score == null ? null : Math.round(score * 10) / 10,
-        demography_color_metrics_available: normalized.length,
+        demography_color_score: colorClass == null ? null : colorClass * 25,
+        demography_color_class: colorClass,
+        demography_color_metrics_available: count == null ? 0 : 1,
       },
     };
   });
@@ -6222,15 +6488,17 @@ function renderDemographyLayer(features) {
       'fill-color': [
         'case',
         ['==', ['coalesce', ['get', 'demography_color_metrics_available'], 0], 0], '#64748b',
-        ['interpolate', ['linear'], ['coalesce', ['get', 'demography_color_score'], 50],
+        // Lima kelas jumlah anak usia 0-4: biru terendah, merah tertinggi.
+        ['match', ['get', 'demography_color_class'],
           0, '#2563eb',
-          25, '#60a5fa',
-          50, '#facc15',
-          75, '#f97316',
-          100, '#dc2626',
+          1, '#60a5fa',
+          2, '#facc15',
+          3, '#f97316',
+          4, '#dc2626',
+          '#64748b',
         ],
       ],
-      'fill-opacity': 0.82,
+      'fill-opacity': 0.9,
       'fill-outline-color': '#475569',
     },
     layout: { visibility: 'none' },
@@ -6256,6 +6524,11 @@ function renderDemographyLayer(features) {
     if (!e.features || !e.features.length) return;
     const feature = e.features[0];
     const p = feature.properties;
+    const chartId = `demography-chart-${Date.now()}-${demographyChartCounter += 1}`;
+    window.__demographyChartData[chartId] = { ...p };
+    const districtSelectionKey = [p.nama_prop, p.nama_kab, p.nama_kec]
+      .map((value) => String(value || "").trim().toUpperCase()).join("|");
+    const districtAlreadySelected = Boolean(window.__demographyDistrictSelections[districtSelectionKey]);
     
     const lhr = (p.lhr_2021||0)+(p.lhr_2022||0)+(p.lhr_2023||0)+(p.lhr_2024||0);
     const s = 'font-family:system-ui,sans-serif;font-size:11px;line-height:1.4;color:#e2e8f0;';
@@ -6281,11 +6554,31 @@ function renderDemographyLayer(features) {
     const html = '<div style="' + s + 'padding:8px 10px;min-width:240px;max-height:420px;overflow:auto;">'
       + '<div style="font-weight:700;font-size:12px;color:#38bdf8;margin-bottom:2px;">' + escapeHtml(p.nama_kel || p.nama_kec || '-') + '</div>'
       + '<div style="font-size:9px;color:#94a3b8;margin-bottom:5px;">' + escapeHtml([p.nama_kec, p.nama_kab, p.nama_prop].filter(Boolean).join(', ')) + '</div>'
+      + '<label style="display:flex;align-items:center;gap:6px;margin:7px 0;padding:7px;background:#1e293b;border:1px solid #475569;border-radius:6px;color:#e2e8f0;font-size:10px;cursor:pointer;">'
+      + '<input class="demography-district-checkbox" type="checkbox" onchange="window.toggleDemographyDistrictSelection(\'' + escapeAttribute(chartId) + '\', this.checked)"' + (districtAlreadySelected ? ' checked' : '') + '>'
+      + '<span>Tambahkan kecamatan ini ke grafik gabungan</span></label>'
+      + '<div style="display:flex;gap:5px;margin-bottom:7px;">'
+      + '<button type="button" onclick="window.downloadCombinedDemographyChart()" style="flex:1;padding:7px 5px;border:0;border-radius:6px;background:#0f766e;color:#fff;font-size:10px;font-weight:700;cursor:pointer;">Download Grafik Gabungan</button>'
+      + '<button type="button" onclick="window.clearDemographyDistrictSelections()" style="padding:7px 8px;border:1px solid #64748b;border-radius:6px;background:#334155;color:#e2e8f0;font-size:10px;cursor:pointer;">Reset</button>'
+      + '</div>'
+      + '<div class="demography-selection-count" style="color:#94a3b8;font-size:10px;margin-bottom:5px;">' + Object.keys(window.__demographyDistrictSelections).length + ' kecamatan dipilih</div>'
       + '<div style="border-top:1px solid #334155;padding-top:4px;margin-bottom:4px;">'
       + '<div style="font-weight:700;font-size:9px;color:#38bdf8;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:2px;">Klasifikasi Demografi</div>'
-      + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">Skor warna</span><span style="font-weight:600;">' + formatDemoNum(p.demography_color_score) + ' / 100</span></div>'
+      + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">Jumlah anak usia 0-4</span><span style="font-weight:600;">' + formatDemoNum(p.demography_children_0_4) + '</span></div>'
       + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">U0-U4 (usia 0-4)</span><span style="font-weight:600;">' + formatDemoNum(p.demography_children_0_4) + ' (' + formatDemoNum(p.demography_children_0_4_share) + '%)</span></div>'
       + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">U5-U9</span><span style="font-weight:600;">' + formatDemoNum(p.demography_children_5_9_share) + '% penduduk</span></div>'
+      + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">U10-U14</span><span style="font-weight:600;">' + formatDemoNum(p.demography_age_10_14_share) + '% penduduk</span></div>'
+      + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">U25-U29</span><span style="font-weight:600;">' + formatDemoNum(p.demography_age_25_29_share) + '% penduduk</span></div>'
+      + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">U35-U39</span><span style="font-weight:600;">' + formatDemoNum(p.demography_age_35_39_share) + '% penduduk</span></div>'
+      + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">U40-U44</span><span style="font-weight:600;">' + formatDemoNum(p.demography_age_40_44_share) + '% penduduk</span></div>'
+      + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">U45-U49</span><span style="font-weight:600;">' + formatDemoNum(p.demography_age_45_49_share) + '% penduduk</span></div>'
+      + '<div style="margin-top:4px;color:#fbbf24;font-size:10px;">Klasifikasi warna: jumlah anak usia 0-4 di antara kelurahan terpilih.</div>'
+      + '<div style="font-size:10px;color:#cbd5e1;">' + [
+        ['0-4', p.demography_kecamatan_avg_ratio_0_4], ['5-9', p.demography_kecamatan_avg_ratio_5_9],
+        ['10-14', p.demography_kecamatan_avg_ratio_10_14], ['25-29', p.demography_kecamatan_avg_ratio_25_29],
+        ['35-39', p.demography_kecamatan_avg_ratio_35_39], ['40-44', p.demography_kecamatan_avg_ratio_40_44],
+        ['45-49', p.demography_kecamatan_avg_ratio_45_49],
+      ].map(([label, value]) => `${label}: ${formatDemoNum(value)}%`).join(' · ') + '</div>'
       + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">Angka kelahiran kasar</span><span style="font-weight:600;">' + formatDemoNum(p.demography_birth_rate_per_1000) + ' / 1.000</span></div>'
       + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">Pertumbuhan penduduk</span><span style="font-weight:600;">' + formatDemoNum(p.demography_growth_average) + '%</span></div>'
       + '<div style="display:flex;justify-content:space-between;margin:1px 0;"><span style="color:#94a3b8;">Rasio ketergantungan anak</span><span style="font-weight:600;">' + formatDemoNum(p.demography_child_dependency_ratio) + ' / 100 usia kerja</span></div>'
@@ -6521,6 +6814,10 @@ function buildAreaPotentialExplanationHtml(properties = {}) {
     ["Sebaran hak milik", properties.area_freehold_share, "Proporsi bidang/luas dengan hak milik. Lebih tinggi berarti keamanan tenure lebih baik.", "tenure_security", "%"],
     ["Sebaran permukiman padat", properties.area_dense_residential_share, "Proporsi area permukiman padat. Lebih tinggi berarti potensi pelanggan lebih terkonsentrasi, bukan otomatis SES lebih tinggi.", "residential_density", "%"],
     ["Sebaran permukiman formal/padat BHUMI", properties.area_bhumi_formal_residential_share ?? properties.bhumi_formal_residential_share, "Proporsi objek guna tanah BHUMI yang teridentifikasi sebagai perumahan, cluster, hunian, apartemen, atau residential; kategori kampung dikeluarkan.", "residential_density", "%"],
+    ["Perumahan menengah BHUMI", properties.area_bhumi_residential_middle_share ?? properties.bhumi_residential_middle_share, "Proporsi observasi guna tanah yang mengandung kategori menengah.", "residential_density", "%"],
+    ["Perumahan mewah BHUMI", properties.area_bhumi_residential_luxury_share ?? properties.bhumi_residential_luxury_share, "Proporsi observasi guna tanah yang mengandung kategori mewah/premium.", "residential_density", "%"],
+    ["Zonasi hunian BHUMI", properties.area_bhumi_zoning_housing_share ?? properties.bhumi_zoning_housing_share, "Proporsi observasi zonasi yang mengindikasikan hunian/perumahan.", "residential_density", "%"],
+    ["Zonasi utama BHUMI", properties.bhumi_zoning_primary, "Kategori zonasi yang paling sering ditemukan dari titik sampling.", "residential_density", ""],
     ["Kelahiran 2020-2024", properties.area_birth_count_2020_2024, "Sinyal tambahan ukuran pasar anak; bukan indikator SES ekonomi.", "birth_signal", ""],
     ["Pertumbuhan penduduk", properties.area_population_growth_average, "Rata-rata pertumbuhan tahunan pada periode data Dukcapil.", "growth_signal", "%"],
     ["Rata-rata nilai tanah BHUMI", properties.area_bhumi_land_value_average ?? properties.bhumi_land_value_average ?? properties.bhumi_land_value_median, "Rata-rata nilai tanah dari sampling BHUMI di dalam hexagon. Ini proxy lokasi, bukan pendapatan rumah tangga.", "land_market", ""],
@@ -6542,7 +6839,9 @@ function buildAreaPotentialExplanationHtml(properties = {}) {
       <b>Sumber:</b> Dukcapil untuk usia dan populasi. ${properties.bhumi_data_available ? `BHUMI/BIG diagregasi dari ${formatSesNumber(properties.bhumi_observation_count, 0)} observasi${properties.bhumi_sample_count ? ` pada ${formatSesNumber(properties.bhumi_sample_count, 0)} titik sampel` : ""}${properties.bhumi_znt_feature_count ? `; BIG ZNT ${formatSesNumber(properties.bhumi_znt_feature_count, 0)} poligon` : ""}${properties.big_land_use_feature_count ? `; BIG guna tanah ${formatSesNumber(properties.big_land_use_feature_count, 0)} poligon` : ""}${properties.big_freehold_feature_count ? `; BIG Hak Milik ${formatSesNumber(properties.big_freehold_feature_count, 0)} bidang` : ""}${properties.big_slum_feature_count ? `; BIG kumuh ${formatSesNumber(properties.big_slum_feature_count, 0)} poligon` : ""}.` : "Data BHUMI/BIG belum berhasil diambil untuk hexagon ini."}<br>
       ${properties.bhumi_znt_ranges ? `<b>Range nilai tanah BIG:</b> ${escapeHtml(properties.bhumi_znt_ranges)}<br>` : ""}
       ${properties.bhumi_right_types ? `<b>Jenis hak:</b> ${escapeHtml(properties.bhumi_right_types)}<br>` : ""}
-      ${properties.bhumi_land_use_types ? `<b>Guna tanah:</b> ${escapeHtml(properties.bhumi_land_use_types)}` : ""}
+      ${properties.bhumi_land_use_types ? `<b>Guna tanah:</b> ${escapeHtml(properties.bhumi_land_use_types)}<br>` : ""}
+      ${properties.bhumi_missing_layers ? `<b>Layer belum ditemukan:</b> ${escapeHtml(properties.bhumi_missing_layers)}<br>` : ""}
+      ${properties.bhumi_observation_layer_counts ? `<b>Observasi per layer:</b> ${escapeHtml(properties.bhumi_observation_layer_counts)}` : ""}
     </div>
     <div style="margin-top:6px;font-size:10px;color:#64748b;">Index Potensi Area: <b>${formatSesNumber(properties.area_potential_index)}%</b> · Coverage data: <b>${formatSesNumber(properties.area_potential_data_coverage)}%</b></div>
   </div>`;
@@ -6593,15 +6892,18 @@ function renderSesProxyLayer(features = []) {
     type: "fill",
     source: "ses-proxy-source",
     paint: {
+      // Skala konsisten: nilai terendah biru, nilai tertinggi merah.
+      // Data tanpa skor tidak boleh dianggap sebagai nilai 50 (kuning).
       "fill-color": [
-        "interpolate",
-        ["linear"],
-        ["coalesce", ["get", "ses_color_score"], 50],
-        0, "#2563eb",
-        25, "#60a5fa",
-        50, "#facc15",
-        75, "#f97316",
-        100, "#dc2626",
+        "case",
+        ["<", ["coalesce", ["get", "ses_color_score"], -1], 0], "#64748b",
+        ["interpolate", ["linear"], ["get", "ses_color_score"],
+          0, "#2563eb",
+          25, "#60a5fa",
+          50, "#facc15",
+          75, "#f97316",
+          100, "#dc2626",
+        ],
       ],
       "fill-opacity": 0.78,
     },
@@ -7534,6 +7836,9 @@ function renderRecommendationComponents(properties = {}) {
     ["Hak milik", properties.area_freehold_share, "%", "tenure_security"],
     ["Perumahan padat", properties.area_dense_residential_share, "%", "residential_density"],
     ["Perumahan formal/padat BHUMI", properties.area_bhumi_formal_residential_share ?? properties.bhumi_formal_residential_share, "%", "residential_density"],
+    ["Perumahan menengah BHUMI", properties.area_bhumi_residential_middle_share ?? properties.bhumi_residential_middle_share, "%", "residential_density"],
+    ["Perumahan mewah BHUMI", properties.area_bhumi_residential_luxury_share ?? properties.bhumi_residential_luxury_share, "%", "residential_density"],
+    ["Zonasi hunian BHUMI", properties.area_bhumi_zoning_housing_share ?? properties.bhumi_zoning_housing_share, "%", "residential_density"],
     ["Nilai tanah BHUMI", properties.area_bhumi_land_value_average ?? properties.bhumi_land_value_average, "", "land_market"],
     ["Kelahiran 2020-2024", properties.area_birth_count_2020_2024, "", "birth_signal"],
     ["Pertumbuhan penduduk", properties.area_population_growth_average, "%", "growth_signal"],
@@ -7813,8 +8118,8 @@ if (recommendationCalculateEl) {
         if (values.length) componentProps[field] = values.reduce((sum, value) => sum + value, 0) / values.length;
       });
       renderRecommendationComponents(componentProps);
-      setRecommendationStatus(`SES selesai untuk ${sesFeatures.length} wilayah relatif terhadap ${comparisonFeatures.length || selectedFeatures.length} wilayah. Membangun hexagon radius 1,5 km...`, true);
-      setSesMapLoading(true, "Tahap 2/4 — Membangun hexagon", "Membuat grid radius 1,5 km dari hasil SES.");
+      setRecommendationStatus(`SES selesai untuk ${sesFeatures.length} wilayah relatif terhadap ${comparisonFeatures.length || selectedFeatures.length} wilayah. Membangun hexagon radius 750 m...`, true);
+      setSesMapLoading(true, "Tahap 2/4 — Membangun hexagon", "Membuat grid radius 750 m dari hasil SES.");
       setSesMapLoadingProgress("Grid hexagon sedang dibuat...");
 
       const gridResponse = await fetch(`${API_BASE}/api/ses/grid`, {
@@ -7823,8 +8128,8 @@ if (recommendationCalculateEl) {
         body: JSON.stringify({
           features: comparisonFeatures.length ? comparisonFeatures : selectedFeatures,
           selectedKeys: selectedFeatures.map(sesFeatureKey),
-          cellSizeM: 1500,
-          coverageRadiusM: 1500,
+          cellSizeM: 750,
+          coverageRadiusM: 750,
         }),
       });
       const gridPayload = await gridResponse.json();
@@ -7853,16 +8158,31 @@ if (recommendationCalculateEl) {
           const totalBatches = Math.ceil(totalHexagons / batchSize);
           setSesMapLoadingProgress(`Memproses BHUMI batch ${batchNumber}/${totalBatches} (hexagon ${offset + 1}-${batchEnd}/${totalHexagons})...`);
           setRecommendationStatus(`BHUMI sedang memproses hexagon ${offset + 1}-${batchEnd} dari ${totalHexagons}...`, true);
-          const bhumiResponse = await fetch(`${API_BASE}/api/bhumi-enrich-hexagons`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ features: batch }),
-          });
-          const bhumiPayload = await bhumiResponse.json();
-          if (!bhumiResponse.ok || !Array.isArray(bhumiPayload.features)) {
-            throw new Error(bhumiPayload.error || `HTTP ${bhumiResponse.status}`);
+          try {
+            const bhumiResponse = await fetch(`${API_BASE}/api/bhumi-enrich-hexagons`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ features: batch }),
+            });
+            const bhumiPayload = await bhumiResponse.json();
+            if (!bhumiResponse.ok || !Array.isArray(bhumiPayload.features)) {
+              throw new Error(bhumiPayload.error || `HTTP ${bhumiResponse.status}`);
+            }
+            enriched.push(...bhumiPayload.features);
+          } catch (batchError) {
+            // Keep the base grid for only this failed batch; never discard
+            // BHUMI results already collected from previous batches.
+            enriched.push(...batch.map((feature) => ({
+              ...feature,
+              properties: {
+                ...(feature.properties || {}),
+                bhumi_data_available: false,
+                bhumi_enrichment_error: batchError.message,
+                enrichment_source: "bhumi_sampling_failed",
+              },
+            })));
+            setRecommendationStatus(`Batch BHUMI ${batchNumber} gagal; batch lain tetap diproses: ${batchError.message}`, false);
           }
-          enriched.push(...bhumiPayload.features);
           // Perbarui peta setiap batch; hexagon yang belum selesai tetap
           // memakai skor dasar sehingga peta tidak menunggu seluruh proses.
           sesProxyData = [...enriched, ...enrichedGridFeatures.slice(offset + batch.length)];
@@ -7873,7 +8193,7 @@ if (recommendationCalculateEl) {
           setRecommendationStatus(`BHUMI: hexagon ${completed}/${totalHexagons} selesai (${percent}%).`, true);
         }
         enrichedGridFeatures = enriched;
-        bhumiEnrichmentSucceeded = true;
+        bhumiEnrichmentSucceeded = enriched.some((feature) => feature.properties?.bhumi_data_available);
       } catch (bhumiError) {
         setRecommendationStatus(`Hexagon tampil; BHUMI belum tersedia: ${bhumiError.message}`, false);
       }
@@ -7908,12 +8228,12 @@ if (recommendationCalculateEl) {
           const props = feature.properties || {};
           return `<div style="padding:4px 0;border-bottom:1px solid rgba(148,163,184,.2);"><strong>${escapeHtml(props.nama_kec || "Wilayah terpilih")}</strong> · SES ${formatSesNumber(props.ses_index)} · Potensi Area ${formatSesNumber(props.area_potential_index)} · Kelas ${escapeHtml(props.ses_class || "-")} · Confidence ${formatSesNumber(props.ses_confidence, 0)}%</div>`;
         }).join("");
-        recommendationResultEl.innerHTML = `<strong>Hasil wilayah terpilih</strong>${resultRows}<div style="margin-top:6px;">${sesProxyData.length} hexagon radius 1,5 km ditampilkan.</div>`;
+        recommendationResultEl.innerHTML = `<strong>Hasil wilayah terpilih</strong>${resultRows}<div style="margin-top:6px;">${sesProxyData.length} hexagon radius 750 m ditampilkan.</div>`;
         recommendationResultEl.classList.remove("hidden");
       }
       setRecommendationStatus(bhumiEnrichmentSucceeded
-        ? `Selesai: ${sesProxyData.length} hexagon radius 1,5 km ditampilkan dengan data BHUMI.`
-        : `Selesai: ${sesProxyData.length} hexagon radius 1,5 km ditampilkan; data BHUMI belum tersedia.`);
+        ? `Selesai: ${sesProxyData.length} hexagon radius 750 m ditampilkan dengan data BHUMI.`
+        : `Selesai: ${sesProxyData.length} hexagon radius 750 m ditampilkan; data BHUMI belum tersedia.`);
     } catch (error) {
       setRecommendationStatus(`Perhitungan gagal: ${error.message}`);
     } finally {

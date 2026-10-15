@@ -32,3 +32,4 @@ _backup_before_restore/
 .cache/
 .tmp/
 _*/
+data/bhumi-banten.cache.json

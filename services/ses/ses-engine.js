@@ -145,6 +145,10 @@ function extractIndicators(properties = {}) {
     freehold_share: extractFreeholdShare(properties),
     dense_residential_share: firstNumeric(properties, ["dense_residential_share", "pct_perumahan_padat", "perumahan_padat_share", "persen_perumahan_padat"]),
     bhumi_formal_residential_share: firstNumeric(properties, ["bhumi_formal_residential_share", "bhumi_dense_residential_share"]),
+    bhumi_residential_middle_share: firstNumeric(properties, ["bhumi_residential_middle_share"]),
+    bhumi_residential_luxury_share: firstNumeric(properties, ["bhumi_residential_luxury_share"]),
+    bhumi_commercial_share: firstNumeric(properties, ["bhumi_commercial_share"]),
+    bhumi_zoning_housing_share: firstNumeric(properties, ["bhumi_zoning_housing_share"]),
     bhumi_land_value_average: firstNumeric(properties, ["bhumi_land_value_average", "bhumi_land_value_median"]),
     big_slum_presence: firstNumeric(properties, ["big_slum_presence", "slum_presence"]),
     birth_count_2020_2024: birthCounts.total,
@@ -409,8 +413,8 @@ function calculateSesHexagonGrid(inputFeatures = [], options = {}) {
         .join("|"));
     });
   }
-  const radiusM = Math.max(100, Math.min(3000, Number(options.cellSizeM) || 1500));
-  const coverageRadiusM = Math.max(500, Math.min(3000, Number(options.coverageRadiusM) || 1500));
+  const radiusM = Math.max(100, Math.min(3000, Number(options.cellSizeM) || 750));
+  const coverageRadiusM = Math.max(500, Math.min(3000, Number(options.coverageRadiusM) || 750));
   const points = sourceFeatures.flatMap((feature) => collectGeometryPoints(feature.geometry));
   if (!points.length) {
     return {
@@ -443,7 +447,7 @@ function calculateSesHexagonGrid(inputFeatures = [], options = {}) {
   const sourceMaxX = toX(maxLon);
   const sourceMinY = toY(minLat);
   const sourceMaxY = toY(maxLat);
-  // Cover the complete selected source extent. The requested 1.5 km radius is
+  // Cover the complete selected source extent. The requested grid radius is
   // retained as a minimum margin around the source, not as a circle that can
   // cut off the rest of the selected kelurahan/kota.
   const gridPaddingM = Math.max(radiusM, coverageRadiusM);
@@ -677,6 +681,10 @@ function calculateSesPolygons(inputFeatures = []) {
       ses_freehold_share: raw.freehold_share,
       ses_bhumi_land_value_average: raw.bhumi_land_value_average,
       ses_bhumi_formal_residential_share: raw.bhumi_formal_residential_share,
+      ses_bhumi_residential_middle_share: raw.bhumi_residential_middle_share,
+      ses_bhumi_residential_luxury_share: raw.bhumi_residential_luxury_share,
+      ses_bhumi_commercial_share: raw.bhumi_commercial_share,
+      ses_bhumi_zoning_housing_share: raw.bhumi_zoning_housing_share,
       ses_child_share: raw.child_share,
       ses_birth_rate_proxy: raw.birth_rate_proxy,
       ses_age_band_total: row.indicators.age_band_total,
@@ -711,6 +719,10 @@ function calculateSesPolygons(inputFeatures = []) {
       area_freehold_share: areaRaw.freehold_share,
       area_dense_residential_share: areaRaw.dense_residential_share,
       area_bhumi_formal_residential_share: areaRaw.bhumi_formal_residential_share,
+      area_bhumi_residential_middle_share: areaRaw.bhumi_residential_middle_share,
+      area_bhumi_residential_luxury_share: areaRaw.bhumi_residential_luxury_share,
+      area_bhumi_commercial_share: areaRaw.bhumi_commercial_share,
+      area_bhumi_zoning_housing_share: areaRaw.bhumi_zoning_housing_share,
       area_bhumi_land_value_average: areaRaw.bhumi_land_value_average,
       area_birth_count_2020_2024: areaRaw.birth_count_2020_2024,
       area_population_growth_average: areaRaw.population_growth_average,
