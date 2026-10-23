@@ -1410,6 +1410,8 @@ function buildPdfReportHtml(landValueSummary = null) {
   const landValueRows = landValueSummary?.samples?.length
     ? landValueSummary.samples.map((sample) => [sample.label, sample.value])
     : [];
+  const landValueChartItems = Object.entries(landValueSummary?.rangeCounts || {})
+    .map(([label, value], index) => ({ label, value, color: ["#0f766e", "#2563eb", "#f59e0b", "#7c3aed", "#db2777", "#0891b2"][index % 6] }));
   const allPoiRows = allPois.map((poi, index) => [
     String(index + 1), poi.name || "POI", poi.categoryLabel || poi.category || "Lainnya",
     poi.address || "-", Number.isFinite(Number(poi.lat)) && Number.isFinite(Number(poi.lon))
@@ -1578,6 +1580,11 @@ function buildPdfReportHtml(landValueSummary = null) {
           ["Sumber", landValueSummary?.source || "BIG ZNT / BHUMI"],
         ])}
         ${buildPdfDataTable("Nilai tanah per titik sampel", ["Titik sampel", "Range / nilai tanah"], landValueRows)}
+        <div class="card" style="margin-top:14px;">
+          <h3>Grafik Sebaran Kelas Nilai Tanah</h3>
+          ${landValueChartItems.length ? buildPdfBarChart(landValueChartItems) : '<p class="muted">Grafik belum tersedia karena tidak ada kelas nilai tanah yang dikembalikan untuk titik sampel.</p>'}
+          <p class="muted">Grafik menunjukkan jumlah titik sampel pada setiap kelas nilai tanah, bukan jumlah bidang tanah.</p>
+        </div>
         <p class="muted">Nilai tanah adalah sampel titik yang tersebar di dalam radius 3 km; hasil mengikuti cakupan layer BIG ZNT/BHUMI dan tidak mewakili setiap bidang tanah.</p>
       </section>
 
@@ -1682,13 +1689,19 @@ async function collectPdfLandValueSamples() {
   const results = await Promise.allSettled(points.map(async ([sampleLat, sampleLon], index) => {
     const response = await fetch(`${API_BASE}/api/bhumi-identify`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ service_layer_name: "umum:ZNTRANGE", lat: sampleLat, lng: sampleLon }),
+      body: JSON.stringify({ service_layer_name: "umum:ZNTRANGE", lat: sampleLat, lng: sampleLon, sample: true }),
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const payload = await response.json();
     const features = payload.result?.features || [];
-    const value = features.map((feature) => feature.properties?.range || feature.properties?.kelasnilai || feature.properties?.RANGENILAI || feature.properties?.nilai_tanah || feature.properties?.nilai).find(Boolean);
-    return value ? { label: index === 0 ? "Titik tengah" : `Titik radius ${index} (2,5 km)`, value: String(value) } : null;
+    const value = features.map((feature) => {
+      const properties = feature.properties || feature.attributes || {};
+      return properties.range || properties.kelasnilai || properties.RANGENILAI || properties.nilai_tanah || properties.nilai;
+    }).find(Boolean);
+    return value ? {
+      label: index === 0 ? "Titik tengah" : `Titik radius ${index} (2,5 km)`,
+      value: String(value), source: payload.source || "BIG ZNT / BHUMI",
+    } : null;
   }));
   const samples = results.filter((result) => result.status === "fulfilled").map((result) => result.value).filter(Boolean);
   const numbers = samples.map((sample) => {
@@ -1697,11 +1710,16 @@ async function collectPdfLandValueSamples() {
     return parsed.length > 1 ? (parsed[0] + parsed[1]) / 2 : parsed[0];
   }).filter(Number.isFinite);
   const sorted = [...numbers].sort((a, b) => a - b);
+  const rangeCounts = samples.reduce((counts, sample) => {
+    counts[sample.value] = (counts[sample.value] || 0) + 1;
+    return counts;
+  }, {});
   return {
     samples, sampleCount: samples.length,
+    rangeCounts,
     average: numbers.length ? numbers.reduce((sum, value) => sum + value, 0) / numbers.length : null,
     median: sorted.length ? sorted[Math.floor(sorted.length / 2)] : null,
-    source: "Sampel titik BIG ZNT / BHUMI (titik tengah + 12 titik di radius 2,5 km)",
+    source: `${[...new Set(samples.map((sample) => sample.source))].join(", ") || "BIG ZNT / BHUMI tidak mengembalikan data"} (titik tengah + 12 titik sampel pada radius 2,5 km)`,
   };
 }
 

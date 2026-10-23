@@ -804,6 +804,28 @@ async function handleBhumiIdentify(req, res) {
     }
     const point = [Number(body.lng), Number(body.lat)];
     const hasPoint = point.every(Number.isFinite);
+    if (body.sample === true && hasPoint && layer === "umum:ZNTRANGE") {
+      try {
+        const attributes = await fetchBigZntForPoint(point[0], point[1]);
+        const local = attributes.length ? null : findLocalBhumiResult(layer, point);
+        const features = attributes.length
+          ? attributes.map((properties) => ({ type: "Feature", properties }))
+          : (local?.features || []);
+        sendJson(res, 200, {
+          layer,
+          result: { type: "FeatureCollection", features },
+          source: attributes.length ? "big-znt-point-sample" : local ? "local-bhumi-znt-cache" : "big-znt-no-data",
+        });
+      } catch (error) {
+        const local = findLocalBhumiResult(layer, point);
+        if (local) {
+          sendJson(res, 200, { layer, result: local, source: "local-bhumi-znt-cache", warning: error.message });
+        } else {
+          sendJson(res, 502, { error: error.message || "Gagal mengambil sampel nilai tanah." });
+        }
+      }
+      return;
+    }
     try {
       const result = hasPoint
         ? await fetchBhumiPersilForPoint(layer, body, point)
