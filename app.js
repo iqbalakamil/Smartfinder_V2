@@ -1384,7 +1384,7 @@ function buildPdfDemographyChartSection(report, topDistrict = {}) {
   `;
 }
 
-function buildPdfReportHtml() {
+function buildPdfReportHtml(landValueSummary = null) {
   const allPois = dedupeMapPois([...latestBasePois, ...latestHotmapPois]);
   const groupedPois = Array.from(allPois.reduce((acc, poi) => {
     const label = poi.categoryLabel || poi.category || "Lainnya";
@@ -1405,6 +1405,16 @@ function buildPdfReportHtml() {
   const scenarios = market?.market_size_scenarios || {};
   const demographyReport = getPdfDemographyReport(latestStructuredAnalysis);
   const demographyText = getPdfDemographyText(latestStructuredAnalysis);
+  const areaCoverage = Array.isArray(latestAnalysisContext?.areaCoverage) ? latestAnalysisContext.areaCoverage : [];
+  const demographic = topDistrict?.demography || {};
+  const landValueRows = landValueSummary?.samples?.length
+    ? landValueSummary.samples.map((sample) => [sample.label, sample.value])
+    : [];
+  const allPoiRows = allPois.map((poi, index) => [
+    String(index + 1), poi.name || "POI", poi.categoryLabel || poi.category || "Lainnya",
+    poi.address || "-", Number.isFinite(Number(poi.lat)) && Number.isFinite(Number(poi.lon))
+      ? `${Number(poi.lat).toFixed(6)}, ${Number(poi.lon).toFixed(6)}` : "-",
+  ]);
   const analysisBars = [
     { label: "Market Size", value: Number(market.market_size) || 0, display: formatCurrency(market.market_size), color: "#0f766e" },
     { label: "TAM", value: Number(market.tam) || 0, display: formatNumber(market.tam), color: "#1d4ed8" },
@@ -1553,6 +1563,30 @@ function buildPdfReportHtml() {
       </section>
 
       <section class="section">
+        <h2>Ringkasan Cakupan Radius 3 km</h2>
+        ${buildPdfDataTable("Kelurahan yang masuk radius", ["No.", "Kelurahan", "Kecamatan", "Kota/Kabupaten"], areaCoverage.map((area, index) => [String(index + 1), area.village || area.subdistrict || area.district || "-", area.subdistrict || area.district || "-", area.city || "-"]))}
+        ${buildPdfDataTable("Demografi Dukcapil", ["Indikator", "Jumlah"], [
+          ["Penduduk", formatNumber(demographyReport?.ringkasan?.jumlah_penduduk ?? demographic.population)],
+          ["Usia 0–14 tahun", formatNumber(demographyReport?.derived_metrics?.usia_0_14 ?? demographic.age_0_14)],
+          ["Estimasi usia 2–7 tahun", formatNumber(demographyReport?.derived_metrics?.estimasi_anak_usia_2_7 ?? demographic.early_childhood_population)],
+          ["Basis data demografi", demographyReport?.wilayah?.kecamatan || demographic.district_name || "Dukcapil; cakupan mengikuti wilayah data yang tersedia"],
+        ])}
+        ${buildPdfDataTable("Nilai tanah dalam radius", ["Ringkasan", "Nilai"], [
+          ["Rata-rata nilai tanah sampel", landValueSummary?.average != null ? formatCurrency(landValueSummary.average) : "Data tidak tersedia"],
+          ["Median nilai tanah sampel", landValueSummary?.median != null ? formatCurrency(landValueSummary.median) : "Data tidak tersedia"],
+          ["Jumlah titik sampel dalam radius 3 km", formatNumber(landValueSummary?.sampleCount || 0)],
+          ["Sumber", landValueSummary?.source || "BIG ZNT / BHUMI"],
+        ])}
+        ${buildPdfDataTable("Nilai tanah per titik sampel", ["Titik sampel", "Range / nilai tanah"], landValueRows)}
+        <p class="muted">Nilai tanah adalah sampel titik yang tersebar di dalam radius 3 km; hasil mengikuti cakupan layer BIG ZNT/BHUMI dan tidak mewakili setiap bidang tanah.</p>
+      </section>
+
+      <section class="section">
+        <h2>Daftar Seluruh POI (${escapeHtml(formatNumber(allPois.length))})</h2>
+        ${buildPdfDataTable("POI di area analisa", ["No.", "Nama", "Kategori", "Alamat", "Koordinat"], allPoiRows)}
+      </section>
+
+      <section class="section">
         <h2>Grafik Hasil Analisa Area</h2>
         <div class="analysis-grid">
           <div class="card">
@@ -1634,7 +1668,44 @@ function buildPdfReportHtml() {
   `;
 }
 
-function downloadPdfReport() {
+async function collectPdfLandValueSamples() {
+  const { lat, lon } = currentMapContext;
+  const points = [[lat, lon]];
+  for (let index = 0; index < 12; index += 1) {
+    const angle = (index / 12) * Math.PI * 2;
+    const distanceKm = 2.5;
+    points.push([
+      lat + (distanceKm / 111.32) * Math.sin(angle),
+      lon + (distanceKm / (111.32 * Math.cos((lat * Math.PI) / 180))) * Math.cos(angle),
+    ]);
+  }
+  const results = await Promise.allSettled(points.map(async ([sampleLat, sampleLon], index) => {
+    const response = await fetch(`${API_BASE}/api/bhumi-identify`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ service_layer_name: "umum:ZNTRANGE", lat: sampleLat, lng: sampleLon }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    const features = payload.result?.features || [];
+    const value = features.map((feature) => feature.properties?.range || feature.properties?.kelasnilai || feature.properties?.RANGENILAI || feature.properties?.nilai_tanah || feature.properties?.nilai).find(Boolean);
+    return value ? { label: index === 0 ? "Titik tengah" : `Titik radius ${index} (2,5 km)`, value: String(value) } : null;
+  }));
+  const samples = results.filter((result) => result.status === "fulfilled").map((result) => result.value).filter(Boolean);
+  const numbers = samples.map((sample) => {
+    const values = sample.value.match(/[\d.,]+/g) || [];
+    const parsed = values.map((value) => Number(value.replace(/\./g, "").replace(",", "."))).filter(Number.isFinite);
+    return parsed.length > 1 ? (parsed[0] + parsed[1]) / 2 : parsed[0];
+  }).filter(Number.isFinite);
+  const sorted = [...numbers].sort((a, b) => a - b);
+  return {
+    samples, sampleCount: samples.length,
+    average: numbers.length ? numbers.reduce((sum, value) => sum + value, 0) / numbers.length : null,
+    median: sorted.length ? sorted[Math.floor(sorted.length / 2)] : null,
+    source: "Sampel titik BIG ZNT / BHUMI (titik tengah + 12 titik di radius 2,5 km)",
+  };
+}
+
+async function downloadPdfReport() {
   if (!currentMapContext || !latestBasePois.length || !latestStructuredAnalysis) {
     setStatus("Belum ada hasil analisa area lengkap untuk diunduh.", true);
     return;
@@ -1645,9 +1716,14 @@ function downloadPdfReport() {
     setStatus("Popup diblokir browser. Izinkan popup untuk membuat PDF.", true);
     return;
   }
+  reportWindow.document.write("<p style='font-family:Arial;padding:24px'>Mengambil sampel nilai tanah untuk rangkuman PDF...</p>");
+  setStatus("Mengambil sampel nilai tanah di radius 3 km untuk rangkuman PDF...");
+  let landValueSummary = null;
+  try { landValueSummary = await collectPdfLandValueSamples(); }
+  catch (error) { console.warn("PDF land value samples unavailable:", error); }
 
   reportWindow.document.open();
-  reportWindow.document.write(buildPdfReportHtml());
+  reportWindow.document.write(buildPdfReportHtml(landValueSummary));
   reportWindow.document.close();
   reportWindow.focus();
   setTimeout(() => {
