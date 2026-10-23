@@ -2424,6 +2424,7 @@ function renderLocalAreaAnalysis({ streetName, districtName, cityName, areaCover
 }
 
 function renderAiAnalysisTables(result, fallbackContext = {}) {
+  fallbackContext = fallbackContext || {};
   if (!aiAnalysisResultsEl) {
     return;
   }
@@ -2511,6 +2512,7 @@ function renderAiAnalysisTables(result, fallbackContext = {}) {
 }
 
 function buildStructuredNarrativeHtml(result, fallbackContext = {}) {
+  fallbackContext = fallbackContext || {};
   const decision = result?.decision || {};
   const market = result?.market_estimation || {};
   const unitEconomics = result?.unit_economics || {};
@@ -2566,6 +2568,7 @@ function buildStructuredNarrativeHtml(result, fallbackContext = {}) {
 }
 
 function renderStructuredAnalysis(result, fallbackContext = {}) {
+  fallbackContext = fallbackContext || {};
   latestStructuredAnalysis = result || null;
 
   const aiEnrichment = result?.ai_enrichment || {};
@@ -4256,6 +4259,10 @@ async function analyzeLocation(lat, lon, radius) {
       .join(", ");
 
     appendActivityLog(`POI berhasil dimuat: ${pois.length} item dalam radius ${effectiveRadius} meter. Sumber aktif: ${[...new Set(pois.map((poi) => getPoiSourceLabel(poi.source)))].join(", ") || "-"}.`, "success");
+    if (poiPayload.meta?.categoryBreakdown) {
+      const counts = Object.entries(poiPayload.meta.categoryBreakdown).map(([category, count]) => `${category}: ${count}`).join(", ") || "tidak ada";
+      appendActivityLog(`Komposisi POI yang diterima backend: ${counts}.`);
+    }
     if (sourceMode === "arcgis-places" && poiPayload.meta?.arcgisPlacesByGroup) {
       const groups = poiPayload.meta.arcgisPlacesByGroup;
       appendActivityLog(`ArcGIS Places: ${groups.residential || 0}/60 hunian, ${groups.education || 0}/20 kompetitor, ${groups["family-services"] || 0}/20 affiliate.`, "success");

@@ -7693,6 +7693,11 @@ async function handlePois(req, res) {
     // Jangan pernah mengembalikan titik sintetis. Jika sumber nyata gagal,
     // dashboard menampilkan hasil kosong/parsial agar tidak menyesatkan.
     const poisToReturn = realPoisInSelectedKelurahan;
+    const categoryBreakdown = poisToReturn.reduce((counts, poi) => {
+      const category = poi.category || "other";
+      counts[category] = (counts[category] || 0) + 1;
+      return counts;
+    }, {});
     syncBackendHotmapPois(realPoisInSelectedKelurahan);
 
     const payload = {
@@ -7716,6 +7721,7 @@ async function handlePois(req, res) {
           return groups;
         }, {}),
         realPoisInRadius: realPoisInSelectedKelurahan.length,
+        categoryBreakdown,
         radiusFilterApplied: true,
         radiusFilterNote: "Kelurahan dipetakan lebih dulu untuk menyusun query crawler; setiap POI berkoordinat kemudian divalidasi ulang dan hanya titik dalam radius 3 km yang dikirim ke peta.",
         googleMapsCoordSources: googleHousingPoisWithCoords.reduce((accumulator, item) => {

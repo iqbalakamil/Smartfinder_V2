@@ -71,6 +71,31 @@ const MAX_CRAWL_TASKS = VERCEL_MODE ? 3 : 999;
 const CRAWL_DEADLINE_MS = Number(process.env.POI_CRAWL_DEADLINE_MS || 600000);
 const GRID_SEARCH_RADIUS_KM = 2.2;
 
+function selectBalancedCrawlTasks(tasks, limit) {
+  if (tasks.length <= limit) return tasks;
+  const selected = [];
+  const selectedKeys = new Set();
+
+  // Ensure a constrained serverless crawl includes every POI family before
+  // spending its remaining budget on additional search terms for one family.
+  for (const mode of Object.keys(CATEGORY_CONFIG)) {
+    const task = tasks.find((candidate) => candidate.mode === mode);
+    if (task) {
+      selected.push(task);
+      selectedKeys.add(`${task.mode}|${task.query}`);
+    }
+  }
+
+  for (const task of tasks) {
+    if (selected.length >= limit) break;
+    const key = `${task.mode}|${task.query}`;
+    if (selectedKeys.has(key)) continue;
+    selected.push(task);
+    selectedKeys.add(key);
+  }
+  return selected;
+}
+
 async function launchConfiguredBrowser(launchOptions = {}) {
   if (chromium) {
     const executablePath = await chromium.executablePath().catch(() => "");
@@ -641,7 +666,7 @@ async function crawlGoogleMapsPois(location = {}) {
     };
 
     const all = [];
-    const tasks = buildQueries(location).slice(0, MAX_CRAWL_TASKS);
+    const tasks = selectBalancedCrawlTasks(buildQueries(location), MAX_CRAWL_TASKS);
     let nextTaskIndex = 0;
     const workerCount = Math.min(MAX_CRAWL_PAGES, Math.max(1, tasks.length));
 
