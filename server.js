@@ -425,25 +425,26 @@ async function fetchBhumiPersil(body) {
     body: requestBody,
   }), BHUMI_REQUEST_TIMEOUT_MS, "BHUMI persil request");
 
-  let response = bhumiTokenCache ? await fetchPersil(bhumiTokenCache) : null;
-  if (!response || response.status === 401) {
-    const loginResponse = await withTimeout(fetch("https://bhumi.atrbpn.go.id/expapi/loginApi", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Origin: "https://bhumi.atrbpn.go.id",
-        Referer: "https://bhumi.atrbpn.go.id/peta",
-      },
-      body: JSON.stringify({ username: "user", password: "password" }),
-    }), BHUMI_REQUEST_TIMEOUT_MS, "BHUMI login request");
-    if (!loginResponse.ok) throw new Error(`BHUMI login HTTP ${loginResponse.status}`);
-    const rawToken = await loginResponse.text();
-    try { bhumiTokenCache = JSON.parse(rawToken); } catch { bhumiTokenCache = rawToken.trim().replace(/^"|"$/g, ""); }
-    response = await fetchPersil(bhumiTokenCache);
+  let response = await fetchPersil(await loginBhumi());
+  if (response.status === 401 || response.status === 403) {
+    response = await fetchPersil(await loginBhumi(true));
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.message || `BHUMI HTTP ${response.status}`);
   return payload.encrypted && payload.data ? decryptBhumiPayload(payload.data) : payload;
+}
+
+function extractBhumiToken(rawToken) {
+  let token = String(rawToken || "").trim();
+  try {
+    const parsed = JSON.parse(token);
+    if (typeof parsed === "string") token = parsed;
+    else if (parsed && typeof parsed === "object") {
+      token = parsed.token || parsed.access_token || parsed.accessToken || parsed.authorization || parsed.data || "";
+      if (typeof token === "object") token = token.token || token.access_token || "";
+    }
+  } catch {}
+  return String(token || "").trim().replace(/^"|"$/g, "");
 }
 
 async function loginBhumi(force = false) {
@@ -459,8 +460,7 @@ async function loginBhumi(force = false) {
     body: JSON.stringify({ username: "user", password: "password" }),
   }), BHUMI_REQUEST_TIMEOUT_MS, "BHUMI login request");
   if (!loginResponse.ok) throw new Error(`BHUMI login HTTP ${loginResponse.status}`);
-  const rawToken = await loginResponse.text();
-  try { bhumiTokenCache = JSON.parse(rawToken); } catch { bhumiTokenCache = rawToken.trim().replace(/^"|"$/g, ""); }
+  bhumiTokenCache = extractBhumiToken(await loginResponse.text());
   if (!bhumiTokenCache) throw new Error("BHUMI login tidak mengembalikan token.");
   return bhumiTokenCache;
 }
@@ -1174,6 +1174,7 @@ async function handleBhumiEnrichHexagons(req, res) {
               height: 512,
               bbox,
               x: 256,
+              y: 256,
             }, point).catch((error) => {
               bhumiSampleCache.delete(cacheKey);
               throw error;
@@ -1190,6 +1191,7 @@ async function handleBhumiEnrichHexagons(req, res) {
               .filter((properties) => Object.keys(properties).length)
               .map((properties) => ({ layer: layersNeedingSampling[index], properties }));
           }
+          externalQueryErrors.push(`BHUMI ${layersNeedingSampling[index]}: ${result.reason?.message || "request gagal"}`);
           return null;
         }).flat().filter(Boolean);
         }));
@@ -9828,6 +9830,40 @@ function handleCctvData(req, res, url) {
   }
 }
 
+async function openInstagramCookieBrowser(res) {
+  let context;
+  try {
+    const { chromium } = require("playwright");
+    const profileDir = path.join(require("os").homedir(), ".instagram-location-search", "chrome-data");
+    fs.mkdirSync(profileDir, { recursive: true });
+    const chromePath = process.env.CHROME_PATH;
+    const options = { headless: false, args: ["--profile-directory=instagram-location-profile"] };
+    if (chromePath && fs.existsSync(chromePath)) options.executablePath = chromePath;
+    else options.channel = "chrome";
+    context = await chromium.launchPersistentContext(profileDir, options);
+    const page = context.pages()[0] || await context.newPage();
+    await page.goto("https://www.instagram.com/", { waitUntil: "domcontentloaded", timeout: 60000 });
+
+    for (let attempt = 0; attempt < 300; attempt += 1) {
+      const cookies = await context.cookies("https://www.instagram.com/");
+      if (cookies.some((cookie) => cookie.name === "sessionid" && cookie.value)) {
+        const cookieString = cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
+        const savedPath = path.join(__dirname, "INSTAGRAM LOCATOR NEW", "_saved_cookie.txt");
+        fs.mkdirSync(path.dirname(savedPath), { recursive: true });
+        fs.writeFileSync(savedPath, cookieString, "utf8");
+        sendJson(res, 200, { success: true, cookie: cookieString, source: "browser_playwright" });
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    sendJson(res, 408, { success: false, error: "Waktu login Instagram habis. Selesaikan login di jendela Chrome lalu coba lagi." });
+  } catch (error) {
+    sendJson(res, 500, { success: false, error: `Gagal membuka Chrome untuk login Instagram: ${error.message}` });
+  } finally {
+    if (context) await context.close().catch(() => {});
+  }
+}
+
 function handleGetInstagramCookie(req, res) {
   try {
     const pythonScript = getExternalPythonScript("get_ig_cookie.py");
@@ -9848,6 +9884,12 @@ function handleGetInstagramCookie(req, res) {
 
       if (stderrStr) {
         console.log("[Instagram Cookie] python stderr:", stderrStr.slice(0, 2000));
+      }
+
+      if (stderrStr.includes("No module named 'selenium'") || stderrStr.includes('No module named "selenium"')) {
+        console.warn("[Instagram Cookie] Selenium is missing; using the bundled Playwright browser fallback.");
+        void openInstagramCookieBrowser(res);
+        return;
       }
 
       if (error && !stdoutStr) {

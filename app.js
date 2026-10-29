@@ -6927,6 +6927,7 @@ function buildAreaPotentialExplanationHtml(properties = {}) {
       ${properties.bhumi_right_types ? `<b>Jenis hak:</b> ${escapeHtml(properties.bhumi_right_types)}<br>` : ""}
       ${properties.bhumi_land_use_types ? `<b>Guna tanah:</b> ${escapeHtml(properties.bhumi_land_use_types)}<br>` : ""}
       ${properties.bhumi_missing_layers ? `<b>Layer belum ditemukan:</b> ${escapeHtml(properties.bhumi_missing_layers)}<br>` : ""}
+      ${properties.big_query_errors ? `<b>Endpoint data:</b> ${escapeHtml(properties.big_query_errors)}<br>` : ""}
       ${properties.bhumi_observation_layer_counts ? `<b>Observasi per layer:</b> ${escapeHtml(properties.bhumi_observation_layer_counts)}` : ""}
     </div>
     <div style="margin-top:6px;font-size:10px;color:#64748b;">Index Potensi Area: <b>${formatSesNumber(properties.area_potential_index)}%</b> · Coverage data: <b>${formatSesNumber(properties.area_potential_data_coverage)}%</b></div>
