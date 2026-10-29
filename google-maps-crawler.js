@@ -25,7 +25,6 @@ const POPULAR_TIMES_ENABLED = String(process.env.POPULAR_TIMES_ENABLED || "false
 const POPULAR_TIMES_MAX_POIS = Number(process.env.POPULAR_TIMES_MAX_POIS || 15);
 const POPULAR_TIMES_DELAY_MS = Number(process.env.POPULAR_TIMES_DELAY_MS || 1500);
 const MIN_REVIEW_COUNT = 0;
-const MAX_POI_PER_CATEGORY = 100;
 const MAX_CRAWL_PAGES = process.env.VERCEL ? 1 : 8;
 // Kategori non-hunian memakai satu keyword inti agar crawl tetap cepat.
 // Affiliate dikecualikan karena keyword brand (McDonald's/Burger King) harus
@@ -69,7 +68,8 @@ const MAX_CRAWL_TASKS = VERCEL_MODE ? 3 : 999;
 // cukup agar task selesai pada desktop/local backend, bukan berhenti di tengah
 // saat cakupan area menghasilkan banyak kelurahan.
 const CRAWL_DEADLINE_MS = Number(process.env.POI_CRAWL_DEADLINE_MS || 600000);
-const GRID_SEARCH_RADIUS_KM = 2.2;
+const DEFAULT_SEARCH_RADIUS_METERS = 3000;
+const GRID_SEARCH_STEP_KM = 1.2;
 
 function selectBalancedCrawlTasks(tasks, limit) {
   if (tasks.length <= limit) return tasks;
@@ -146,19 +146,22 @@ function buildGridSearchPoints(location = {}) {
   const lon = Number(location.targetLon ?? location.lon);
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return [];
 
-  // Google Maps tidak selalu mengembalikan semua tempat saat query hanya
-  // memakai nama kelurahan. Sebarkan query ke pusat dan delapan arah supaya
-  // koridor/perumahan yang berada di sisi radius tidak terlewat.
+  // Overlapping search centers ensure Maps' per-query ranking does not hide
+  // places near the edge of the requested circle. The final POI filter still
+  // uses the exact center and radius, so outer grid points cannot add outsiders.
+  const radiusKm = Math.max(0, Number(location.radiusMeters ?? location.radius ?? DEFAULT_SEARCH_RADIUS_METERS) / 1000);
+  const latKm = 1 / 111.32;
+  const lonKm = 1 / (111.32 * Math.max(0.2, Math.cos((lat * Math.PI) / 180)));
+  const latitudeRange = radiusKm / 111.32;
+  const longitudeRange = radiusKm / (111.32 * Math.max(0.2, Math.cos((lat * Math.PI) / 180)));
   const points = [{ lat, lon, label: "center" }];
-  const latitudeKm = GRID_SEARCH_RADIUS_KM / 111.32;
-  const longitudeKm = GRID_SEARCH_RADIUS_KM / (111.32 * Math.max(0.2, Math.cos((lat * Math.PI) / 180)));
-  for (let index = 0; index < 8; index += 1) {
-    const angle = (index * Math.PI) / 4;
-    points.push({
-      lat: lat + latitudeKm * Math.sin(angle),
-      lon: lon + longitudeKm * Math.cos(angle),
-      label: `grid-${index + 1}`,
-    });
+  for (let y = -latitudeRange; y <= latitudeRange + 1e-9; y += GRID_SEARCH_STEP_KM * latKm) {
+    for (let x = -longitudeRange; x <= longitudeRange + 1e-9; x += GRID_SEARCH_STEP_KM * lonKm) {
+      const pointLat = lat + y;
+      const pointLon = lon + x;
+      if (haversineMeters(lat, lon, pointLat, pointLon) > radiusKm * 1000 + GRID_SEARCH_STEP_KM * 1000) continue;
+      points.push({ lat: pointLat, lon: pointLon, label: `grid-${points.length + 1}` });
+    }
   }
   return points;
 }
@@ -252,7 +255,6 @@ function parseCoordinatesFromHref(href) {
     /ll=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/i,
     /q=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/i,
     /destination=(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/i,
-    /@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/i,
   ];
 
   for (const pattern of patterns) {
@@ -279,6 +281,10 @@ function parseCoordinatesFromHref(href) {
     lat: null,
     lon: null,
   };
+}
+
+function haversineMeters(lat1, lon1, lat2, lon2) {
+  return haversineKm(lat1, lon1, lat2, lon2) * 1000;
 }
 
 async function resolveCoordinatesFromPlacePage(page, href) {
@@ -724,10 +730,8 @@ async function crawlGoogleMapsPois(location = {}) {
     const categoryBuckets = new Map();
     for (const item of deduped.values()) {
       const bucket = categoryBuckets.get(item.category) || [];
-      if (bucket.length < MAX_POI_PER_CATEGORY) {
-        bucket.push(item);
-        categoryBuckets.set(item.category, bucket);
-      }
+      bucket.push(item);
+      categoryBuckets.set(item.category, bucket);
     }
 
     let results = Array.from(categoryBuckets.values()).flat();

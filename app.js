@@ -906,27 +906,12 @@ function renderMapPois(lat, lon, radius, pois) {
 
   console.log('RENDER_MAP_POIS: markerCandidates in radius:', markerCandidates.length, 'of', withCoordinates.length);
   
-  const categoryCounts = {
-    residential: 0,
-    education: 0,
-    "family-services": 0,
-  };
-  
   const features = [];
   
   appendActivityLog(`Render peta menerima ${markerCandidates.length} kandidat marker berkordinat.`);
   
   markerCandidates.forEach((poi) => {
     if (!Number.isFinite(Number(poi.lat)) || !Number.isFinite(Number(poi.lon))) return;
-    
-    // Batasi jumlah marker per kategori
-    if (poi.category === "residential" && categoryCounts.residential >= 100) return;
-    if (poi.category === "education" && categoryCounts.education >= 100) return;
-    if (poi.category === "family-services" && categoryCounts["family-services"] >= 100) return;
-    
-    if (poi.category === "residential") categoryCounts.residential += 1;
-    else if (poi.category === "education") categoryCounts.education += 1;
-    else if (poi.category === "family-services") categoryCounts["family-services"] += 1;
     
     // Build popup content
     let popupContent = '';
