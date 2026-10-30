@@ -171,7 +171,9 @@ const researchSearchCache = new Map();
 const POI_EXTERNAL_RESEARCH_TIMEOUT_MS = Number(process.env.POI_EXTERNAL_RESEARCH_TIMEOUT_MS || 12000);
 // Harus lebih panjang dari crawler deadline agar endpoint tidak memotong
 // proses sebelum seluruh query POI hunian selesai.
-const POI_GOOGLE_HOUSING_TIMEOUT_MS = Number(process.env.POI_GOOGLE_HOUSING_TIMEOUT_MS || 660000);
+const POI_GOOGLE_HOUSING_TIMEOUT_MS = Number(
+  process.env.POI_GOOGLE_HOUSING_TIMEOUT_MS || (process.env.VERCEL ? 50000 : 180000)
+);
 const FAST_MODE = String(process.env.AI_FAST_MODE || "true").toLowerCase() !== "false";
 const FAST_EXTERNAL_QUERY_LIMIT = FAST_MODE ? 6 : 999;
 const FAST_POI_QUERY_LIMIT = FAST_MODE ? 8 : 999;
@@ -1961,6 +1963,16 @@ function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
   return earthRadius * c;
 }
 
+function hasValidPoiCoordinates(item = {}) {
+  const rawLat = item.lat ?? item.latitude;
+  const rawLon = item.lon ?? item.lng ?? item.longitude;
+  if (rawLat == null || rawLon == null || rawLat === "" || rawLon === "") return false;
+  const lat = Number(rawLat);
+  const lon = Number(rawLon);
+  return Number.isFinite(lat) && Number.isFinite(lon)
+    && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+}
+
 function normalizeImportedHotmapPoi(item = {}) {
   const linkCoordinates = parseCoordinatesFromGoogleMapsLink(item.headerLinkRaw || item.header_link_raw || item.href || item.google_maps_link || "");
   const lat = Number(item.latitude ?? item.lat ?? linkCoordinates.lat);
@@ -2093,11 +2105,16 @@ function classifyPoi(tags = {}) {
 
 function normalizeBackendCrawlerPoi(item = {}) {
   const parsed = parseCoordinatesFromGoogleMapsLink(item.tags?.header_link_raw || item.tags?.maps_link || item.href || "");
-  const lat = Number(item.lat ?? item.latitude ?? parsed.lat);
-  const lon = Number(item.lon ?? item.longitude ?? parsed.lon);
-  if (Number.isNaN(lat) || Number.isNaN(lon)) {
+  const rawLat = item.lat ?? item.latitude ?? parsed.lat;
+  const rawLon = item.lon ?? item.lng ?? item.longitude ?? parsed.lon;
+  // Number(null) is 0; treating a missing Google coordinate as (0, 0)
+  // creates a bogus marker and can contaminate the backend hotmap cache.
+  if (rawLat == null || rawLon == null || rawLat === "" || rawLon === "") {
     return null;
   }
+  const lat = Number(rawLat);
+  const lon = Number(rawLon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
 
   return {
     name: item.name || item.title || "POI Hotmap Backend",
@@ -2362,7 +2379,7 @@ async function geocodeAddressWithPhoton(addressText) {
 
 async function enrichMissingGoogleMapsCoordinates(items, location = {}) {
   const targets = items
-    .filter((item) => item.source === "google-maps-crawl" && (!item.lat || !item.lon))
+    .filter((item) => item.source === "google-maps-crawl" && !hasValidPoiCoordinates(item))
     .slice(0, 80);
 
   let nextIndex = 0;
@@ -2403,12 +2420,12 @@ async function enrichMissingGoogleMapsCoordinates(items, location = {}) {
       let coordinates = { lat: null, lon: null, source: "" };
       for (const addressText of addressCandidates) {
         coordinates = await geocodeAddress(addressText).catch(() => ({ lat: null, lon: null, source: "" }));
-        if (coordinates.lat && coordinates.lon) break;
+        if (Number.isFinite(coordinates.lat) && Number.isFinite(coordinates.lon)) break;
         coordinates = await geocodeAddressWithPhoton(addressText).catch(() => ({ lat: null, lon: null, source: "" }));
-        if (coordinates.lat && coordinates.lon) break;
+        if (Number.isFinite(coordinates.lat) && Number.isFinite(coordinates.lon)) break;
       }
 
-      if (coordinates.lat && coordinates.lon) {
+      if (Number.isFinite(coordinates.lat) && Number.isFinite(coordinates.lon)) {
         item.lat = coordinates.lat;
         item.lon = coordinates.lon;
         item.tags = {
@@ -7680,8 +7697,9 @@ async function handlePois(req, res) {
     ]);
 
     const googleHousingPois = googleHousingPipelineResult.status === "fulfilled" ? googleHousingPipelineResult.value : [];
+    // Preserve crawl diagnostics before Array.filter() drops custom array properties.
     const crawlDebug = googleHousingPois.debug || null;
-    const googleHousingPoisWithCoords = googleHousingPois.filter((item) => Number.isFinite(Number(item.lat)) && Number.isFinite(Number(item.lon)));
+    const googleHousingPoisWithCoords = googleHousingPois.filter(hasValidPoiCoordinates);
     const googleHousingPoisInRadius = googleHousingPoisWithCoords.filter((item) => calculateDistanceMeters(lat, lon, item.lat, item.lon) <= radius);
     const googleHousingPoisOutsideRadius = googleHousingPoisWithCoords.filter((item) => calculateDistanceMeters(lat, lon, item.lat, item.lon) > radius).length;
     const googleHousingPoisWithoutCoords = googleHousingPois.length - googleHousingPoisWithCoords.length;
@@ -7699,13 +7717,11 @@ async function handlePois(req, res) {
       ? arcgisPlacesPipelineResult.reason?.message || "ArcGIS Places request gagal"
       : null;
     const overpassPoisInRadius = overpassPois.filter((item) =>
-      Number.isFinite(Number(item.lat)) &&
-      Number.isFinite(Number(item.lon)) &&
+      hasValidPoiCoordinates(item) &&
       calculateDistanceMeters(lat, lon, item.lat, item.lon) <= radius
     );
     const arcgisPlacesPoisInRadius = arcgisPlacesPois.filter((item) =>
-      Number.isFinite(Number(item.lat)) &&
-      Number.isFinite(Number(item.lon)) &&
+      hasValidPoiCoordinates(item) &&
       calculateDistanceMeters(lat, lon, item.lat, item.lon) <= radius
     );
     const realPoisInSelectedKelurahan = dedupePois([

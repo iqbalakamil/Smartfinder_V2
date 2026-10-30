@@ -63,11 +63,11 @@ const SEARCH_READY_TIMEOUT_MS = VERCEL_MODE ? 10000 : 12000;
 const QUERY_POST_LOAD_DELAY_MS = VERCEL_MODE ? 900 : 1000;
 const MAX_SCROLL_ROUNDS = VERCEL_MODE ? 4 : 6;
 const SCROLL_DELAY_MS = VERCEL_MODE ? 300 : 350;
-const MAX_CRAWL_TASKS = VERCEL_MODE ? 3 : 999;
-// Seluruh keyword hunian dan affiliate dijalankan untuk setiap area. Beri waktu
-// cukup agar task selesai pada desktop/local backend, bukan berhenti di tengah
-// saat cakupan area menghasilkan banyak kelurahan.
-const CRAWL_DEADLINE_MS = Number(process.env.POI_CRAWL_DEADLINE_MS || 600000);
+// Keep each request bounded. The radius grid has broad coverage already; running
+// every keyword for every intersecting village made a single POI search exceed
+// serverless and desktop request limits.
+const MAX_CRAWL_TASKS = VERCEL_MODE ? 3 : Number(process.env.POI_MAX_CRAWL_TASKS || 72);
+const CRAWL_DEADLINE_MS = Number(process.env.POI_CRAWL_DEADLINE_MS || 120000);
 const DEFAULT_SEARCH_RADIUS_METERS = 3000;
 const GRID_SEARCH_STEP_KM = 1.2;
 
@@ -163,11 +163,19 @@ function buildGridSearchPoints(location = {}) {
       points.push({ lat: pointLat, lon: pointLon, label: `grid-${points.length + 1}` });
     }
   }
-  return points;
+  return points.sort((left, right) =>
+    haversineMeters(lat, lon, left.lat, left.lon) - haversineMeters(lat, lon, right.lat, right.lon)
+  );
 }
 
 function buildQueries(location = {}) {
   const areas = buildSearchAreas(location);
+  const targetAreaLabel = [
+    location.village,
+    location.subdistrict || location.district,
+    location.city,
+    location.province,
+  ].filter(Boolean).join(", ") || buildLocationLabel(areas[0] || {});
   const areaQueries = areas.flatMap((area) => {
     const locationLabel = buildLocationLabel(area);
     return Object.entries(CATEGORY_CONFIG).flatMap(([mode, config]) => {
@@ -195,7 +203,7 @@ function buildQueries(location = {}) {
       mode,
       keyword,
       area: areas[0] || {},
-      query: `${keyword} near ${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}`,
+      query: `${keyword} near ${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}${targetAreaLabel ? `, ${targetAreaLabel}` : ""}`,
       searchScope: point.label,
       searchPoint: point,
     }));
@@ -284,7 +292,12 @@ function parseCoordinatesFromHref(href) {
 }
 
 function haversineMeters(lat1, lon1, lat2, lon2) {
-  return haversineKm(lat1, lon1, lat2, lon2) * 1000;
+  const toRadians = (value) => (Number(value) * Math.PI) / 180;
+  const dLat = toRadians(lat2 - lat1);
+  const dLon = toRadians(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 async function resolveCoordinatesFromPlacePage(page, href) {
@@ -322,7 +335,7 @@ async function resolveCoordinatesFromPlacePage(page, href) {
 
     for (const candidate of candidates) {
       const parsed = parseCoordinatesFromHref(candidate);
-      if (parsed.lat && parsed.lon) {
+      if (Number.isFinite(parsed.lat) && Number.isFinite(parsed.lon)) {
         return {
           lat: parsed.lat,
           lon: parsed.lon,
@@ -544,7 +557,7 @@ async function scrapeGoogleMapsResults(options = {}) {
 
 async function crawlQuery(page, query) {
   const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}&hl=id&gl=id&authuser=0`;
-  await page.goto(url, { waitUntil: "domcontentloaded", timeout: process.env.VERCEL ? 30000 : 60000 });
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: VERCEL_MODE ? 25000 : 30000 });
   await maybeDismissGoogleConsent(page);
   await page.waitForFunction(() => Boolean(
     document.querySelector('div[role="feed"]') ||
@@ -598,9 +611,16 @@ function mapResultToPoi(row, task) {
   const parsedCoordinates = parseCoordinatesFromHref(coordinateHref);
   const directLat = Number(row.lat ?? row.latitude ?? row.coordinates?.lat ?? row.position?.lat);
   const directLon = Number(row.lon ?? row.lng ?? row.longitude ?? row.coordinates?.lon ?? row.coordinates?.lng ?? row.position?.lon ?? row.position?.lng);
-  const coordinates = Number.isFinite(directLat) && Number.isFinite(directLon)
+  const directCoordinatesValid = Number.isFinite(directLat) && Number.isFinite(directLon)
+    && directLat >= -90 && directLat <= 90 && directLon >= -180 && directLon <= 180;
+  const parsedCoordinatesValid = Number.isFinite(parsedCoordinates.lat) && Number.isFinite(parsedCoordinates.lon)
+    && parsedCoordinates.lat >= -90 && parsedCoordinates.lat <= 90
+    && parsedCoordinates.lon >= -180 && parsedCoordinates.lon <= 180;
+  const coordinates = directCoordinatesValid
     ? { lat: directLat, lon: directLon, source: "google-result-fields" }
-    : parsedCoordinates;
+    : parsedCoordinatesValid
+      ? parsedCoordinates
+      : { lat: null, lon: null };
   const reviewCount = parseReviewCount(row.reviewCount);
   return {
     name: row.title || config.fallbackName,
@@ -613,7 +633,9 @@ function mapResultToPoi(row, task) {
       website: row.companyUrl || "",
       maps_link: row.href || row.headerLinkRaw || "",
       header_link_raw: row.headerLinkRaw || row.href || "",
-      coord_source: coordinates.lat && coordinates.lon ? "google-header-link" : "",
+      coord_source: Number.isFinite(coordinates.lat) && Number.isFinite(coordinates.lon)
+        ? (coordinates.source || "google-header-link")
+        : "",
       keyword: task.keyword,
       query: task.query,
       industry: row.industry || "",
@@ -692,9 +714,9 @@ async function crawlGoogleMapsPois(location = {}) {
             }
 
             const poi = mapResultToPoi(row, task);
-            if ((!poi.lat || !poi.lon) && (row.headerLinkRaw || row.href) && !VERCEL_MODE) {
+            if ((!Number.isFinite(poi.lat) || !Number.isFinite(poi.lon)) && (row.headerLinkRaw || row.href) && !VERCEL_MODE) {
               const resolved = await resolveCoordinatesFromPlacePage(page, row.headerLinkRaw || row.href).catch(() => ({ lat: null, lon: null, resolvedHref: "" }));
-              if (resolved.lat && resolved.lon) {
+              if (Number.isFinite(resolved.lat) && Number.isFinite(resolved.lon)) {
                 poi.lat = resolved.lat;
                 poi.lon = resolved.lon;
                 poi.tags = {

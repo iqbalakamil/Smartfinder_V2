@@ -466,7 +466,8 @@ function syncActionButtons() {
   const submitButton = form.querySelector('button[type="submit"]');
   submitButton.disabled = isProcessing;
   useMyLocationBtn.disabled = isProcessing;
-  downloadPdfBtn.disabled = isProcessing || !currentMapContext || !latestBasePois.length || !latestStructuredAnalysis;
+  // PDF boleh diunduh begitu titik analisa siap; riset lanjutan bisa tetap berjalan.
+  downloadPdfBtn.disabled = !currentMapContext;
   if (downloadPoiXlsBtn) {
     downloadPoiXlsBtn.disabled = isProcessing || !latestBasePois.length;
   }
@@ -649,8 +650,10 @@ function parseCoordinatesFromPoiLinks(poi) {
 }
 
 function normalizePoiForMap(poi) {
-  const lat = Number(poi?.lat ?? poi?.latitude);
-  const lon = Number(poi?.lon ?? poi?.lng ?? poi?.longitude);
+  const rawLat = poi?.lat ?? poi?.latitude;
+  const rawLon = poi?.lon ?? poi?.lng ?? poi?.longitude;
+  const lat = rawLat == null || rawLat === "" ? NaN : Number(rawLat);
+  const lon = rawLon == null || rawLon === "" ? NaN : Number(rawLon);
   if (Number.isFinite(lat) && Number.isFinite(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
     return { ...poi, lat, lon };
   }
@@ -895,7 +898,12 @@ function renderMapPois(lat, lon, radius, pois) {
   }
   
   // Siapkan GeoJSON features untuk POI markers
-  const withCoordinates = pois.filter((poi) => Number.isFinite(Number(poi.lat)) && Number.isFinite(Number(poi.lon)));
+  const withCoordinates = pois.filter((poi) => {
+    const lat = poi?.lat == null || poi.lat === "" ? NaN : Number(poi.lat);
+    const lon = poi?.lon == null || poi.lon === "" ? NaN : Number(poi.lon);
+    return Number.isFinite(lat) && Number.isFinite(lon)
+      && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+  });
   // Backend sudah memvalidasi radius, tetapi filter kedua di frontend menjaga
   // peta tetap aman jika ada cache lama atau sumber tambahan yang mengirim
   // koordinat di luar radius aktif.
@@ -911,7 +919,7 @@ function renderMapPois(lat, lon, radius, pois) {
   appendActivityLog(`Render peta menerima ${markerCandidates.length} kandidat marker berkordinat.`);
   
   markerCandidates.forEach((poi) => {
-    if (!Number.isFinite(Number(poi.lat)) || !Number.isFinite(Number(poi.lon))) return;
+    if (poi?.lat == null || poi?.lon == null || !Number.isFinite(Number(poi.lat)) || !Number.isFinite(Number(poi.lon))) return;
     
     // Build popup content
     let popupContent = '';
@@ -1222,7 +1230,7 @@ function buildPdfDataTable(title, headers = [], rows = []) {
         <tbody>
           ${rows.length ? rows.map((row) => `
             <tr>
-              ${row.map((cell, index) => `<td class="${index > 0 ? "number-cell" : ""}">${escapeHtml(cell)}</td>`).join("")}
+              ${row.map((cell, index) => `<td class="${index > 0 ? "number-cell" : ""}">${index === 1 && String(cell).startsWith("<a ") ? cell : escapeHtml(cell)}</td>`).join("")}
             </tr>
           `).join("") : `
             <tr>
@@ -1378,8 +1386,9 @@ function buildPdfReportHtml(landValueSummary = null) {
   }, new Map()).entries()).sort((left, right) => right[1] - left[1]);
   const areaName = [districtNameEl.textContent || "", cityNameEl.textContent || ""].filter(Boolean).join(", ") || streetNameEl.textContent || "Area analisa";
   const coordinates = currentMapContext ? `${currentMapContext.lat}, ${currentMapContext.lon}` : "-";
-  const mbMap = getMaplibreMap();
-  const mapHtml = mbMap ? mbMap.getContainer().outerHTML : "";
+  const mapLink = currentMapContext
+    ? `https://www.google.com/maps/@${encodeURIComponent(`${currentMapContext.lat},${currentMapContext.lon},15z`)}`
+    : "https://www.google.com/maps";
   const market = latestStructuredAnalysis?.market_estimation || {};
   const formula = market?.market_size_formula || {};
   const competitorMap = latestStructuredAnalysis?.competitor_map || {};
@@ -1397,11 +1406,21 @@ function buildPdfReportHtml(landValueSummary = null) {
     : [];
   const landValueChartItems = Object.entries(landValueSummary?.rangeCounts || {})
     .map(([label, value], index) => ({ label, value, color: ["#0f766e", "#2563eb", "#f59e0b", "#7c3aed", "#db2777", "#0891b2"][index % 6] }));
-  const allPoiRows = allPois.map((poi, index) => [
-    String(index + 1), poi.name || "POI", poi.categoryLabel || poi.category || "Lainnya",
-    poi.address || "-", Number.isFinite(Number(poi.lat)) && Number.isFinite(Number(poi.lon))
-      ? `${Number(poi.lat).toFixed(6)}, ${Number(poi.lon).toFixed(6)}` : "-",
-  ]);
+  const allPoiRows = allPois.map((poi, index) => {
+    const lat = poi?.lat == null || poi.lat === "" ? NaN : Number(poi.lat);
+    const lon = poi?.lon == null || poi.lon === "" ? NaN : Number(poi.lon);
+    const mapsUrl = poi.tags?.maps_link || poi.tags?.header_link_raw || poi.href
+      || (Number.isFinite(lat) && Number.isFinite(lon)
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lon}`)}`
+        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(poi.name || "POI")}`);
+    return [
+      String(index + 1),
+      `<a href="${escapeAttribute(mapsUrl)}" target="_blank" rel="noopener">${escapeHtml(poi.name || "POI")}</a>`,
+      poi.categoryLabel || poi.category || "Lainnya",
+      poi.address || poi.tags?.address || "-",
+      Number.isFinite(lat) && Number.isFinite(lon) ? `${lat.toFixed(6)}, ${lon.toFixed(6)}` : "-",
+    ];
+  });
   const analysisBars = [
     { label: "Market Size", value: Number(market.market_size) || 0, display: formatCurrency(market.market_size), color: "#0f766e" },
     { label: "TAM", value: Number(market.tam) || 0, display: formatNumber(market.tam), color: "#1d4ed8" },
@@ -1489,6 +1508,7 @@ function buildPdfReportHtml(landValueSummary = null) {
         table { width: 100%; border-collapse: collapse; }
         th, td { padding: 10px 12px; border: 1px solid #d9d0c3; text-align: left; }
         th { background: #f8fafc; }
+        a { color: #1d4ed8; text-decoration: underline; }
         .number-cell { text-align: right; }
         .chart-grid { display: grid; gap: 12px; }
         .chart-row { display: grid; gap: 8px; }
@@ -1526,8 +1546,11 @@ function buildPdfReportHtml(landValueSummary = null) {
       </section>
 
       <section class="section">
-        <h2>Peta Visual</h2>
-        ${mapHtml}
+        <h2>Peta Lokasi Analisa</h2>
+        <div class="card">
+          <p>Lokasi pusat analisa: ${escapeHtml(coordinates)}</p>
+          <p><a href="${escapeAttribute(mapLink)}" target="_blank" rel="noopener">Buka titik analisa di Google Maps</a></p>
+        </div>
       </section>
 
       <section class="section">
@@ -1709,8 +1732,8 @@ async function collectPdfLandValueSamples() {
 }
 
 async function downloadPdfReport() {
-  if (!currentMapContext || !latestBasePois.length || !latestStructuredAnalysis) {
-    setStatus("Belum ada hasil analisa area lengkap untuk diunduh.", true);
+  if (!currentMapContext) {
+    setStatus("Masukkan koordinat lokasi terlebih dahulu sebelum mengunduh rangkuman PDF.", true);
     return;
   }
 
@@ -1719,16 +1742,23 @@ async function downloadPdfReport() {
     setStatus("Popup diblokir browser. Izinkan popup untuk membuat PDF.", true);
     return;
   }
-  reportWindow.document.write("<p style='font-family:Arial;padding:24px'>Mengambil sampel nilai tanah untuk rangkuman PDF...</p>");
-  setStatus("Mengambil sampel nilai tanah di radius 3 km untuk rangkuman PDF...");
+  reportWindow.document.write("<p style='font-family:Arial;padding:24px'>Menunggu analisa lokasi selesai sebelum menyusun rangkuman PDF...</p>");
+  setStatus("Menyiapkan rangkuman PDF...");
+  const analysisWaitStartedAt = Date.now();
+  while (isProcessing && Date.now() - analysisWaitStartedAt < 180000) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
   let landValueSummary = null;
-  try { landValueSummary = await collectPdfLandValueSamples(); }
+  try {
+    if (currentMapContext) landValueSummary = await collectPdfLandValueSamples();
+  }
   catch (error) { console.warn("PDF land value samples unavailable:", error); }
 
   reportWindow.document.open();
   reportWindow.document.write(buildPdfReportHtml(landValueSummary));
   reportWindow.document.close();
   reportWindow.focus();
+  setStatus("Rangkuman siap. Pada dialog cetak, pilih Save as PDF untuk menyimpan berkas.");
   setTimeout(() => {
     reportWindow.print();
   }, 1200);
@@ -4050,6 +4080,8 @@ async function runUnifiedAnalysis() {
   };
 
   unifiedLoadingEl.classList.remove("hidden");
+  isProcessing = true;
+  syncActionButtons();
   advanceResearchWorkflow(6);
   unifiedLoadingText.textContent = "Layer 1: AI sedang meriset SPP kompetitor & daya beli...";
   tinyfishStatusEl.textContent = "Meriset...";
@@ -4118,6 +4150,8 @@ async function runUnifiedAnalysis() {
   } finally {
     unifiedLoadingEl.classList.add("hidden");
     unifiedAnalysisBtn.disabled = false;
+    isProcessing = false;
+    syncActionButtons();
   }
 }
 
@@ -4334,7 +4368,7 @@ async function analyzeLocation(lat, lon, radius) {
       appendActivityLog(`Backend POI mengembalikan fallback kosong: ${poiPayload.meta.backendError}.`, "error");
     }
     if (poiPayload.meta?.degradedSources?.googleHousingTimedOut) {
-      appendActivityLog("Google housing crawl melewati batas waktu. Dashboard melanjutkan dengan data parsial yang sudah tersedia.", "error");
+      appendActivityLog("Google Maps crawl melewati batas waktu. POI dari sumber lain tetap ditampilkan jika tersedia.", "error");
     }
     if (poiPayload.meta?.degradedSources?.externalResearchTimedOut) {
       appendActivityLog("Riset eksternal melewati batas waktu. Crawl lokasi tetap dilanjutkan tanpa ringkasan riset lengkap.", "error");
