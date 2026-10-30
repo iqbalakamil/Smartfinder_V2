@@ -66,8 +66,8 @@ const SCROLL_DELAY_MS = VERCEL_MODE ? 300 : 350;
 // Keep each request bounded. The radius grid has broad coverage already; running
 // every keyword for every intersecting village made a single POI search exceed
 // serverless and desktop request limits.
-const MAX_CRAWL_TASKS = VERCEL_MODE ? 3 : Number(process.env.POI_MAX_CRAWL_TASKS || 72);
-const CRAWL_DEADLINE_MS = Number(process.env.POI_CRAWL_DEADLINE_MS || 120000);
+const MAX_CRAWL_TASKS = VERCEL_MODE ? 3 : Number(process.env.POI_MAX_CRAWL_TASKS || 150);
+const CRAWL_DEADLINE_MS = Number(process.env.POI_CRAWL_DEADLINE_MS || 210000);
 const DEFAULT_SEARCH_RADIUS_METERS = 3000;
 const GRID_SEARCH_STEP_KM = 1.2;
 
@@ -75,23 +75,59 @@ function selectBalancedCrawlTasks(tasks, limit) {
   if (tasks.length <= limit) return tasks;
   const selected = [];
   const selectedKeys = new Set();
+  const modes = Object.keys(CATEGORY_CONFIG);
+  const gridGroups = new Map();
+  const areaGroups = new Map();
+  for (const task of tasks) {
+    const isGridTask = Boolean(task.searchPoint || task.searchScope);
+    const area = task.area || {};
+    const locationKey = isGridTask
+      ? `grid:${task.searchScope || `${task.searchPoint?.lat},${task.searchPoint?.lon}`}`
+      : `area:${[area.village, area.subdistrict || area.district, area.city, area.province].filter(Boolean).join("|").toLowerCase()}`;
+    const groups = isGridTask ? gridGroups : areaGroups;
+    if (!groups.has(locationKey)) groups.set(locationKey, new Map());
+    const modeGroups = groups.get(locationKey);
+    if (!modeGroups.has(task.mode)) modeGroups.set(task.mode, []);
+    modeGroups.get(task.mode).push(task);
+  }
 
-  // Ensure a constrained serverless crawl includes every POI family before
-  // spending its remaining budget on additional search terms for one family.
-  for (const mode of Object.keys(CATEGORY_CONFIG)) {
-    const task = tasks.find((candidate) => candidate.mode === mode);
-    if (task) {
-      selected.push(task);
-      selectedKeys.add(`${task.mode}|${task.query}`);
+  const addTask = (task) => {
+    if (!task || selected.length >= limit) return false;
+    const key = `${task.mode}|${task.query}`;
+    if (selectedKeys.has(key)) return false;
+    selectedKeys.add(key);
+    selected.push(task);
+    return true;
+  };
+
+  // Cover every nearby grid point and intersecting area once per POI family
+  // before spending the remaining request budget on alternate keywords.
+  const orderedLocations = [
+    ...Array.from(gridGroups.values()),
+    ...Array.from(areaGroups.values()),
+  ];
+  for (const group of orderedLocations) {
+    for (const mode of modes) addTask(group.get(mode)?.[0]);
+    if (selected.length >= limit) break;
+  }
+
+  const maxVariants = Math.max(0, ...orderedLocations.flatMap((group) =>
+    Array.from(group.values()).map((variants) => variants.length)
+  ));
+  for (let variantIndex = 1; variantIndex < maxVariants && selected.length < limit; variantIndex += 1) {
+    for (const group of orderedLocations) {
+      for (const mode of modes) {
+        addTask(group.get(mode)?.[variantIndex]);
+        if (selected.length >= limit) break;
+      }
+      if (selected.length >= limit) break;
     }
   }
 
+  // Preserve any task families not represented in the location groups.
   for (const task of tasks) {
     if (selected.length >= limit) break;
-    const key = `${task.mode}|${task.query}`;
-    if (selectedKeys.has(key)) continue;
-    selected.push(task);
-    selectedKeys.add(key);
+    addTask(task);
   }
   return selected;
 }

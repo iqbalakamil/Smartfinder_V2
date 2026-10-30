@@ -172,7 +172,7 @@ const POI_EXTERNAL_RESEARCH_TIMEOUT_MS = Number(process.env.POI_EXTERNAL_RESEARC
 // Harus lebih panjang dari crawler deadline agar endpoint tidak memotong
 // proses sebelum seluruh query POI hunian selesai.
 const POI_GOOGLE_HOUSING_TIMEOUT_MS = Number(
-  process.env.POI_GOOGLE_HOUSING_TIMEOUT_MS || (process.env.VERCEL ? 50000 : 180000)
+  process.env.POI_GOOGLE_HOUSING_TIMEOUT_MS || (process.env.VERCEL ? 50000 : 270000)
 );
 const FAST_MODE = String(process.env.AI_FAST_MODE || "true").toLowerCase() !== "false";
 const FAST_EXTERNAL_QUERY_LIMIT = FAST_MODE ? 6 : 999;
