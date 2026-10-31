@@ -1210,13 +1210,6 @@ function getPdfDemographyReport(result) {
     : null;
 }
 
-function getPdfDemographyText(result) {
-  return result?.demography_text
-    || result?.district_analysis?.[0]?.demography?.formatted_text
-    || findDemographyTextDeep(result)
-    || "";
-}
-
 function buildPdfDataTable(title, headers = [], rows = []) {
   return `
     <div class="pdf-subsection">
@@ -1277,108 +1270,59 @@ function buildPdfBarChart(items = [], { valueFormatter = formatNumber } = {}) {
   `;
 }
 
-function buildPdfNestedObjectTables(title, data, level = 0) {
-  if (!data || typeof data !== "object" || Array.isArray(data)) {
-    return "";
-  }
-
-  const primitiveRows = [];
-  const nestedSections = [];
-
-  Object.entries(data).forEach(([key, value]) => {
-    if (key === "raw_attributes") {
-      return;
-    }
-
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-      nestedSections.push(buildPdfNestedObjectTables(formatJsonKeyLabel(key), value, level + 1));
-      return;
-    }
-
-    primitiveRows.push([formatJsonKeyLabel(key), formatJsonValue(value)]);
-  });
-
-  return `
-    <div class="pdf-subsection ${level > 0 ? "nested-subsection" : ""}">
-      <h3>${escapeHtml(title)}</h3>
-      ${primitiveRows.length ? `
-        <table>
-          <thead>
-            <tr>
-              <th>Field</th>
-              <th>Value</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${primitiveRows.map(([label, value]) => `
-              <tr>
-                <td>${escapeHtml(label)}</td>
-                <td class="number-cell">${escapeHtml(value)}</td>
-              </tr>
-            `).join("")}
-          </tbody>
-        </table>
-      ` : ""}
-      ${nestedSections.join("")}
-    </div>
-  `;
+function buildPdfLineChart(items = [], { valueFormatter = (value) => `${Number(value).toFixed(2)}%` } = {}) {
+  const values = items.map((item) => ({ label: String(item.label), value: Number(item.value) })).filter((item) => Number.isFinite(item.value));
+  if (values.length < 2) return '<p class="muted">Grafik pertumbuhan belum tersedia.</p>';
+  const width = 680, height = 280, left = 62, right = 24, top = 24, bottom = 48;
+  const minValue = Math.min(0, ...values.map((item) => item.value));
+  const maxValue = Math.max(...values.map((item) => item.value), 1);
+  const x = (index) => left + (index * (width - left - right)) / (values.length - 1);
+  const y = (value) => top + ((maxValue - value) * (height - top - bottom)) / (maxValue - minValue || 1);
+  const points = values.map((item, index) => `${x(index)},${y(item.value)}`).join(" ");
+  const grid = [0, 1, 2, 3, 4].map((step) => {
+    const value = maxValue - ((maxValue - minValue) * step) / 4;
+    const yy = y(value);
+    return `<line x1="${left}" y1="${yy}" x2="${width - right}" y2="${yy}" stroke="#e2e8f0"/><text x="${left - 8}" y="${yy + 4}" text-anchor="end" font-size="11" fill="#64748b">${escapeHtml(valueFormatter(value))}</text>`;
+  }).join("");
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Grafik garis pertumbuhan penduduk" style="width:100%;height:auto;font-family:Arial,sans-serif">${grid}<polyline points="${points}" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>${values.map((item, index) => `<circle cx="${x(index)}" cy="${y(item.value)}" r="5" fill="#0f766e"/><text x="${x(index)}" y="${height - 20}" text-anchor="middle" font-size="12" fill="#334155">${escapeHtml(item.label)}</text><text x="${x(index)}" y="${y(item.value) - 10}" text-anchor="middle" font-size="10" fill="#0f172a">${escapeHtml(valueFormatter(item.value))}</text>`).join("")}</svg>`;
 }
 
-function buildPdfDemographyChartSection(report, topDistrict = {}) {
-  if (!report) {
-    const earlyChildhood = topDistrict?.demography?.early_childhood_population;
-    if (earlyChildhood == null) {
-      return `<p class="muted">Grafik demografi belum tersedia karena laporan Dukcapil tidak ditemukan.</p>`;
-    }
-
-    return buildPdfBarChart([
-      { label: "Estimasi anak usia 2-7", value: earlyChildhood, color: "#0f766e" },
-      { label: "Total populasi", value: topDistrict?.demography?.population || 0, color: "#2563eb" },
-    ]);
-  }
-
-  const ageChartItems = [
-    { label: "Usia 0-4", value: report?.kelompok_usia?.usia_0_4_tahun, color: "#0f766e" },
-    { label: "Usia 5-9", value: report?.kelompok_usia?.usia_5_9_tahun, color: "#1d4ed8" },
-    { label: "Usia 10-14", value: report?.kelompok_usia?.usia_10_14_tahun, color: "#3b82f6" },
-    { label: "Estimasi usia 2-7", value: report?.derived_metrics?.estimasi_anak_usia_2_7, color: "#f59e0b" },
+function buildPdfAgeRows(report) {
+  const groups = [
+    ["0–4 tahun", "usia_0_4_tahun"], ["5–9 tahun", "usia_5_9_tahun"], ["10–14 tahun", "usia_10_14_tahun"],
+    ["15–19 tahun", "usia_15_19_tahun"], ["20–24 tahun", "usia_20_24_tahun"], ["25–29 tahun", "usia_25_29_tahun"],
+    ["30–34 tahun", "usia_30_34_tahun"], ["35–39 tahun", "usia_35_39_tahun"], ["40–44 tahun", "usia_40_44_tahun"],
+    ["45–49 tahun", "usia_45_49_tahun"], ["50–54 tahun", "usia_50_54_tahun"], ["55–59 tahun", "usia_55_59_tahun"],
+    ["60–64 tahun", "usia_60_64_tahun"], ["65–69 tahun", "usia_65_69_tahun"], ["70–74 tahun", "usia_70_74_tahun"], ["75+ tahun", "usia_75_tahun_ke_atas"],
   ];
-
-  const genderChartItems = [
-    { label: "Laki-laki", value: report?.penduduk?.laki_laki, color: "#7c3aed" },
-    { label: "Perempuan", value: report?.penduduk?.perempuan, color: "#db2777" },
-  ];
-
-  const religionEntries = Object.entries(report?.agama || {})
-    .map(([key, value], index) => ({
-      label: formatJsonKeyLabel(key),
-      value: Number(value) || 0,
-      color: ["#2563eb", "#0f766e", "#f59e0b", "#7c3aed", "#db2777", "#0891b2", "#65a30d"][index % 7],
-    }))
-    .filter((item) => item.value > 0)
-    .sort((left, right) => right.value - left.value)
-    .slice(0, 5);
-
-  return `
-    <div class="pdf-chart-stack">
-      <div class="card">
-        <h3>Grafik Kelompok Usia Kunci</h3>
-        ${buildPdfBarChart(ageChartItems)}
-      </div>
-      <div class="card">
-        <h3>Grafik Gender</h3>
-        ${buildPdfBarChart(genderChartItems)}
-      </div>
-      <div class="card">
-        <h3>Grafik Agama Dominan</h3>
-        ${buildPdfBarChart(religionEntries)}
-      </div>
-    </div>
-  `;
+  return groups.map(([label, key]) => [label, formatNumber(report?.kelompok_usia?.[key])]);
 }
 
-function buildPdfReportHtml(landValueSummary = null) {
-  const allPois = dedupeMapPois([...latestBasePois, ...latestHotmapPois]);
+function buildPdfDemographyCharts(report) {
+  if (!report) return '<p class="muted">Data demografi belum tersedia.</p>';
+  const ageGroups = [
+    ["0–4", "usia_0_4_tahun"], ["5–9", "usia_5_9_tahun"], ["10–14", "usia_10_14_tahun"], ["15–19", "usia_15_19_tahun"],
+    ["20–24", "usia_20_24_tahun"], ["25–29", "usia_25_29_tahun"], ["30–34", "usia_30_34_tahun"], ["35–39", "usia_35_39_tahun"],
+    ["40–44", "usia_40_44_tahun"], ["45–49", "usia_45_49_tahun"], ["50–54", "usia_50_54_tahun"], ["55–59", "usia_55_59_tahun"],
+    ["60–64", "usia_60_64_tahun"], ["65–69", "usia_65_69_tahun"], ["70–74", "usia_70_74_tahun"], ["75+", "usia_75_tahun_ke_atas"],
+  ];
+  const occupationLabels = {
+    belum_tidak_bekerja: "Belum/tidak bekerja", nelayan: "Nelayan", pelajar_dan_mahasiswa: "Pelajar/mahasiswa", pensiunan: "Pensiunan",
+    perdagangan: "Perdagangan", mengurus_rumah_tangga: "Mengurus rumah tangga", wiraswasta: "Wiraswasta", guru: "Guru",
+    perawat: "Perawat", pengacara: "Pengacara", pekerjaan_lainnya: "Pekerjaan lainnya",
+  };
+  const occupations = Object.entries(report.pekerjaan || {}).map(([key, value], index) => ({
+    label: occupationLabels[key] || formatJsonKeyLabel(key), value,
+    color: ["#0f766e", "#2563eb", "#f59e0b", "#7c3aed", "#db2777", "#0891b2", "#65a30d"][index % 7],
+  }));
+  const growth = [2020, 2021, 2022, 2023, 2024].map((year) => ({
+    label: String(year), value: report?.pertumbuhan_penduduk?.[`pertumbuhan_penduduk_tahun_${year}_persen`],
+  }));
+  return `<div class="pdf-chart-stack"><div class="card"><h3>Kelompok Usia</h3>${buildPdfBarChart(ageGroups.map(([label, key], index) => ({ label, value: report?.kelompok_usia?.[key], color: ["#0f766e", "#1d4ed8", "#3b82f6", "#f59e0b"][index % 4] })))}</div><div class="card"><h3>Pertumbuhan Penduduk</h3>${buildPdfLineChart(growth)}</div><div class="card"><h3>Pekerjaan</h3>${buildPdfBarChart(occupations)}</div></div>`;
+}
+
+function buildPdfReportHtml(landValueSummary = null, selectedPois = null) {
+  const allPois = dedupeMapPois(Array.isArray(selectedPois) ? selectedPois : [...latestBasePois, ...latestHotmapPois]);
   const groupedPois = Array.from(allPois.reduce((acc, poi) => {
     const label = poi.categoryLabel || poi.category || "Lainnya";
     acc.set(label, (acc.get(label) || 0) + 1);
@@ -1398,9 +1342,8 @@ function buildPdfReportHtml(landValueSummary = null) {
   const topDistrict = latestStructuredAnalysis?.district_analysis?.[0] || {};
   const scenarios = market?.market_size_scenarios || {};
   const demographyReport = getPdfDemographyReport(latestStructuredAnalysis);
-  const demographyText = getPdfDemographyText(latestStructuredAnalysis);
   const areaCoverage = Array.isArray(latestAnalysisContext?.areaCoverage) ? latestAnalysisContext.areaCoverage : [];
-  const demographic = topDistrict?.demography || {};
+  const ageRows = buildPdfAgeRows(demographyReport);
   const landValueRows = landValueSummary?.samples?.length
     ? landValueSummary.samples.map((sample) => [sample.label, sample.value])
     : [];
@@ -1457,34 +1400,17 @@ function buildPdfReportHtml(landValueSummary = null) {
       </tr>
     `;
 
-  const marketShareRows = [
-    ["Low", "1%", formatNumber(scenarios?.low?.students), formatCurrency(scenarios?.low?.annual_revenue), "Simulasi konservatif"],
-    ["Mid", "2%", formatNumber(scenarios?.mid?.students), formatCurrency(scenarios?.mid?.annual_revenue), "Target realistis cabang baru"],
-    ["High", "5%", formatNumber(scenarios?.high?.students), formatCurrency(scenarios?.high?.annual_revenue), "Skenario agresif"],
-  ];
   const marketShareChartHtml = buildPdfBarChart([
     { label: "Low 1%", value: scenarios?.low?.students, color: "#94a3b8" },
     { label: "Mid 2%", value: scenarios?.mid?.students, color: "#2563eb" },
     { label: "High 5%", value: scenarios?.high?.students, color: "#0f766e" },
   ]);
-  const demographyTablesHtml = demographyReport
-    ? Object.entries(demographyReport)
-      .filter(([key]) => key !== "raw_attributes")
-      .map(([key, value]) => buildPdfNestedObjectTables(formatJsonKeyLabel(key), value))
-      .join("")
-    : demographyText
-    ? `
-      <div class="pdf-subsection">
-        <h3>Demografi Dukcapil</h3>
-        <pre class="pdf-pre">${escapeHtml(demographyText)}</pre>
-      </div>
-    `
-    : `
-      <div class="pdf-subsection">
-        <h3>Demografi Dukcapil</h3>
-        <p class="muted">Data demografi lengkap belum tersedia pada hasil analisa.</p>
-      </div>
-    `;
+  const fixedMonthlyFee = 560000;
+  const scenarioRows = [
+    ["Low", "1%", formatNumber(scenarios?.low?.students), formatCurrency(fixedMonthlyFee), formatCurrency((Number(scenarios?.low?.students) || 0) * fixedMonthlyFee * 12)],
+    ["Mid", "2%", formatNumber(scenarios?.mid?.students), formatCurrency(fixedMonthlyFee), formatCurrency((Number(scenarios?.mid?.students) || 0) * fixedMonthlyFee * 12)],
+    ["High", "5%", formatNumber(scenarios?.high?.students), formatCurrency(fixedMonthlyFee), formatCurrency((Number(scenarios?.high?.students) || 0) * fixedMonthlyFee * 12)],
+  ];
 
   return `
     <!DOCTYPE html>
@@ -1575,18 +1501,13 @@ function buildPdfReportHtml(landValueSummary = null) {
       <section class="section">
         <h2>Ringkasan Cakupan Radius 3 km</h2>
         ${buildPdfDataTable("Kelurahan yang masuk radius", ["No.", "Kelurahan", "Kecamatan", "Kota/Kabupaten"], areaCoverage.map((area, index) => [String(index + 1), area.village || area.subdistrict || area.district || "-", area.subdistrict || area.district || "-", area.city || "-"]))}
-        ${buildPdfDataTable("Demografi Dukcapil", ["Indikator", "Jumlah"], [
-          ["Penduduk", formatNumber(demographyReport?.ringkasan?.jumlah_penduduk ?? demographic.population)],
-          ["Usia 0–14 tahun", formatNumber(demographyReport?.derived_metrics?.usia_0_14 ?? demographic.age_0_14)],
-          ["Estimasi usia 2–7 tahun", formatNumber(demographyReport?.derived_metrics?.estimasi_anak_usia_2_7 ?? demographic.early_childhood_population)],
-          ["Basis data demografi", demographyReport?.wilayah?.kecamatan || demographic.district_name || "Dukcapil; cakupan mengikuti wilayah data yang tersedia"],
-        ])}
         ${buildPdfDataTable("Nilai tanah dalam radius", ["Ringkasan", "Nilai"], [
-          ["Rata-rata nilai tanah sampel", landValueSummary?.average != null ? formatCurrency(landValueSummary.average) : "Data tidak tersedia"],
-          ["Median nilai tanah sampel", landValueSummary?.median != null ? formatCurrency(landValueSummary.median) : "Data tidak tersedia"],
+          ["Rata-rata nilai ZNT per m²", landValueSummary?.average != null ? formatCurrency(landValueSummary.average) : "Data tidak tersedia"],
+          ["Median nilai ZNT per m²", landValueSummary?.median != null ? formatCurrency(landValueSummary.median) : "Data tidak tersedia"],
           ["Jumlah titik sampel dalam radius 3 km", formatNumber(landValueSummary?.sampleCount || 0)],
-          ["Sumber", landValueSummary?.source || "BIG ZNT / BHUMI"],
+          ["Jenis penggunaan tanah terbanyak", landValueSummary?.majorityLandUse ? `${landValueSummary.majorityLandUse.label} (${formatNumber(landValueSummary.majorityLandUse.count)} titik)` : "Data tidak tersedia"],
         ])}
+        <p class="muted">Rata-rata dihitung dari nilai tengah range BIG ZNT pada titik yang berhasil ditemukan. Penggunaan tanah mayoritas dihitung dari kategori pada titik sampel, bukan luasan bidang.</p>
         ${buildPdfDataTable("Nilai tanah per titik sampel", ["Titik sampel", "Range / nilai tanah"], landValueRows)}
         <div class="card" style="margin-top:14px;">
           <h3>Grafik Sebaran Kelas Nilai Tanah</h3>
@@ -1597,7 +1518,7 @@ function buildPdfReportHtml(landValueSummary = null) {
       </section>
 
       <section class="section">
-        <h2>Daftar Seluruh POI (${escapeHtml(formatNumber(allPois.length))})</h2>
+        <h2>POI Terpilih (${escapeHtml(formatNumber(allPois.length))})</h2>
         ${buildPdfDataTable("POI di area analisa", ["No.", "Nama", "Kategori", "Alamat", "Koordinat"], allPoiRows)}
       </section>
 
@@ -1614,10 +1535,7 @@ function buildPdfReportHtml(landValueSummary = null) {
               <tbody>
                 <tr><th>Benchmark wilayah</th><td>${escapeHtml(formula.region_benchmark || "-")}</td></tr>
                 <tr><th>Jumlah kompetitor</th><td>${escapeHtml(formatNumber(formula.competitor_poi_count))}</td></tr>
-                <tr><th>Rata-rata SPP</th><td>${escapeHtml(formatCurrency(formula.average_spp_benchmark ?? formula.spp_monthly))}</td></tr>
-                <tr><th>Sumber SPP</th><td>${escapeHtml(formula.spp_reference_status === "local_web_research" ? `Web Research (${formula.researched_spp?.count || 0} data)` : "Benchmark regional / asumsi")}</td></tr>
-                <tr><th>Status referensi</th><td>${escapeHtml(formula.spp_reference_note || "-")}</td></tr>
-                <tr><th>Link referensi SPP</th><td>${escapeHtml(Array.isArray(formula.spp_reference_links) && formula.spp_reference_links.length ? formula.spp_reference_links.map((item) => item.title || item.url).join(" | ") : "Tidak ada link referensi lokal yang tersimpan")}</td></tr>
+                <tr><th>SPP acuan simulasi</th><td>${escapeHtml(formatCurrency(fixedMonthlyFee))} per bulan</td></tr>
                 <tr><th>Rata-rata kapasitas</th><td>${escapeHtml(formula.average_capacity_benchmark != null ? `${formatNumber(formula.average_capacity_benchmark)} murid` : "-")}</td></tr>
                 <tr><th>Market Size</th><td>${escapeHtml(formatCurrency(market.market_size))}</td></tr>
                 <tr><th>TAM / SAM / SOM</th><td>${escapeHtml(`${formatNumber(market.tam)} / ${formatNumber(market.sam)} / ${formatNumber(market.som)}`)}</td></tr>
@@ -1633,7 +1551,7 @@ function buildPdfReportHtml(landValueSummary = null) {
         <h2>Simulasi Market Share</h2>
         <div class="analysis-grid">
           <div class="card">
-            ${buildPdfDataTable("Tabel Simulasi Market Share", ["Skenario", "Penetrasi", "Target Siswa", "Revenue Tahunan", "Catatan"], marketShareRows)}
+            ${buildPdfDataTable("Tabel Simulasi Market Share", ["Skenario", "Penetrasi", "Target Siswa", "SPP per Bulan", "Revenue Tahunan"], scenarioRows)}
           </div>
           <div class="card">
             <h3>Grafik Target Siswa per Skenario</h3>
@@ -1643,9 +1561,9 @@ function buildPdfReportHtml(landValueSummary = null) {
                 <tr><th>Market Share Backend</th><td>${escapeHtml(market.market_share != null ? `${market.market_share}%` : "-")}</td></tr>
                 <tr><th>Potential Revenue</th><td>${escapeHtml(formatCurrency(market.potential_revenue))}</td></tr>
                 <tr><th>Market Gap</th><td>${escapeHtml(formatNumber(market.market_gap))}</td></tr>
-                <tr><th>Reasoning</th><td>${escapeHtml(market.reasoning || "-")}</td></tr>
               </tbody>
             </table>
+            <p class="muted">Market Share Backend membandingkan target siswa SOM dengan total kapasitas kompetitor yang terdata. Nilai ini menunjukkan porsi terhadap kapasitas pesaing, bukan penetrasi SAM.</p>
           </div>
         </div>
       </section>
@@ -1653,34 +1571,37 @@ function buildPdfReportHtml(landValueSummary = null) {
       <section class="section">
         <h2>Demografi Dukcapil</h2>
         <div class="card">
-          <table>
-            <tbody>
-              <tr><th>Kecamatan</th><td>${escapeHtml(demographyReport?.wilayah?.kecamatan || topDistrict?.district_name || "-")}</td></tr>
-              <tr><th>Kabupaten/Kota</th><td>${escapeHtml(demographyReport?.wilayah?.kabupaten_kota || "-")}</td></tr>
-              <tr><th>Jumlah penduduk</th><td>${escapeHtml(formatNumber(demographyReport?.ringkasan?.jumlah_penduduk || topDistrict?.demography?.population))}</td></tr>
-              <tr><th>Estimasi anak usia 2-7</th><td>${escapeHtml(formatNumber(demographyReport?.derived_metrics?.estimasi_anak_usia_2_7 || topDistrict?.demography?.early_childhood_population))}</td></tr>
-              <tr><th>Sumber</th><td>${escapeHtml(topDistrict?.demography?.source || demographyReport?.source?.system || "dukcapil_arcgis_kecamatan")}</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="analysis-grid" style="margin-top:16px;">
-          <div class="card">
-            <h3>Grafik Demografi</h3>
-            ${buildPdfDemographyChartSection(demographyReport, topDistrict)}
-          </div>
-          <div class="card">
-            <h3>Catatan Demografi</h3>
-            <p>${escapeHtml(topDistrict?.demography?.reasoning || "Demografi Dukcapil dipakai sebagai basis pembacaan populasi dan struktur usia area.")}</p>
-            <p>${escapeHtml(demographyReport?.derived_metrics?.metode_estimasi_anak_usia_2_7 || topDistrict?.demography?.assumption_source || "")}</p>
-          </div>
-        </div>
-        <div style="margin-top:16px;">
-          ${demographyTablesHtml}
+          <h3>Kelompok Usia</h3>
+          ${buildPdfDataTable("Jumlah Penduduk per Kelompok Usia", ["Kelompok Usia", "Jumlah"], ageRows)}
+          ${buildPdfDemographyCharts(demographyReport)}
         </div>
       </section>
     </body>
     </html>
   `;
+}
+
+function parseLandValueRange(raw) {
+  if (raw == null || raw === "") return null;
+  const parts = String(raw).match(/\d{1,3}(?:[.,]\d{3})+|\d+/g) || [];
+  const values = parts.map((part) => Number(part.replace(/[.,]/g, ""))).filter((value) => Number.isFinite(value) && value >= 10000);
+  return values.length > 1 ? (values[0] + values[1]) / 2 : values[0] ?? null;
+}
+
+function getPdfFeatureProperties(payload) {
+  const feature = payload?.result?.features?.[0] || payload?.result?.data?.features?.[0];
+  if (feature?.properties || feature?.attributes) return feature.properties || feature.attributes;
+  if (Array.isArray(payload?.result?.data)) return payload.result.data[0] || {};
+  return payload?.result?.data || {};
+}
+
+function getPdfProperty(properties, names = []) {
+  for (const name of names) {
+    const key = Object.keys(properties || {}).find((candidate) => candidate.toLowerCase() === name.toLowerCase());
+    const value = key ? properties[key] : null;
+    if (value != null && value !== "") return value;
+  }
+  return null;
 }
 
 async function collectPdfLandValueSamples() {
@@ -1694,44 +1615,111 @@ async function collectPdfLandValueSamples() {
       lon + (distanceKm / (111.32 * Math.cos((lat * Math.PI) / 180))) * Math.cos(angle),
     ]);
   }
-  const results = await Promise.allSettled(points.map(async ([sampleLat, sampleLon], index) => {
+  const samplePoint = async (sampleLat, sampleLon, layer) => {
+    const halfDegree = 0.005;
+    const body = {
+      service_layer_name: layer, query_layers: layer, lat: sampleLat, lng: sampleLon,
+      width: 512, height: 512, bbox: [sampleLon - halfDegree, sampleLat - halfDegree, sampleLon + halfDegree, sampleLat + halfDegree].join(","),
+      x: 256, y: 256, sample: layer === "umum:ZNTRANGE" || layer === "umum:nbt3",
+    };
     const response = await fetch(`${API_BASE}/api/bhumi-identify`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ service_layer_name: "umum:ZNTRANGE", lat: sampleLat, lng: sampleLon, sample: true }),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const payload = await response.json();
-    const features = payload.result?.features || [];
-    const value = features.map((feature) => {
-      const properties = feature.properties || feature.attributes || {};
-      return properties.range || properties.kelasnilai || properties.RANGENILAI || properties.nilai_tanah || properties.nilai;
-    }).find(Boolean);
-    return value ? {
-      label: index === 0 ? "Titik tengah" : `Titik radius ${index} (2,5 km)`,
-      value: String(value), source: payload.source || "BIG ZNT / BHUMI",
-    } : null;
-  }));
-  const samples = results.filter((result) => result.status === "fulfilled").map((result) => result.value).filter(Boolean);
-  const numbers = samples.map((sample) => {
-    const values = sample.value.match(/[\d.,]+/g) || [];
-    const parsed = values.map((value) => Number(value.replace(/\./g, "").replace(",", "."))).filter(Number.isFinite);
-    return parsed.length > 1 ? (parsed[0] + parsed[1]) / 2 : parsed[0];
-  }).filter(Number.isFinite);
-  const sorted = [...numbers].sort((a, b) => a - b);
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+    return { payload, properties: getPdfFeatureProperties(payload) };
+  };
+  const samples = [];
+  const landUseCounts = new Map();
+  const sources = new Set();
+  for (let offset = 0; offset < points.length; offset += 4) {
+    const batch = points.slice(offset, offset + 4);
+    const settled = await Promise.all(batch.map(async ([sampleLat, sampleLon], index) => {
+      const sampleIndex = offset + index;
+      const [valueResult, useResult] = await Promise.allSettled([
+        samplePoint(sampleLat, sampleLon, "umum:ZNTRANGE"),
+        samplePoint(sampleLat, sampleLon, "umum:PenggunaanTanah"),
+      ]);
+      const label = sampleIndex === 0 ? "Titik tengah" : `Titik radius ${sampleIndex} (2,5 km)`;
+      let landValue = null;
+      if (valueResult.status === "fulfilled") {
+        const { payload, properties } = valueResult.value;
+        const value = getPdfProperty(properties, ["range", "RANGENILAI", "nilai_tanah", "nilai"]);
+        if (value != null && value !== "") {
+          landValue = { label, value: String(value), price: parseLandValueRange(value) };
+          if (payload.source) sources.add(payload.source);
+        }
+      }
+      if (useResult.status === "fulfilled") {
+        const { payload, properties } = useResult.value;
+        const useValue = getPdfProperty(properties, ["GUNATANAH", "NAMAOBJ", "ptnobjname", "ptnsbjname", "namobj", "fcode"]);
+        if (useValue != null && String(useValue).trim()) {
+          const name = String(useValue).trim();
+          landUseCounts.set(name, (landUseCounts.get(name) || 0) + 1);
+          if (payload.source) sources.add(payload.source);
+        }
+      }
+      return landValue;
+    }));
+    samples.push(...settled.filter(Boolean));
+  }
+  const prices = samples.map((sample) => sample.price).filter(Number.isFinite).sort((a, b) => a - b);
+  const majorityEntry = [...landUseCounts.entries()].sort((a, b) => b[1] - a[1])[0] || null;
   const rangeCounts = samples.reduce((counts, sample) => {
     counts[sample.value] = (counts[sample.value] || 0) + 1;
     return counts;
   }, {});
+  const middle = Math.floor(prices.length / 2);
   return {
-    samples, sampleCount: samples.length,
-    rangeCounts,
-    average: numbers.length ? numbers.reduce((sum, value) => sum + value, 0) / numbers.length : null,
-    median: sorted.length ? sorted[Math.floor(sorted.length / 2)] : null,
-    source: `${[...new Set(samples.map((sample) => sample.source))].join(", ") || "BIG ZNT / BHUMI tidak mengembalikan data"} (titik tengah + 12 titik sampel pada radius 2,5 km)`,
+    samples, sampleCount: samples.length, rangeCounts,
+    average: prices.length ? prices.reduce((sum, value) => sum + value, 0) / prices.length : null,
+    median: prices.length ? (prices.length % 2 ? prices[middle] : (prices[middle - 1] + prices[middle]) / 2) : null,
+    majorityLandUse: majorityEntry ? { label: majorityEntry[0], count: majorityEntry[1] } : null,
+    landUseCounts: Object.fromEntries(landUseCounts),
+    source: `${[...sources].join(", ") || "BIG ZNT / BHUMI"} (13 titik sampel dalam radius 3 km)`,
   };
 }
 
-async function downloadPdfReport() {
+function openPdfPoiPicker() {
+  const allPois = dedupeMapPois([...latestBasePois, ...latestHotmapPois]);
+  let dialog = document.getElementById("pdf-poi-picker");
+  if (!dialog) {
+    dialog = document.createElement("dialog");
+    dialog.id = "pdf-poi-picker";
+    dialog.style.cssText = "width:min(760px,94vw);max-height:86vh;border:1px solid #cbd5e1;border-radius:14px;padding:0;box-shadow:0 24px 70px #0f172a66;color:#0f172a";
+    document.body.appendChild(dialog);
+  }
+  const groups = Array.from(allPois.reduce((map, poi, index) => {
+    const name = poi.categoryLabel || poi.category || "Lainnya";
+    if (!map.has(name)) map.set(name, []);
+    map.get(name).push({ poi, index });
+    return map;
+  }, new Map()).entries());
+  dialog.innerHTML = `<div style="padding:20px;border-bottom:1px solid #e2e8f0"><h2 style="margin:0 0 6px">Pilih POI untuk PDF</h2><p style="margin:0;color:#64748b">Centang titik yang ingin disertakan. Pilihan berlaku per kategori atau per POI.</p></div><div style="padding:12px 20px;border-bottom:1px solid #e2e8f0"><label style="font-weight:700"><input type="checkbox" data-select-all checked> Pilih semua (${allPois.length})</label></div><div style="padding:8px 20px;overflow:auto;max-height:55vh">${groups.length ? groups.map(([category, entries], groupIndex) => `<section style="padding:10px 0;border-bottom:1px solid #e2e8f0"><label style="font-weight:700"><input type="checkbox" data-group-toggle="${groupIndex}" checked> ${escapeHtml(category)} (${entries.length})</label><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:6px 14px;margin:10px 0 0 22px">${entries.map(({ poi, index }) => `<label style="font-size:13px;display:flex;gap:7px;align-items:flex-start"><input type="checkbox" data-poi-index="${index}" data-group="${groupIndex}" checked><span>${escapeHtml(poi.name || "POI")}${poi.tags?.address ? `<small style="display:block;color:#64748b">${escapeHtml(poi.tags.address)}</small>` : ""}</span></label>`).join("")}</div></section>`).join("") : '<p>Belum ada POI. PDF tetap dapat dibuat tanpa daftar POI.</p>'}</div><div style="padding:14px 20px;display:flex;justify-content:flex-end;gap:10px;border-top:1px solid #e2e8f0"><button type="button" data-cancel style="padding:9px 16px">Batal</button><button type="button" data-continue style="padding:9px 16px;background:#2563eb;color:white;border:0;border-radius:8px;font-weight:700">Lanjutkan ke PDF</button></div>`;
+  const itemCheckboxes = [...dialog.querySelectorAll("input[data-poi-index]")];
+  const selectAll = dialog.querySelector("[data-select-all]");
+  selectAll.addEventListener("change", () => itemCheckboxes.forEach((input) => { input.checked = selectAll.checked; }));
+  dialog.querySelectorAll("[data-group-toggle]").forEach((toggle) => toggle.addEventListener("change", () => {
+    dialog.querySelectorAll(`input[data-group="${toggle.dataset.groupToggle}"]`).forEach((input) => { input.checked = toggle.checked; });
+    selectAll.checked = itemCheckboxes.every((input) => input.checked);
+  }));
+  itemCheckboxes.forEach((input) => input.addEventListener("change", () => {
+    const groupItems = [...dialog.querySelectorAll(`input[data-group="${input.dataset.group}"]`)];
+    const groupToggle = dialog.querySelector(`[data-group-toggle="${input.dataset.group}"]`);
+    if (groupToggle) groupToggle.checked = groupItems.every((item) => item.checked);
+    selectAll.checked = itemCheckboxes.every((item) => item.checked);
+  }));
+  dialog.querySelector("[data-cancel]").addEventListener("click", () => dialog.close());
+  dialog.querySelector("[data-continue]").addEventListener("click", () => {
+    const selectedIndexes = new Set(itemCheckboxes.filter((input) => input.checked).map((input) => Number(input.dataset.poiIndex)));
+    const selectedPois = allPois.filter((_, index) => selectedIndexes.has(index));
+    dialog.close();
+    downloadPdfReport(selectedPois);
+  });
+  if (!dialog.open) dialog.showModal();
+}
+
+async function downloadPdfReport(selectedPois = []) {
   if (!currentMapContext) {
     setStatus("Masukkan koordinat lokasi terlebih dahulu sebelum mengunduh rangkuman PDF.", true);
     return;
@@ -1750,12 +1738,15 @@ async function downloadPdfReport() {
   }
   let landValueSummary = null;
   try {
-    if (currentMapContext) landValueSummary = await collectPdfLandValueSamples();
+    if (currentMapContext) {
+      setStatus("Mengambil sampel nilai tanah dan penggunaan tanah di radius 3 km...");
+      landValueSummary = await collectPdfLandValueSamples();
+    }
   }
   catch (error) { console.warn("PDF land value samples unavailable:", error); }
 
   reportWindow.document.open();
-  reportWindow.document.write(buildPdfReportHtml(landValueSummary));
+  reportWindow.document.write(buildPdfReportHtml(landValueSummary, selectedPois));
   reportWindow.document.close();
   reportWindow.focus();
   setStatus("Rangkuman siap. Pada dialog cetak, pilih Save as PDF untuk menyimpan berkas.");
@@ -5323,7 +5314,7 @@ form.addEventListener("submit", async (event) => {
 });
 
 downloadPdfBtn.addEventListener("click", () => {
-  downloadPdfReport();
+  openPdfPoiPicker();
 });
 
 if (downloadPoiXlsBtn) {

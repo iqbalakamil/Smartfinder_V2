@@ -775,11 +775,12 @@ async function fetchBhumiPersilForPoint(layer, body, point) {
 }
 
 async function fetchBigZntForPoint(lon, lat) {
+  const tolerance = 0.00005;
   const params = new URLSearchParams({
     f: "json",
     where: "1=1",
-    geometry: JSON.stringify({ x: Number(lon), y: Number(lat), spatialReference: { wkid: 4326 } }),
-    geometryType: "esriGeometryPoint",
+    geometry: JSON.stringify({ xmin: Number(lon) - tolerance, ymin: Number(lat) - tolerance, xmax: Number(lon) + tolerance, ymax: Number(lat) + tolerance, spatialReference: { wkid: 4326 } }),
+    geometryType: "esriGeometryEnvelope",
     inSR: "4326",
     spatialRel: "esriSpatialRelIntersects",
     outFields: "range,kelasnilai,nozn,kanwil,kantah,tglsk,akhirsk,thnsk,blnsk",
@@ -5717,11 +5718,11 @@ function buildStructuredDukcapilReport(attributes = {}, context = {}) {
     lahir_sebelum_tahun_2023: toInteger(attributes.lhr_sebelum_2023),
     lahir_tahun_2024: toInteger(attributes.lhr_2024),
     lahir_sebelum_tahun_2024: toInteger(attributes.lhr_sebelum_2024),
-    pertumbuhan_penduduk_tahun_2020_persen: toInteger(attributes.pertumbuhan_2020),
-    pertumbuhan_penduduk_tahun_2021_persen: toInteger(attributes.pertumbuhan_2021),
-    pertumbuhan_penduduk_tahun_2022_persen: toInteger(attributes.pertumbuhan_2022),
-    pertumbuhan_penduduk_tahun_2023_persen: toInteger(attributes.pertumbuhan_2023),
-    pertumbuhan_penduduk_tahun_2024_persen: toInteger(attributes.pertumbuhan_2024)
+    pertumbuhan_penduduk_tahun_2020_persen: toFiniteNumber(attributes.pertumbuhan_2020),
+    pertumbuhan_penduduk_tahun_2021_persen: toFiniteNumber(attributes.pertumbuhan_2021),
+    pertumbuhan_penduduk_tahun_2022_persen: toFiniteNumber(attributes.pertumbuhan_2022),
+    pertumbuhan_penduduk_tahun_2023_persen: toFiniteNumber(attributes.pertumbuhan_2023),
+    pertumbuhan_penduduk_tahun_2024_persen: toFiniteNumber(attributes.pertumbuhan_2024)
   };
   const education = {
     tidak_belum_sekolah: toInteger(attributes.tidak_blm_sekolah),
@@ -6197,7 +6198,9 @@ function buildMarketEstimationStructured({ radiusKm, districtAnalysis, competito
   const samFactorInfo = resolveSamFactorStructured(reverseGeocodeResult);
   const sam = tam != null ? Math.round(tam * samFactorInfo.factor) : null;
   const regionalBenchmark = resolveRegionalMarketBenchmarkStructured(reverseGeocodeResult, locationContext, tinyfishSppResult);
-  const monthlyFee = regionalBenchmark.fee_range.average;
+  // Product tuition is fixed by the user at Rp560,000/month. Competitor web
+  // pricing remains useful as market context, but must not change this model.
+  const monthlyFee = 560000;
   const capacityPerPoi = regionalBenchmark.capacity_range.average;
   const competitorCount = toInteger(competitorMap?.count_estimate) || 0;
   const marketSize = competitorCount > 0 ? competitorCount * monthlyFee * capacityPerPoi * 12 : null;
@@ -6230,16 +6233,16 @@ function buildMarketEstimationStructured({ radiusKm, districtAnalysis, competito
       sam_factor: samFactorInfo.factor,
       pricing_segment: regionalBenchmark.region,
       region_benchmark: regionalBenchmark.region,
-      spp_range_min: regionalBenchmark.fee_range.min,
-      spp_range_max: regionalBenchmark.fee_range.max,
+      spp_range_min: monthlyFee,
+      spp_range_max: monthlyFee,
       capacity_range_min: regionalBenchmark.capacity_range.min,
       capacity_range_max: regionalBenchmark.capacity_range.max,
       average_capacity_benchmark: regionalBenchmark.capacity_range.average,
-      average_spp_benchmark: regionalBenchmark.fee_range.average,
+      average_spp_benchmark: monthlyFee,
       formula_market_size: marketSize,
-      spp_source: regionalBenchmark.spp_source || "regional_hardcode",
-      spp_reference_status: regionalBenchmark.spp_reference_status || "unknown",
-      spp_reference_note: regionalBenchmark.spp_reference_note || "",
+      spp_source: "user_fixed_tuition",
+      spp_reference_status: "user_defined",
+      spp_reference_note: "SPP acuan simulasi ditetapkan Rp560.000 per bulan.",
       spp_reference_links: Array.isArray(regionalBenchmark.spp_reference_links) ? regionalBenchmark.spp_reference_links : [],
       researched_spp: regionalBenchmark.researched_spp || null,
     },
@@ -6250,9 +6253,7 @@ function buildMarketEstimationStructured({ radiusKm, districtAnalysis, competito
     estimated: Boolean(demography?.estimated) || totalCapacity == null,
     reasoning: tam == null
       ? "TAM/SAM/SOM belum bisa dihitung penuh karena data anak usia dini radius 3 KM belum lengkap."
-      : regionalBenchmark.spp_source === "tinyfish_research"
-      ? `Market size dihitung dari jumlah kompetitor x rata-rata SPP bulanan x rata-rata maksimum kapasitas x 12. SPP menggunakan data riset web lokal (${tinyfishSppResult?.spp_count || 0} data ditemukan) dengan rata-rata Rp${regionalBenchmark.fee_range.average.toLocaleString("id-ID")}/bulan (range Rp${regionalBenchmark.fee_range.min.toLocaleString("id-ID")} - Rp${regionalBenchmark.fee_range.max.toLocaleString("id-ID")}). Kapasitas memakai benchmark ${regionalBenchmark.region} (${regionalBenchmark.capacity_range.min}-${regionalBenchmark.capacity_range.max} murid). Referensi SPP: ${(regionalBenchmark.spp_reference_links || []).map((item) => item.title).join(", ") || "tidak ada link referensi tersimpan"}. Simulasi low/mid/high memakai penetrasi 1%, 2%, dan 5% dari SAM ${samFactorInfo.label}.`
-      : `Market size dihitung dari jumlah kompetitor x rata-rata SPP bulanan x rata-rata maksimum kapasitas x 12. Namun tidak ada referensi SPP lokal yang cukup kuat, sehingga angka SPP di sini adalah benchmark regional/asumsi (${regionalBenchmark.region}) dengan rentang Rp${regionalBenchmark.fee_range.min.toLocaleString("id-ID")} - Rp${regionalBenchmark.fee_range.max.toLocaleString("id-ID")}. Ini bukan harga area spesifik. Simulasi low/mid/high tetap memakai penetrasi 1%, 2%, dan 5% dari SAM ${samFactorInfo.label}.`,
+      : `Market size dihitung dari jumlah kompetitor x kapasitas rata-rata x SPP acuan Rp${monthlyFee.toLocaleString("id-ID")}/bulan x 12 bulan. Skenario target siswa memakai penetrasi 1%, 2%, dan 5% dari SAM ${samFactorInfo.label}; semua simulasi pendapatan menggunakan SPP acuan yang ditetapkan.`,
     assumption_source: tam == null ? "demography_service_not_configured" : `sam_factor_rule:${samFactorInfo.label}`,
   };
 }
