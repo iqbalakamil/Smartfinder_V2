@@ -214,35 +214,35 @@ function buildQueries(location = {}) {
     location.province,
   ].filter(Boolean).join(", ") || buildLocationLabel(areas[0] || {});
   if (location.poiSearchMode === "mix-search") {
-    const point = buildGridSearchPoints(location)[0] || {
-      lat: Number(location.targetLat ?? location.lat),
-      lon: Number(location.targetLon ?? location.lon),
-      label: "mix-center",
-    };
     const area = areas[0] || {};
-    const queries = [
-      // Use one clear search intent per task: long multi-keyword phrases are
-      // often treated as conjunctive text by Google Maps and return few rows.
-      { mode: "kids_education", keyword: "preschool" },
-      { mode: "kids_education", keyword: "bimba" },
-      { mode: "kids_education", keyword: "daycare" },
-      { mode: "kids_education", keyword: "TK" },
-      { mode: "kids_education", keyword: "PAUD" },
-      { mode: "affiliate", keyword: "taman" },
-      { mode: "affiliate", keyword: "playground" },
-      { mode: "affiliate", keyword: "rumah sakit" },
-      { mode: "affiliate", keyword: "McDonald's" },
-      { mode: "affiliate", keyword: "KFC" },
-      { mode: "affiliate", keyword: "Burger King" },
+    const lat = Number(location.targetLat ?? location.lat);
+    const lon = Number(location.targetLon ?? location.lon);
+    const metersPerDegreeLon = 111320 * Math.max(0.2, Math.cos((lat * Math.PI) / 180));
+    const sampleCenters = [
+      { lat, lon, label: "mix-center" },
+      ...[30, 150, 270].map((bearing, index) => {
+        const radians = bearing * Math.PI / 180;
+        const distance = 1500;
+        return {
+          lat: lat + (distance * Math.cos(radians)) / 111320,
+          lon: lon + (distance * Math.sin(radians)) / metersPerDegreeLon,
+          label: `mix-ring-${index + 1}`,
+        };
+      }),
+    ];
+    const queryFamilies = [
+      { mode: "kids_education", keyword: "preschool OR bimba OR daycare OR kindergarten OR PAUD OR TK" },
+      { mode: "affiliate", keyword: "taman OR playground OR park OR rumah sakit OR hospital" },
+      { mode: "affiliate", keyword: "McDonald's OR KFC OR Burger King" },
       { mode: "affiliate", keyword: "Pizza Hut OR Domino's OR Starbucks OR Subway OR J.CO OR HokBen" },
     ];
-    return queries.map((item) => ({
+    return sampleCenters.flatMap((point) => queryFamilies.map((item) => ({
       ...item,
       area,
-      searchScope: "mix-center",
+      searchScope: point.label,
       searchPoint: point,
       query: `${item.keyword} near ${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}${targetAreaLabel ? `, ${targetAreaLabel}` : ""}`,
-    }));
+    })));
   }
 
   const areaQueries = areas.flatMap((area) => {
@@ -765,7 +765,7 @@ async function crawlGoogleMapsPois(location = {}) {
     const all = [];
     const mixSearch = location.poiSearchMode === "mix-search";
     const taskLimit = mixSearch && VERCEL_MODE
-      ? Math.max(3, Math.min(12, Number(process.env.POI_MIX_SEARCH_TASKS || 12)))
+      ? Math.max(3, Math.min(16, Number(process.env.POI_MIX_SEARCH_TASKS || 16)))
       : MAX_CRAWL_TASKS;
     const tasks = selectBalancedCrawlTasks(buildQueries(location), taskLimit);
     debug.selectedTaskCount = tasks.length;
