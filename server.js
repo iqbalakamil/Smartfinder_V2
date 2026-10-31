@@ -84,7 +84,7 @@ async function launchConfiguredBrowser(launchOptions = {}) {
 
 const DEFAULT_PORT = Number(process.env.PORT || 3000);
 const HOST = "127.0.0.1";
-const POI_CACHE_VERSION = "v23-mix-search-radius-coverage";
+const POI_CACHE_VERSION = "v24-kids-store-day-care-commercial-affiliates";
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 15000);
 const LITELLM_BASE_URL = "https://litellm.koboi2026.biz.id/v1";
 const LITELLM_MODEL = "gpt-4o-mini";
@@ -2115,7 +2115,16 @@ function buildBackendCrawlPlan(searchAreas = [], seedLocation = {}) {
   const categories = [
     { mode: "hunian", label: "housing complex", keywords: EXTENSION_CATEGORY_CONFIG.hunian.keywords },
     { mode: "kids_education", label: "kids education", keywords: EXTENSION_CATEGORY_CONFIG.kids_education.keywords },
-    { mode: "affiliate", label: "affiliate", keywords: EXTENSION_CATEGORY_CONFIG.affiliate.keywords },
+    { mode: "kids_store", label: "kids store", keywords: ["kids store", "baby shop", "toko perlengkapan bayi", "toko mainan anak"] },
+    { mode: "day_care", label: "day care", keywords: ["daycare", "day care", "childcare", "penitipan anak"] },
+    {
+      mode: "affiliate",
+      label: "affiliate",
+      keywords: [
+        ...EXTENSION_CATEGORY_CONFIG.affiliate.keywords,
+        "commercial area", "shopping mall", "shopping center", "plaza", "ruko", "commercial complex",
+      ],
+    },
   ];
 
   const plan = [];
@@ -2220,6 +2229,24 @@ function classifyPoi(tags = {}) {
     tags.residential,
     tags.building,
   ].filter(Boolean).join(" ").toLowerCase();
+
+  if (
+    categoryHint === "day-care" ||
+    ["child_care", "childcare", "daycare"].includes(amenity) ||
+    types.some((type) => ["childcare", "daycare"].includes(type)) ||
+    /day[\s-]?care|childcare|penitipan anak/i.test(placeText)
+  ) {
+    return { signal: "positive", category: "day-care", label: "Day Care" };
+  }
+
+  if (
+    categoryHint === "kids-store" ||
+    ["baby_goods", "toys", "children"].includes(shop) ||
+    types.some((type) => ["baby_store", "toy_store"].includes(type)) ||
+    /kids store|baby shop|toko (perlengkapan bayi|mainan anak)/i.test(placeText)
+  ) {
+    return { signal: "positive", category: "kids-store", label: "Kids Store" };
+  }
 
   // Banyak cluster/perumahan di OSM hanya ditandai building=yes atau place
   // tanpa tipe hunian yang lengkap. Kenali nama hunian agar tidak hilang dari
@@ -4588,7 +4615,7 @@ function inferAreaTypeFromPois(pois = []) {
 
   for (const poi of pois) {
     if (poi.category === "residential") counts.residential += 1;
-    if (["traffic-support", "daily-needs", "family-services"].includes(poi.category)) counts.commercial += 1;
+    if (["traffic-support", "daily-needs", "family-services", "kids-store"].includes(poi.category)) counts.commercial += 1;
     if (poi.category === "education") counts.education += 1;
     if (poi.category === "industrial" || poi.category === "heavy-building") counts.industrial += 1;
     if (poi.category === "child-friendly") counts.tourism += 1;
@@ -5754,7 +5781,9 @@ function structuredCategoryFromPoi(item = {}) {
   ].filter(Boolean).join(" ").toLowerCase();
 
   if (haystack.includes("bimba")) return "bimba";
-  if (haystack.includes("daycare") || haystack.includes("day care")) return "daycare";
+  if (item.category === "kids-store" || /kids store|baby shop|toko mainan anak|perlengkapan bayi/.test(haystack)) return "kids store";
+  if (item.category === "day-care" || /day[\s-]?care|childcare|penitipan anak/.test(haystack)) return "daycare";
+  if (/commercial area/.test(haystack)) return "commercial area";
   if (haystack.includes("paud")) return "paud";
   if (/\btk\b|taman kanak/.test(haystack)) return "tk";
   if (item.category === "education") return "tk";

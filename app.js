@@ -602,6 +602,12 @@ function getMarkerColor(poi) {
   if (poi.category === "education") {
     return "#2563eb";
   }
+  if (poi.category === "kids-store") {
+    return "#8b5cf6";
+  }
+  if (poi.category === "day-care") {
+    return "#ffffff";
+  }
   if (poi.category === "family-services") {
     return "#eab308";
   }
@@ -824,6 +830,8 @@ function ensureMapLayers() {
           'circle-color': ['coalesce', ['get', '_markerColor'], ['case',
             ['==', ['get', 'category'], 'residential'], '#16a34a',
             ['==', ['get', 'category'], 'education'], '#2563eb',
+            ['==', ['get', 'category'], 'kids-store'], '#8b5cf6',
+            ['==', ['get', 'category'], 'day-care'], '#ffffff',
             ['==', ['get', 'category'], 'family-services'], '#eab308',
             ['==', ['get', 'signal'], 'risk'], '#9f2d2d',
             '#0f766e'
@@ -831,7 +839,7 @@ function ensureMapLayers() {
           // Semua marker dibuat solid agar warna kategori tetap tajam.
           'circle-opacity': 1,
           'circle-stroke-width': 1.5,
-          'circle-stroke-color': 'rgba(255,255,255,0.85)',
+          'circle-stroke-color': ['case', ['==', ['get', 'category'], 'day-care'], '#334155', 'rgba(255,255,255,0.85)'],
         },
       });
       
@@ -1897,7 +1905,7 @@ function summarizePois(pois = []) {
     categoryCounts,
     categories: {
       ...categoryCounts,
-      familyServices: categoryCounts["family-services"] || 0,
+      familyServices: (categoryCounts["family-services"] || 0) + (categoryCounts["kids-store"] || 0),
     },
   };
 }
@@ -3016,7 +3024,8 @@ function renderPoiBreakdownTable(targetBody, pois = [], category) {
     return;
   }
 
-  const rows = pois.filter((poi) => poi.category === category);
+  const categories = Array.isArray(category) ? category : [category];
+  const rows = pois.filter((poi) => categories.includes(poi.category));
   if (!rows.length) {
     targetBody.innerHTML = '<tr><td colspan="2" class="empty-row">Belum ada data.</td></tr>';
     return;
@@ -3046,14 +3055,14 @@ function renderPoiBreakdownTable(targetBody, pois = [], category) {
 
 function renderPoiBreakdowns(pois = []) {
   renderPoiBreakdownTable(residentialBreakdownBody, pois, "residential");
-  renderPoiBreakdownTable(educationBreakdownBody, pois, "education");
-  renderPoiBreakdownTable(affiliateBreakdownBody, pois, "family-services");
+  renderPoiBreakdownTable(educationBreakdownBody, pois, ["education", "day-care"]);
+  renderPoiBreakdownTable(affiliateBreakdownBody, pois, ["family-services", "kids-store"]);
 }
 
 function buildAnalysisContext({ lat, lon, effectiveRadius, streetName, locationContext, areaCoverage, pois, externalResearch, reverseGeocodeResult = null, demographyPayload = null }) {
   const districtName = locationContext.subdistrict || locationContext.district || "Kecamatan tidak ditemukan";
   const cityName = locationContext.city || "Kota tidak ditemukan";
-  const blueCompetitorPois = pois.filter((poi) => poi.category === "education");
+  const blueCompetitorPois = pois.filter((poi) => ["education", "day-care"].includes(poi.category));
   const competitorCountFromTable = blueCompetitorPois.length;
 
   return {

@@ -48,11 +48,30 @@ const CATEGORY_CONFIG = {
     googleTypes: ["school", "preschool"],
     fallbackName: "Kids education",
   },
+  kids_store: {
+    signal: "positive",
+    category: "kids-store",
+    categoryLabel: "Kids Store",
+    keywords: ["kids store", "baby shop", "toko perlengkapan bayi", "toko mainan anak"],
+    googleTypes: ["store", "toy_store", "baby_store"],
+    fallbackName: "Kids Store",
+  },
+  day_care: {
+    signal: "positive",
+    category: "day-care",
+    categoryLabel: "Day Care",
+    keywords: ["daycare", "day care", "childcare", "penitipan anak"],
+    googleTypes: ["childcare", "preschool"],
+    fallbackName: "Day Care",
+  },
   affiliate: {
     signal: "positive",
     category: "family-services",
     categoryLabel: "Affiliate keluarga",
-    keywords: EXTENSION_CATEGORY_CONFIG.affiliate.keywords,
+    keywords: [
+      ...EXTENSION_CATEGORY_CONFIG.affiliate.keywords,
+      "commercial area", "shopping mall", "shopping center", "plaza", "ruko", "commercial complex",
+    ],
     googleTypes: ["park", "hospital", "restaurant", "playground"],
     fallbackName: "Affiliate keluarga",
   },
@@ -220,9 +239,20 @@ function buildQueries(location = {}) {
     const queries = [
       { mode: "kids_education", keyword: "preschool" },
       { mode: "kids_education", keyword: "bimba" },
-      { mode: "kids_education", keyword: "daycare" },
       { mode: "kids_education", keyword: "PAUD" },
       { mode: "kids_education", keyword: "TK" },
+      { mode: "kids_store", keyword: "kids store" },
+      { mode: "kids_store", keyword: "baby shop" },
+      { mode: "kids_store", keyword: "toko mainan anak" },
+      { mode: "day_care", keyword: "daycare" },
+      { mode: "day_care", keyword: "childcare" },
+      { mode: "day_care", keyword: "penitipan anak" },
+      { mode: "affiliate", keyword: "commercial area", categoryLabel: "Affiliate - Commercial Area" },
+      { mode: "affiliate", keyword: "shopping mall", categoryLabel: "Affiliate - Commercial Area" },
+      { mode: "affiliate", keyword: "shopping center", categoryLabel: "Affiliate - Commercial Area" },
+      { mode: "affiliate", keyword: "plaza", categoryLabel: "Affiliate - Commercial Area" },
+      { mode: "affiliate", keyword: "ruko", categoryLabel: "Affiliate - Commercial Area" },
+      { mode: "affiliate", keyword: "commercial complex", categoryLabel: "Affiliate - Commercial Area" },
       { mode: "affiliate", keyword: "McDonald's" },
       { mode: "affiliate", keyword: "KFC" },
       { mode: "affiliate", keyword: "Burger King" },
@@ -749,7 +779,7 @@ function mapResultToPoi(row, task) {
     },
     signal: config.signal,
     category: config.category,
-    categoryLabel: config.categoryLabel,
+    categoryLabel: task.categoryLabel || config.categoryLabel,
     source: "google-maps-crawl",
   };
 }
@@ -795,7 +825,7 @@ async function crawlGoogleMapsPois(location = {}) {
     const all = [];
     const mixSearch = location.poiSearchMode === "mix-search";
     const taskLimit = mixSearch && VERCEL_MODE
-      ? Math.max(3, Math.min(16, Number(process.env.POI_MIX_SEARCH_TASKS || 16)))
+      ? Math.max(8, Math.min(36, Number(process.env.POI_MIX_SEARCH_TASKS || 36)))
       : MAX_CRAWL_TASKS;
     const tasks = selectBalancedCrawlTasks(buildQueries(location), taskLimit);
     debug.selectedTaskCount = tasks.length;
