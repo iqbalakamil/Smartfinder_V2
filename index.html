@@ -438,7 +438,7 @@
             <div class="heatmap-header">
               <div>
                 <h3 id="bhumi-layers-title">🗺️ Layer Nilai Tanah BHUMI</h3>
-                <p class="cgis-control-caption">Layer nilai tanah BHUMI dengan fallback data polygon internal.</p>
+                <p class="cgis-control-caption">Nilai tanah dari BIG ZNT, dengan titik sampel lokal dan sampling sekitar sebagai fallback.</p>
               </div>
               <span class="pill pill-muted" id="bhumi-layer-status">Siap</span>
             </div>
@@ -1079,6 +1079,10 @@
     }
 
     function arcgisPolygonToGeoJson(feature) {
+      const point = feature?.geometry;
+      if (Number.isFinite(Number(point?.x)) && Number.isFinite(Number(point?.y))) {
+        return { type: 'Feature', properties: feature.attributes || {}, geometry: { type: 'Point', coordinates: [Number(point.x), Number(point.y)] } };
+      }
       const rings = feature?.geometry?.rings;
       if (!Array.isArray(rings) || !rings.length) return null;
       return { type: 'Feature', properties: feature.attributes || {}, geometry: { type: 'Polygon', coordinates: rings } };
@@ -1093,6 +1097,7 @@
       const layerId = 'big-json-znt-fill';
       if (!bigJsonEnabled) {
         if (map.getLayer(layerId)) map.setLayoutProperty(layerId, 'visibility', 'none');
+        if (map.getLayer('big-json-znt-samples')) map.setLayoutProperty('big-json-znt-samples', 'visibility', 'none');
         return;
       }
       if (status) status.textContent = 'Memuat layer nilai tanah...';
@@ -1132,7 +1137,28 @@
           map.setPaintProperty(layerId, 'fill-outline-color', '#7c2d12');
           map.setLayoutProperty(layerId, 'visibility', 'visible');
         }
-        if (status) status.textContent = `${geojson.features.length} polygon nilai tanah`;
+        const sampleLayerId = 'big-json-znt-samples';
+        if (!map.getLayer(sampleLayerId)) {
+          map.addLayer({
+            id: sampleLayerId,
+            type: 'circle',
+            source: sourceId,
+            filter: ['==', ['geometry-type'], 'Point'],
+            paint: {
+              'circle-radius': 6,
+              'circle-color': ['interpolate', ['linear'], ['to-number', ['coalesce', ['get', 'kelasnilai'], ['get', 'KELASNILAI']], 6], 1, '#2563eb', 3, '#06b6d4', 5, '#22c55e', 7, '#f59e0b', 9, '#ef4444'],
+              'circle-stroke-width': 1.5,
+              'circle-stroke-color': '#ffffff',
+              'circle-opacity': 0.9,
+            },
+            layout: { visibility: 'visible' },
+          });
+        } else {
+          map.setLayoutProperty(sampleLayerId, 'visibility', 'visible');
+        }
+        const polygonCount = geojson.features.filter((feature) => feature.geometry?.type === 'Polygon').length;
+        const sampleCount = geojson.features.filter((feature) => feature.geometry?.type === 'Point').length;
+        if (status) status.textContent = `${polygonCount} polygon · ${sampleCount} titik sampel nilai tanah`;
       } catch (error) {
         if (status) status.textContent = `Layer nilai tanah gagal: ${error.message}`;
       }
@@ -1501,6 +1527,7 @@
         ['RANGENILAI', 'Range Nilai'],
         ['range', 'Range Nilai BIG'],
         ['kelasnilai', 'Kelas Nilai BIG'],
+        ['sample_distance_m', 'Jarak sampel dari titik klik (m)'],
         ['KELAS', 'Kelas'],
       ],
       'umum:PenggunaanTanah': [

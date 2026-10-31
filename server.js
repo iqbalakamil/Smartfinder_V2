@@ -570,7 +570,7 @@ function loadBhumiLocalFeatureIndex() {
       return true;
     });
   bhumiLocalFeatureIndex = features;
-  console.log(`[BHUMI JSON] ${features.length} feature lokal dimuat dari ${files.length} file.`);
+  console.log(`[BHUMI CACHE] ${features.length} fitur lokal siap sebagai fallback; query BIG tetap dicoba lebih dulu.`);
   return features;
 }
 
@@ -723,6 +723,24 @@ function findLocalBhumiResult(layer, point) {
   return features.length ? { type: "FeatureCollection", features } : null;
 }
 
+function findNearestLocalBhumiResult(layer, point, maxDistanceMeters = 500) {
+  const nearest = loadBhumiLocalFeatureIndex()
+    .filter((feature) => (feature?.properties?.bhumi_layer || feature?.properties?.layer) === layer
+      && feature.geometry?.type === "Point")
+    .map((feature) => {
+      const [lon, lat] = feature.geometry.coordinates || [];
+      return { feature, distance: calculateDistanceMeters(Number(point[1]), Number(point[0]), Number(lat), Number(lon)) };
+    })
+    .filter((item) => Number.isFinite(item.distance) && item.distance <= maxDistanceMeters)
+    .sort((left, right) => left.distance - right.distance)
+    .slice(0, 3)
+    .map(({ feature, distance }) => ({
+      ...feature,
+      properties: { ...(feature.properties || {}), sample_distance_m: Math.round(distance) },
+    }));
+  return nearest.length ? { type: "FeatureCollection", features: nearest } : null;
+}
+
 function scheduleBhumiPersistentWrite() {
   if (bhumiPersistentWriteTimer) return;
   bhumiPersistentWriteTimer = setTimeout(() => {
@@ -797,6 +815,24 @@ async function fetchBigZntForPoint(lon, lat) {
   return (payload.features || []).map((item) => item?.attributes || {}).filter((attributes) => Object.keys(attributes).length);
 }
 
+async function sampleBigZntAroundPoint(lon, lat) {
+  const offsets = [
+    [0, 250], [90, 250], [180, 250], [270, 250],
+    [45, 500], [135, 500], [225, 500], [315, 500],
+  ];
+  const observations = await Promise.all(offsets.map(async ([bearing, distance]) => {
+    const radians = bearing * Math.PI / 180;
+    const sampleLat = lat + (distance * Math.cos(radians)) / 111320;
+    const sampleLon = lon + (distance * Math.sin(radians)) / (111320 * Math.cos(lat * Math.PI / 180));
+    const values = await fetchBigZntForPoint(sampleLon, sampleLat).catch(() => []);
+    return values.map((properties) => ({ properties, distance }));
+  }));
+  return observations.flat().map(({ properties, distance }) => ({
+    ...properties,
+    sample_distance_m: distance,
+  }));
+}
+
 async function handleBhumiIdentify(req, res) {
   try {
     const body = await parseBody(req);
@@ -815,11 +851,29 @@ async function handleBhumiIdentify(req, res) {
       } catch (error) {
         bigError = error;
       }
-      const local = attributes.length ? null : findLocalBhumiResult(layer, point);
+      let local = attributes.length ? null : findLocalBhumiResult(layer, point);
       const features = attributes.length
         ? attributes.map((properties) => ({ type: "Feature", properties }))
         : [...(local?.features || [])];
       let resultSource = attributes.length ? "big-znt-point-sample" : local ? "local-bhumi-znt-cache" : null;
+      if (!features.length && layer === "umum:ZNTRANGE") {
+        try {
+          const sampled = await sampleBigZntAroundPoint(point[0], point[1]);
+          if (sampled.length) {
+            features.push(...sampled.map((properties) => ({ type: "Feature", properties })));
+            resultSource = "big-znt-nearby-sampling";
+          }
+        } catch (samplingError) {
+          bigError = bigError || samplingError;
+        }
+      }
+      if (!features.length) {
+        local = findNearestLocalBhumiResult(layer, point, 750);
+        if (local?.features?.length) {
+          features.push(...local.features);
+          resultSource = "local-bhumi-nearest-sample";
+        }
+      }
       if (!features.length) {
         try {
           const bhumi = await fetchBhumiPersilForPoint(layer, body, point);
@@ -917,7 +971,9 @@ async function handleBigZntProxy(req, res, url) {
             attributes: feature.properties || {},
             geometry: feature.geometry?.type === "Polygon"
               ? { rings: feature.geometry.coordinates, spatialReference: { wkid: 4326 } }
-              : null,
+              : feature.geometry?.type === "Point"
+                ? { x: feature.geometry.coordinates?.[0], y: feature.geometry.coordinates?.[1], spatialReference: { wkid: 4326 } }
+                : null,
           }))
           .filter((feature) => feature.geometry);
         if (localFeatures.length) responsePayload = { ...payload, features: localFeatures, source: "local-bhumi-znt-cache" };
