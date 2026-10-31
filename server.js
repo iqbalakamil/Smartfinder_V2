@@ -84,7 +84,7 @@ async function launchConfiguredBrowser(launchOptions = {}) {
 
 const DEFAULT_PORT = Number(process.env.PORT || 3000);
 const HOST = "127.0.0.1";
-const POI_CACHE_VERSION = "v22-mix-search-specific-category-queries";
+const POI_CACHE_VERSION = "v23-mix-search-radius-coverage";
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 15000);
 const LITELLM_BASE_URL = "https://litellm.koboi2026.biz.id/v1";
 const LITELLM_MODEL = "gpt-4o-mini";
@@ -570,7 +570,7 @@ function loadBhumiLocalFeatureIndex() {
       return true;
     });
   bhumiLocalFeatureIndex = features;
-  console.log(`[BHUMI CACHE] ${features.length} fitur lokal siap sebagai fallback; query BIG tetap dicoba lebih dulu.`);
+  console.log(`[BHUMI CACHE] ${features.length} fitur lokal siap sebagai fallback bila data live BIG/BHUMI tidak tersedia.`);
   return features;
 }
 
@@ -852,11 +852,9 @@ async function handleBhumiIdentify(req, res) {
         bigError = error;
       }
       console.log(`[CGIS ZNT] BIG point query lon=${point[0].toFixed(6)} lat=${point[1].toFixed(6)} features=${attributes.length}${bigError ? ` error=${bigError.message}` : ""}`);
-      let local = attributes.length ? null : findLocalBhumiResult(layer, point);
-      const features = attributes.length
-        ? attributes.map((properties) => ({ type: "Feature", properties }))
-        : [...(local?.features || [])];
-      let resultSource = attributes.length ? "big-znt-point-sample" : local ? "local-bhumi-znt-cache" : null;
+      let local = null;
+      const features = attributes.map((properties) => ({ type: "Feature", properties }));
+      let resultSource = attributes.length ? "big-znt-point-sample" : null;
       if (!features.length && layer === "umum:ZNTRANGE") {
         try {
           const sampled = await sampleBigZntAroundPoint(point[0], point[1]);
@@ -866,6 +864,13 @@ async function handleBhumiIdentify(req, res) {
           }
         } catch (samplingError) {
           bigError = bigError || samplingError;
+        }
+      }
+      if (!features.length) {
+        local = findLocalBhumiResult(layer, point);
+        if (local?.features?.length) {
+          features.push(...local.features);
+          resultSource = "local-bhumi-znt-cache";
         }
       }
       if (!features.length) {
@@ -1071,8 +1076,6 @@ function parseBhumiNumber(value) {
 async function fetchBigZntForHexagon(feature) {
   const ring = feature?.geometry?.coordinates?.[0];
   if (!Array.isArray(ring) || ring.length < 4) return [];
-  const localAttributes = localZntAttributesForHexagon(feature);
-  if (localAttributes.length) return localAttributes;
   const geometry = {
     rings: [ring],
     spatialReference: { wkid: 4326 },
@@ -1196,8 +1199,8 @@ async function handleBhumiEnrichHexagons(req, res) {
       return;
     }
     const enrichFeature = async (feature) => {
-      // Local exported BHUMI data is authoritative for the covered geometry.
-      // Only layers with no local coverage continue to live sampling.
+      // Query live BIG data first; local BHUMI exports remain a fallback for
+      // areas where the public layer has no coverage or is temporarily down.
       let bigZntAttributes = [];
       let bigZntError = null;
       let bigLandUseAttributes = [];
@@ -1211,15 +1214,12 @@ async function handleBhumiEnrichHexagons(req, res) {
         localBhumiAttributesForHexagon(feature, layer),
       ]));
       const localZntAttributes = localLayerAttributes["umum:ZNTRANGE"] || [];
-      if (localZntAttributes.length) {
-        bigZntAttributes = localZntAttributes;
-      } else {
-        try {
-          bigZntAttributes = await fetchBigZntForHexagon(feature);
-        } catch (error) {
-          bigZntError = error.message;
-        }
+      try {
+        bigZntAttributes = await fetchBigZntForHexagon(feature);
+      } catch (error) {
+        bigZntError = error.message;
       }
+      if (!bigZntAttributes.length && localZntAttributes.length) bigZntAttributes = localZntAttributes;
       // These indicators are part of the Area Potential model but are not
       // included in the three standard BHUMI export layers. Query BIG only
       // for the missing external layers so the recommendation fields are
@@ -1368,7 +1368,7 @@ async function handleBhumiEnrichHexagons(req, res) {
         bhumi_sample_points: points.map(([lon, lat]) => [Number(lon.toFixed(7)), Number(lat.toFixed(7))]),
         bhumi_znt_feature_count: bigZntAttributes.length,
         bhumi_znt_source: bigZntAttributes.length
-          ? (localZntAttributes.length ? "local data/bhumi-znt/data_tanah.geojson" : "BIG PUBLIK/PERIZINAN_DAN_PERTANAHAN/MapServer/60")
+          ? (bigZntAttributes === localZntAttributes ? "local data/bhumi-znt/data_tanah.geojson" : "BIG PUBLIK/PERIZINAN_DAN_PERTANAHAN/MapServer/60")
           : null,
         bhumi_znt_ranges: [...new Set(bigZntAttributes.map((attributes) => attributes.range || attributes.kelasnilai || attributes.RANGENILAI).filter(Boolean))].slice(0, 8).join(", "),
         big_land_use_feature_count: bigLandUseAttributes.length,
@@ -1409,7 +1409,7 @@ async function handleBhumiEnrichHexagons(req, res) {
         bhumi_sampling_layers: layersNeedingSampling.join(","),
         bhumi_sampling_skipped_layers: layers.filter((layer) => !layersNeedingSampling.includes(layer)).join(","),
         enrichment_source: [
-          localZntAttributes.length ? "local-znt" : bigZntAttributes.length ? "big-znt" : null,
+          bigZntAttributes.length ? (bigZntAttributes === localZntAttributes ? "local-znt" : "big-znt") : null,
           sampledResults.length ? (layersNeedingSampling.length ? "local-plus-sampling" : "local-only") : null,
         ].filter(Boolean).join("+") || "unavailable",
       };

@@ -223,30 +223,48 @@ function buildQueries(location = {}) {
       { mode: "kids_education", keyword: "daycare" },
       { mode: "kids_education", keyword: "PAUD" },
       { mode: "kids_education", keyword: "TK" },
-      { mode: "affiliate", keyword: "taman" },
-      { mode: "affiliate", keyword: "playground" },
-      { mode: "affiliate", keyword: "rumah sakit" },
       { mode: "affiliate", keyword: "McDonald's" },
       { mode: "affiliate", keyword: "KFC" },
       { mode: "affiliate", keyword: "Burger King" },
+      { mode: "affiliate", keyword: "taman" },
+      { mode: "affiliate", keyword: "playground" },
+      { mode: "affiliate", keyword: "rumah sakit" },
+      { mode: "affiliate", keyword: "McDonalds" },
       { mode: "affiliate", keyword: "Pizza Hut OR Domino's Pizza" },
       { mode: "affiliate", keyword: "Starbucks" },
       { mode: "affiliate", keyword: "Subway" },
       { mode: "affiliate", keyword: "J.CO" },
       { mode: "affiliate", keyword: "HokBen" },
+      { mode: "affiliate", keyword: "Richeese Factory" },
+      { mode: "affiliate", keyword: "Kopi Kenangan" },
+      { mode: "affiliate", keyword: "Chatime" },
+      { mode: "affiliate", keyword: "bakery restaurant cafe" },
     ];
-    const point = {
-      lat,
-      lon,
-      label: "mix-center",
-    };
-    return queries.map((item) => ({
-      ...item,
-      area,
-      searchScope: "mix-center",
-      searchPoint: point,
-      query: `${item.keyword} near ${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}`,
-    }));
+    // Search the center and four points within the requested 3 km circle.
+    // Google Maps ranks only a small page of results for each query, so one
+    // center query misses places on the edge of the radius.
+    const radiusKm = Math.min(1.8, Math.max(1.2, Number(location.radiusMeters || 3000) / 2000));
+    const offsets = [
+      { north: 0, east: 0, label: "center" },
+      { north: radiusKm, east: 0, label: "north" },
+      { north: -radiusKm, east: 0, label: "south" },
+      { north: 0, east: radiusKm, label: "east" },
+      { north: 0, east: -radiusKm, label: "west" },
+    ];
+    return offsets.flatMap((offset) => {
+      const point = {
+        lat: lat + offset.north / 111.32,
+        lon: lon + offset.east / (111.32 * Math.max(0.2, Math.cos((lat * Math.PI) / 180))),
+        label: `mix-${offset.label}`,
+      };
+      return queries.map((item) => ({
+        ...item,
+        area,
+        searchScope: point.label,
+        searchPoint: point,
+        query: `${item.keyword} near ${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}`,
+      }));
+    });
   }
 
   const areaQueries = areas.flatMap((area) => {
@@ -628,8 +646,16 @@ async function scrapeGoogleMapsResults(options = {}) {
   return Array.from(unique.values());
 }
 
-async function crawlQuery(page, query) {
-  const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}&hl=id&gl=id&authuser=0`;
+async function crawlQuery(page, task) {
+  const point = task.searchPoint;
+  const mixSearch = point && Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lon));
+  const searchText = mixSearch ? task.keyword : task.query;
+  // Put the search term in the Maps search path and anchor its viewport to the
+  // actual target coordinate. A textual "near lat,lon" query is often ignored
+  // by Maps, which otherwise returns places from central Jakarta.
+  const url = mixSearch
+    ? `https://www.google.com/maps/search/${encodeURIComponent(searchText)}/@${Number(point.lat)},${Number(point.lon)},15z?hl=id&gl=id&authuser=0`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(searchText)}&hl=id&gl=id&authuser=0`;
   await page.goto(url, { waitUntil: "domcontentloaded", timeout: GOOGLE_MAPS_NAVIGATION_TIMEOUT_MS });
   await maybeDismissGoogleConsent(page);
   await page.waitForFunction(() => Boolean(
@@ -786,7 +812,7 @@ async function crawlGoogleMapsPois(location = {}) {
           const task = tasks[taskIndex];
           nextTaskIndex += 1;
           console.log(`GOOGLE_MAPS_TASK_START ${taskIndex + 1}/${tasks.length} ${task.mode} ${task.searchScope || task.area?.village || ""}`);
-          const rows = await crawlQuery(page, task.query).catch(() => []);
+          const rows = await crawlQuery(page, task).catch(() => []);
           console.log(`GOOGLE_MAPS_TASK_DONE ${taskIndex + 1}/${tasks.length} rows=${rows.length} ${task.mode} ${task.searchScope || task.area?.village || ""}`);
           for (const row of rows) {
             if (!shouldKeepRow(row, task)) {
