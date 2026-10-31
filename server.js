@@ -120,6 +120,7 @@ const ARCGIS_API_KEY = String(process.env.ARCGIS_API_KEY || "").trim();
 const BHUMI_TOKEN = String(process.env.BHUMI_TOKEN || "").trim();
 let bhumiTokenCache = BHUMI_TOKEN;
 const bhumiSampleCache = new Map();
+const bigZntPointCache = new Map();
 const BIG_ZNT_QUERY_URL = "https://kspservices.big.go.id/satupeta/rest/services/PUBLIK/PERIZINAN_DAN_PERTANAHAN/MapServer/60/query";
 const BIG_LAND_USE_QUERY_URL = "https://kspservices.big.go.id/satupeta/rest/services/PUBLIK/SUMBER_DAYA_ALAM_DAN_LINGKUNGAN/MapServer/3/query";
 const BIG_ZNT_TIMEOUT_MS = Number(process.env.BIG_ZNT_TIMEOUT_MS || 20000);
@@ -793,6 +794,8 @@ async function fetchBhumiPersilForPoint(layer, body, point) {
 }
 
 async function fetchBigZntForPoint(lon, lat) {
+  const cacheKey = `${Number(lon).toFixed(6)},${Number(lat).toFixed(6)}`;
+  if (bigZntPointCache.has(cacheKey)) return bigZntPointCache.get(cacheKey);
   const tolerance = 0.00005;
   const params = new URLSearchParams({
     f: "json",
@@ -805,32 +808,69 @@ async function fetchBigZntForPoint(lon, lat) {
     returnGeometry: "false",
     resultRecordCount: "20",
   });
-  const response = await withTimeout(
-    fetch(`${BIG_ZNT_QUERY_URL}?${params}`, { headers: { Accept: "application/json" } }),
-    BIG_ZNT_TIMEOUT_MS,
-    "BIG ZNT point query",
-  );
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload.error) throw new Error(payload.error?.message || `BIG ZNT HTTP ${response.status}`);
-  return (payload.features || []).map((item) => item?.attributes || {}).filter((attributes) => Object.keys(attributes).length);
+  const request = (async () => {
+    const response = await withTimeout(
+      fetch(`${BIG_ZNT_QUERY_URL}?${params}`, { headers: { Accept: "application/json" } }),
+      BIG_ZNT_TIMEOUT_MS,
+      "BIG ZNT point query",
+    );
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.error) throw new Error(payload.error?.message || `BIG ZNT HTTP ${response.status}`);
+    return (payload.features || []).map((item) => item?.attributes || {}).filter((attributes) => Object.keys(attributes).length);
+  })();
+  bigZntPointCache.set(cacheKey, request);
+  if (bigZntPointCache.size > 10000) bigZntPointCache.delete(bigZntPointCache.keys().next().value);
+  try {
+    return await request;
+  } catch (error) {
+    bigZntPointCache.delete(cacheKey);
+    throw error;
+  }
 }
 
 async function sampleBigZntAroundPoint(lon, lat) {
-  const offsets = [
-    [0, 250], [90, 250], [180, 250], [270, 250],
-    [45, 500], [135, 500], [225, 500], [315, 500],
-  ];
-  const observations = await Promise.all(offsets.map(async ([bearing, distance]) => {
-    const radians = bearing * Math.PI / 180;
-    const sampleLat = lat + (distance * Math.cos(radians)) / 111320;
-    const sampleLon = lon + (distance * Math.sin(radians)) / (111320 * Math.cos(lat * Math.PI / 180));
-    const values = await fetchBigZntForPoint(sampleLon, sampleLat).catch(() => []);
-    return values.map((properties) => ({ properties, distance }));
-  }));
-  return observations.flat().map(({ properties, distance }) => ({
-    ...properties,
-    sample_distance_m: distance,
-  }));
+  const bearings = [0, 90, 180, 270];
+  let lastError = null;
+  for (const distance of [250, 500, 1000, 2000]) {
+    const observations = await Promise.all(bearings.map(async (bearing) => {
+      const radians = bearing * Math.PI / 180;
+      const sampleLat = lat + (distance * Math.cos(radians)) / 111320;
+      const sampleLon = lon + (distance * Math.sin(radians)) / (111320 * Math.cos(lat * Math.PI / 180));
+      let values = [];
+      try {
+        values = await fetchBigZntForPoint(sampleLon, sampleLat);
+      } catch (error) {
+        lastError = error;
+      }
+      return values.map((properties) => ({ ...properties, sample_distance_m: distance }));
+    }));
+    const found = observations.flat();
+    if (found.length) return found;
+  }
+  if (lastError) throw lastError;
+  return [];
+}
+
+async function fetchBigLandUseForPoint(lon, lat) {
+  const params = new URLSearchParams({
+    f: "json",
+    where: "1=1",
+    geometry: JSON.stringify({ x: Number(lon), y: Number(lat), spatialReference: { wkid: 4326 } }),
+    geometryType: "esriGeometryPoint",
+    inSR: "4326",
+    spatialRel: "esriSpatialRelIntersects",
+    outFields: "ptnobjname,ptnsbjname,namobj,fcode,ig25k_penggunaan10k_ar_area,ptnremarks",
+    returnGeometry: "false",
+    resultRecordCount: "20",
+  });
+  const response = await withTimeout(
+    fetch(`${BIG_LAND_USE_QUERY_URL}?${params}`, { headers: { Accept: "application/json" } }),
+    BIG_LAND_USE_TIMEOUT_MS,
+    "BIG land-use point query",
+  );
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.error) throw new Error(payload.error?.message || `BIG land-use HTTP ${response.status}`);
+  return (payload.features || []).map((item) => item?.attributes || {}).filter((attributes) => Object.keys(attributes).length);
 }
 
 async function handleBhumiIdentify(req, res) {
@@ -855,7 +895,7 @@ async function handleBhumiIdentify(req, res) {
       let local = null;
       const features = attributes.map((properties) => ({ type: "Feature", properties }));
       let resultSource = attributes.length ? "big-znt-point-sample" : null;
-      if (!features.length && layer === "umum:ZNTRANGE") {
+      if (!features.length && ["umum:ZNTRANGE", "umum:nbt3"].includes(layer)) {
         try {
           const sampled = await sampleBigZntAroundPoint(point[0], point[1]);
           if (sampled.length) {
@@ -867,17 +907,19 @@ async function handleBhumiIdentify(req, res) {
         }
       }
       if (!features.length) {
-        local = findLocalBhumiResult(layer, point);
+        const cacheLayer = layer === "umum:nbt3" ? "umum:ZNTRANGE" : layer;
+        local = findLocalBhumiResult(cacheLayer, point);
         if (local?.features?.length) {
           features.push(...local.features);
-          resultSource = "local-bhumi-znt-cache";
+          resultSource = cacheLayer === layer ? "local-bhumi-znt-cache" : "local-bhumi-znt-cache-for-nbt3";
         }
       }
       if (!features.length) {
-        local = findNearestLocalBhumiResult(layer, point, 750);
+        const cacheLayer = layer === "umum:nbt3" ? "umum:ZNTRANGE" : layer;
+        local = findNearestLocalBhumiResult(cacheLayer, point, 2500);
         if (local?.features?.length) {
           features.push(...local.features);
-          resultSource = "local-bhumi-nearest-sample";
+          resultSource = cacheLayer === layer ? "local-bhumi-nearest-sample" : "local-bhumi-nearest-znt-for-nbt3";
         }
       }
       if (!features.length) {
@@ -895,6 +937,49 @@ async function handleBhumiIdentify(req, res) {
         layer,
         result: { type: "FeatureCollection", features },
         source: resultSource || "big-znt-no-data",
+        ...(bigError ? { warning: bigError.message } : {}),
+      });
+      return;
+    }
+    if (hasPoint && layer === "umum:PenggunaanTanah") {
+      let bigError = null;
+      let attributes = [];
+      try {
+        attributes = await fetchBigLandUseForPoint(point[0], point[1]);
+      } catch (error) {
+        bigError = error;
+      }
+      let local = null;
+      let features = attributes.map((properties) => ({ type: "Feature", properties }));
+      let source = attributes.length ? "big-land-use-point" : null;
+      if (!features.length) {
+        local = findLocalBhumiResult(layer, point);
+        if (local?.features?.length) {
+          features = local.features;
+          source = "local-bhumi-land-use-cache";
+        }
+      }
+      if (!features.length) {
+        local = findNearestLocalBhumiResult(layer, point, 2500);
+        if (local?.features?.length) {
+          features = local.features;
+          source = "local-bhumi-nearest-land-use";
+        }
+      }
+      if (!features.length) {
+        try {
+          const bhumi = await fetchBhumiPersilForPoint(layer, body, point);
+          features = bhumi?.features || bhumi?.data?.features || [];
+          if (features.length) source = "bhumi-point-fallback";
+        } catch (fallbackError) {
+          sendJson(res, 502, { error: `BIG penggunaan tanah: ${bigError?.message || "data tidak ditemukan"}; fallback BHUMI: ${fallbackError.message || "gagal"}` });
+          return;
+        }
+      }
+      sendJson(res, 200, {
+        layer,
+        result: { type: "FeatureCollection", features },
+        source: source || "big-land-use-no-data",
         ...(bigError ? { warning: bigError.message } : {}),
       });
       return;

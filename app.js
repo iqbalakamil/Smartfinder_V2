@@ -1272,7 +1272,7 @@ function buildPdfBarChart(items = [], { valueFormatter = formatNumber } = {}) {
 
 function buildPdfLineChart(items = [], { valueFormatter = (value) => `${Number(value).toFixed(2)}%` } = {}) {
   const values = items.map((item) => ({ label: String(item.label), value: Number(item.value) })).filter((item) => Number.isFinite(item.value));
-  if (values.length < 2) return '<p class="muted">Grafik pertumbuhan belum tersedia.</p>';
+  if (values.length < 2) return '<p class="muted">Grafik kelahiran belum tersedia.</p>';
   const width = 680, height = 280, left = 62, right = 24, top = 24, bottom = 48;
   const minValue = Math.min(0, ...values.map((item) => item.value));
   const maxValue = Math.max(...values.map((item) => item.value), 1);
@@ -1284,27 +1284,66 @@ function buildPdfLineChart(items = [], { valueFormatter = (value) => `${Number(v
     const yy = y(value);
     return `<line x1="${left}" y1="${yy}" x2="${width - right}" y2="${yy}" stroke="#e2e8f0"/><text x="${left - 8}" y="${yy + 4}" text-anchor="end" font-size="11" fill="#64748b">${escapeHtml(valueFormatter(value))}</text>`;
   }).join("");
-  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Grafik garis pertumbuhan penduduk" style="width:100%;height:auto;font-family:Arial,sans-serif">${grid}<polyline points="${points}" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>${values.map((item, index) => `<circle cx="${x(index)}" cy="${y(item.value)}" r="5" fill="#0f766e"/><text x="${x(index)}" y="${height - 20}" text-anchor="middle" font-size="12" fill="#334155">${escapeHtml(item.label)}</text><text x="${x(index)}" y="${y(item.value) - 10}" text-anchor="middle" font-size="10" fill="#0f172a">${escapeHtml(valueFormatter(item.value))}</text>`).join("")}</svg>`;
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Grafik garis jumlah kelahiran" style="width:100%;height:auto;font-family:Arial,sans-serif">${grid}<polyline points="${points}" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>${values.map((item, index) => `<circle cx="${x(index)}" cy="${y(item.value)}" r="5" fill="#0f766e"/><text x="${x(index)}" y="${height - 20}" text-anchor="middle" font-size="12" fill="#334155">${escapeHtml(item.label)}</text><text x="${x(index)}" y="${y(item.value) - 10}" text-anchor="middle" font-size="10" fill="#0f172a">${escapeHtml(valueFormatter(item.value))}</text>`).join("")}</svg>`;
 }
 
-function buildPdfAgeRows(report) {
-  const groups = [
-    ["0–4 tahun", "usia_0_4_tahun"], ["5–9 tahun", "usia_5_9_tahun"], ["10–14 tahun", "usia_10_14_tahun"],
-    ["15–19 tahun", "usia_15_19_tahun"], ["20–24 tahun", "usia_20_24_tahun"], ["25–29 tahun", "usia_25_29_tahun"],
-    ["30–34 tahun", "usia_30_34_tahun"], ["35–39 tahun", "usia_35_39_tahun"], ["40–44 tahun", "usia_40_44_tahun"],
-    ["45–49 tahun", "usia_45_49_tahun"], ["50–54 tahun", "usia_50_54_tahun"], ["55–59 tahun", "usia_55_59_tahun"],
-    ["60–64 tahun", "usia_60_64_tahun"], ["65–69 tahun", "usia_65_69_tahun"], ["70–74 tahun", "usia_70_74_tahun"], ["75+ tahun", "usia_75_tahun_ke_atas"],
-  ];
-  return groups.map(([label, key]) => [label, formatNumber(report?.kelompok_usia?.[key])]);
+function buildPdfVerticalBarChart(items = [], { valueFormatter = formatNumber } = {}) {
+  const values = items.map((item) => ({ label: String(item?.label || "-"), value: Number(item?.value), color: item?.color || "#2563eb" }))
+    .filter((item) => Number.isFinite(item.value) && item.value > 0);
+  if (!values.length) return '<p class="muted">Grafik usia belum tersedia karena data numerik belum lengkap.</p>';
+  const width = 1040, height = 430, left = 72, right = 24, top = 30, bottom = 130;
+  const plotHeight = height - top - bottom;
+  const maxValue = Math.max(...values.map((item) => item.value));
+  const axisMax = Math.ceil(maxValue / 5) * 5 || maxValue || 1;
+  const slot = (width - left - right) / values.length;
+  const barWidth = slot * 0.62;
+  const grid = [0, 1, 2, 3, 4, 5].map((step) => {
+    const value = axisMax * (step / 5);
+    const y = top + plotHeight - (value / axisMax) * plotHeight;
+    return `<line x1="${left}" y1="${y}" x2="${width - right}" y2="${y}" stroke="#e2e8f0"/><text x="${left - 10}" y="${y + 4}" text-anchor="end" font-size="11" fill="#64748b">${escapeHtml(valueFormatter(value))}</text>`;
+  }).join("");
+  const bars = values.map((item, index) => {
+    const barHeight = (item.value / axisMax) * plotHeight;
+    const x = left + index * slot + (slot - barWidth) / 2;
+    const y = top + plotHeight - barHeight;
+    const center = x + barWidth / 2;
+    return `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="3" fill="${escapeAttribute(item.color)}"/><text x="${center}" y="${y - 7}" text-anchor="middle" font-size="10" fill="#0f172a">${escapeHtml(valueFormatter(item.value))}</text><text transform="translate(${center - 3},${top + plotHeight + 18}) rotate(-45)" text-anchor="end" font-size="11" fill="#334155">${escapeHtml(item.label)}</text>`;
+  }).join("");
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Grafik batang vertikal kelompok usia" style="width:100%;height:auto;font-family:Arial,sans-serif">${grid}${bars}</svg>`;
+}
+
+function buildPdfPieChart(items = []) {
+  const values = items.map((item) => ({ label: String(item?.label || "-"), value: Number(item?.value) || 0, color: item?.color || "#2563eb" }))
+    .filter((item) => item.value > 0);
+  const total = values.reduce((sum, item) => sum + item.value, 0);
+  if (!total) return '<p class="muted">Grafik pekerjaan belum tersedia karena data numerik belum lengkap.</p>';
+  const cx = 165, cy = 215, radius = 145;
+  let angle = -Math.PI / 2;
+  const slices = values.map((item) => {
+    const sweep = (item.value / total) * Math.PI * 2;
+    const startX = cx + radius * Math.cos(angle), startY = cy + radius * Math.sin(angle);
+    const endAngle = angle + sweep;
+    const endX = cx + radius * Math.cos(endAngle), endY = cy + radius * Math.sin(endAngle);
+    const slice = sweep >= Math.PI * 2 - 1e-6
+      ? `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="${escapeAttribute(item.color)}"/>`
+      : `<path d="M ${cx} ${cy} L ${startX} ${startY} A ${radius} ${radius} 0 ${sweep > Math.PI ? 1 : 0} 1 ${endX} ${endY} Z" fill="${escapeAttribute(item.color)}" stroke="#fff" stroke-width="1"/>`;
+    angle = endAngle;
+    return slice;
+  }).join("");
+  const legend = values.map((item, index) => {
+    const y = 28 + index * 37;
+    return `<rect x="340" y="${y}" width="14" height="14" rx="3" fill="${escapeAttribute(item.color)}"/><text x="364" y="${y + 12}" font-size="12" fill="#334155">${escapeHtml(item.label)}: ${escapeHtml(formatNumber(item.value))} (${escapeHtml(((item.value / total) * 100).toFixed(1))}%)</text>`;
+  }).join("");
+  return `<svg viewBox="0 0 900 470" role="img" aria-label="Grafik pie komposisi pekerjaan" style="width:100%;height:auto;font-family:Arial,sans-serif">${slices}${legend}<text x="165" y="390" text-anchor="middle" font-size="12" fill="#64748b">Total: ${escapeHtml(formatNumber(total))} orang</text></svg>`;
 }
 
 function buildPdfDemographyCharts(report) {
   if (!report) return '<p class="muted">Data demografi belum tersedia.</p>';
   const ageGroups = [
-    ["0–4", "usia_0_4_tahun"], ["5–9", "usia_5_9_tahun"], ["10–14", "usia_10_14_tahun"], ["15–19", "usia_15_19_tahun"],
-    ["20–24", "usia_20_24_tahun"], ["25–29", "usia_25_29_tahun"], ["30–34", "usia_30_34_tahun"], ["35–39", "usia_35_39_tahun"],
-    ["40–44", "usia_40_44_tahun"], ["45–49", "usia_45_49_tahun"], ["50–54", "usia_50_54_tahun"], ["55–59", "usia_55_59_tahun"],
-    ["60–64", "usia_60_64_tahun"], ["65–69", "usia_65_69_tahun"], ["70–74", "usia_70_74_tahun"], ["75+", "usia_75_tahun_ke_atas"],
+    ["0-4", "usia_0_4_tahun"], ["5-9", "usia_5_9_tahun"], ["10-14", "usia_10_14_tahun"], ["15-19", "usia_15_19_tahun"],
+    ["20-24", "usia_20_24_tahun"], ["25-29", "usia_25_29_tahun"], ["30-34", "usia_30_34_tahun"], ["35-39", "usia_35_39_tahun"],
+    ["40-44", "usia_40_44_tahun"], ["45-49", "usia_45_49_tahun"], ["50-54", "usia_50_54_tahun"], ["55-59", "usia_55_59_tahun"],
+    ["60-64", "usia_60_64_tahun"], ["65-69", "usia_65_69_tahun"], ["70-74", "usia_70_74_tahun"], ["75+", "usia_75_tahun_ke_atas"],
   ];
   const occupationLabels = {
     belum_tidak_bekerja: "Belum/tidak bekerja", nelayan: "Nelayan", pelajar_dan_mahasiswa: "Pelajar/mahasiswa", pensiunan: "Pensiunan",
@@ -1315,10 +1354,10 @@ function buildPdfDemographyCharts(report) {
     label: occupationLabels[key] || formatJsonKeyLabel(key), value,
     color: ["#0f766e", "#2563eb", "#f59e0b", "#7c3aed", "#db2777", "#0891b2", "#65a30d"][index % 7],
   }));
-  const growth = [2020, 2021, 2022, 2023, 2024].map((year) => ({
-    label: String(year), value: report?.pertumbuhan_penduduk?.[`pertumbuhan_penduduk_tahun_${year}_persen`],
+  const births = [2020, 2021, 2022, 2023, 2024].map((year) => ({
+    label: String(year), value: report?.pertumbuhan_penduduk?.[`lahir_tahun_${year}`],
   }));
-  return `<div class="pdf-chart-stack"><div class="card"><h3>Kelompok Usia</h3>${buildPdfBarChart(ageGroups.map(([label, key], index) => ({ label, value: report?.kelompok_usia?.[key], color: ["#0f766e", "#1d4ed8", "#3b82f6", "#f59e0b"][index % 4] })))}</div><div class="card"><h3>Pertumbuhan Penduduk</h3>${buildPdfLineChart(growth)}</div><div class="card"><h3>Pekerjaan</h3>${buildPdfBarChart(occupations)}</div></div>`;
+  return `<div class="pdf-chart-stack"><div class="card"><h3>Kelompok Usia</h3>${buildPdfVerticalBarChart(ageGroups.map(([label, key], index) => ({ label, value: report?.kelompok_usia?.[key], color: ["#0f766e", "#1d4ed8", "#3b82f6", "#f59e0b"][index % 4] })))}</div><div class="card"><h3>Jumlah Kelahiran per Tahun</h3>${buildPdfLineChart(births, { valueFormatter: formatNumber })}</div><div class="card"><h3>Pekerjaan</h3>${buildPdfPieChart(occupations)}</div></div>`;
 }
 
 function buildPdfReportHtml(landValueSummary = null, selectedPois = null) {
@@ -1343,7 +1382,6 @@ function buildPdfReportHtml(landValueSummary = null, selectedPois = null) {
   const scenarios = market?.market_size_scenarios || {};
   const demographyReport = getPdfDemographyReport(latestStructuredAnalysis);
   const areaCoverage = Array.isArray(latestAnalysisContext?.areaCoverage) ? latestAnalysisContext.areaCoverage : [];
-  const ageRows = buildPdfAgeRows(demographyReport);
   const landValueRows = landValueSummary?.samples?.length
     ? landValueSummary.samples.map((sample) => [sample.label, sample.value])
     : [];
@@ -1360,7 +1398,6 @@ function buildPdfReportHtml(landValueSummary = null, selectedPois = null) {
       String(index + 1),
       `<a href="${escapeAttribute(mapsUrl)}" target="_blank" rel="noopener">${escapeHtml(poi.name || "POI")}</a>`,
       poi.categoryLabel || poi.category || "Lainnya",
-      poi.address || poi.tags?.address || "-",
       Number.isFinite(lat) && Number.isFinite(lon) ? `${lat.toFixed(6)}, ${lon.toFixed(6)}` : "-",
     ];
   });
@@ -1518,8 +1555,8 @@ function buildPdfReportHtml(landValueSummary = null, selectedPois = null) {
       </section>
 
       <section class="section">
-        <h2>POI Terpilih (${escapeHtml(formatNumber(allPois.length))})</h2>
-        ${buildPdfDataTable("POI di area analisa", ["No.", "Nama", "Kategori", "Alamat", "Koordinat"], allPoiRows)}
+        <h2>Daftar POI Potensial (${escapeHtml(formatNumber(allPois.length))})</h2>
+        ${buildPdfDataTable("POI di area analisa", ["No.", "Nama", "Kategori", "Koordinat"], allPoiRows)}
       </section>
 
       <section class="section">
@@ -1571,8 +1608,6 @@ function buildPdfReportHtml(landValueSummary = null, selectedPois = null) {
       <section class="section">
         <h2>Demografi Dukcapil</h2>
         <div class="card">
-          <h3>Kelompok Usia</h3>
-          ${buildPdfDataTable("Jumlah Penduduk per Kelompok Usia", ["Kelompok Usia", "Jumlah"], ageRows)}
           ${buildPdfDemographyCharts(demographyReport)}
         </div>
       </section>
