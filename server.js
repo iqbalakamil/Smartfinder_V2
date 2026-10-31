@@ -1180,16 +1180,20 @@ async function handleBhumiEnrichHexagons(req, res) {
       Object.entries(localLayerAttributes).forEach(([layer, propertiesList]) => {
         propertiesList.forEach((properties) => sampledResults.push({ layer, properties }));
       });
-      const layersNeedingSampling = layers.filter((layer) => !localLayerAttributes[layer].length);
+      // If there is no local JSON, sample the missing layers live. For ZNT,
+      // prefer the public BIG point query (no BHUMI login required), and only
+      // fall back to BHUMI identify if BIG has no observation at that point.
+      const layersNeedingSampling = layers.filter((layer) => !localLayerAttributes[layer].length
+        && !(layer === "umum:ZNTRANGE" && bigZntAttributes.length));
       const pointConcurrency = Math.max(2, Math.min(6, Number(process.env.BHUMI_SAMPLE_CONCURRENCY || 4)));
       for (let pointOffset = 0; pointOffset < points.length; pointOffset += pointConcurrency) {
         const pointBatch = await Promise.all(points.slice(pointOffset, pointOffset + pointConcurrency).map(async (point) => {
         const delta = 0.0008;
         const bbox = [point[0] - delta, point[1] - delta, point[0] + delta, point[1] + delta].join(",");
-        const results = await Promise.allSettled(layersNeedingSampling.map((layer) => {
+        const results = await Promise.allSettled(layersNeedingSampling.map(async (layer) => {
           const cacheKey = `${layer}|${bbox}`;
           if (!bhumiSampleCache.has(cacheKey)) {
-            const request = fetchBhumiPersilForPoint(layer, {
+            const body = {
               service_layer_name: layer,
               query_layers: layer,
               width: 512,
@@ -1197,7 +1201,28 @@ async function handleBhumiEnrichHexagons(req, res) {
               bbox,
               x: 256,
               y: 256,
-            }, point).catch((error) => {
+            };
+            const request = (async () => {
+              if (layer === "umum:ZNTRANGE") {
+                try {
+                  const attributes = await fetchBigZntForPoint(point[0], point[1]);
+                  if (attributes.length) {
+                    return { features: attributes.map((properties) => ({ type: "Feature", properties })) };
+                  }
+                } catch (error) {
+                  // Try BHUMI itself below; report only if both providers fail.
+                  body.bigFallbackError = error.message;
+                }
+              }
+              try {
+                return await fetchBhumiPersilForPoint(layer, body, point);
+              } catch (error) {
+                if (body.bigFallbackError) {
+                  throw new Error(`BIG: ${body.bigFallbackError}; BHUMI: ${error.message}`);
+                }
+                throw error;
+              }
+            })().catch((error) => {
               bhumiSampleCache.delete(cacheKey);
               throw error;
             });
