@@ -84,7 +84,7 @@ async function launchConfiguredBrowser(launchOptions = {}) {
 
 const DEFAULT_PORT = Number(process.env.PORT || 3000);
 const HOST = "127.0.0.1";
-const POI_CACHE_VERSION = "v24-kids-store-day-care-commercial-affiliates";
+const POI_CACHE_VERSION = "v25-expanded-poi-category-crawl";
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 15000);
 const LITELLM_BASE_URL = "https://litellm.koboi2026.biz.id/v1";
 const LITELLM_MODEL = "gpt-4o-mini";
@@ -2399,8 +2399,13 @@ async function fetchArcgisPlacesPois(lat, lon, radius, requestedGroups) {
   if (!ARCGIS_API_KEY) throw new Error("ARCGIS_API_KEY belum dikonfigurasi di .env.");
   const groups = [
     { key: "residential", label: "Hunian", target: 60, searches: ["perumahan", "cluster", "apartment", "housing", "residential"] },
-    { key: "education", label: "Kompetitor", target: 20, searches: ["school", "preschool", "daycare", "kindergarten", "bimba", "paud", "tk"] },
-    { key: "family-services", label: "Affiliate", target: 20, perSearchTarget: 5, searches: ["McDonald's", "MCD", "KFC", "Burger King", "park", "taman", "hospital", "rumah sakit"] },
+    { key: "education", label: "Kompetitor", target: 20, searches: ["school", "preschool", "kindergarten", "bimba", "paud", "tk"] },
+    { key: "kids-store", label: "Kids Store", target: 20, searches: ["toko perlengkapan bayi", "toko mainan anak", "kids store", "baby shop"] },
+    { key: "day-care", label: "Day Care", target: 20, searches: ["daycare", "penitipan anak", "childcare", "day care"] },
+    {
+      key: "family-services", label: "Affiliate", target: 20, perSearchTarget: 5,
+      searches: ["area komersial", "commercial area", "shopping mall", "shopping center", "plaza", "ruko", "commercial complex", "McDonald's", "MCD", "KFC", "Burger King", "park", "taman", "hospital", "rumah sakit"],
+    },
   ];
   const fetchGroup = async (group) => {
     let target = new URL("https://places-api.arcgis.com/arcgis/rest/services/places-service/v1/places/near-point");
@@ -2418,7 +2423,16 @@ async function fetchArcgisPlacesPois(lat, lon, radius, requestedGroups) {
           && !/(cafe|coffee|restaurant|warung|hotel|hospital|school|mosque|masjid)/i.test(text);
       }
       if (group.key === "education") {
-        return /(school|preschool|daycare|kindergarten|education|bimba|paud|tk|taman kanak)/i.test(text);
+        return /(school|preschool|kindergarten|education|bimba|paud|tk|taman kanak)/i.test(text);
+      }
+      if (group.key === "kids-store") {
+        return /(kids store|baby shop|baby store|toy store|toko mainan|perlengkapan bayi|children.?s store)/i.test(text);
+      }
+      if (group.key === "day-care") {
+        return /(day.?care|daycare|childcare|penitipan anak|child care)/i.test(text);
+      }
+      if (/area komersial|commercial area|shopping mall|shopping center|plaza|ruko|commercial complex/i.test(search)) {
+        return /(commercial|shopping|mall|plaza|ruko|business park|retail center|pusat perbelanjaan|area komersial)/i.test(text);
       }
       if (/mcd|mc ?donald/i.test(search)) return /mcdonald/i.test(text);
       if (/kfc/i.test(search)) return /\bkfc\b|kentucky fried chicken/i.test(text);
@@ -2448,7 +2462,12 @@ async function fetchArcgisPlacesPois(lat, lon, radius, requestedGroups) {
         if (!seenPlaceIds.has(id)) {
           seenPlaceIds.add(id);
           countsBySearch.set(search, searchCount + 1);
-          rawPlaces.push(place);
+          rawPlaces.push({
+            ...place,
+            _poiCategoryLabel: group.key === "family-services" && /area komersial|commercial area|shopping mall|shopping center|plaza|ruko|commercial complex/i.test(search)
+              ? "Affiliate - Commercial Area"
+              : group.label,
+          });
         }
       });
       target = payload.pagination?.nextUrl ? new URL(payload.pagination.nextUrl) : null;
@@ -2460,6 +2479,7 @@ async function fetchArcgisPlacesPois(lat, lon, radius, requestedGroups) {
       lat: Number(place.location?.y),
       lon: Number(place.location?.x),
       category: group.key,
+      categoryLabel: place._poiCategoryLabel || group.label,
       source: "arcgis-places",
       distance: Number(place.distance) || null,
       tags: {

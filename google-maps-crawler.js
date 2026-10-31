@@ -25,11 +25,16 @@ const POPULAR_TIMES_ENABLED = String(process.env.POPULAR_TIMES_ENABLED || "false
 const POPULAR_TIMES_MAX_POIS = Number(process.env.POPULAR_TIMES_MAX_POIS || 15);
 const POPULAR_TIMES_DELAY_MS = Number(process.env.POPULAR_TIMES_DELAY_MS || 1500);
 const MIN_REVIEW_COUNT = 0;
-const MAX_CRAWL_PAGES = process.env.VERCEL ? 1 : 8;
+const VERCEL_MODE = Boolean(process.env.VERCEL);
+const MAX_CRAWL_PAGES = VERCEL_MODE ? 4 : 8;
 // Kategori non-hunian memakai satu keyword inti agar crawl tetap cepat.
 // Affiliate dikecualikan karena keyword brand (McDonald's/Burger King) harus
 // benar-benar dijalankan agar hasil affiliate tidak hanya berisi taman.
 const KEYWORDS_PER_CATEGORY = 1;
+
+const COMMERCIAL_AREA_KEYWORDS = [
+  "area komersial", "commercial area", "shopping mall", "shopping center", "plaza", "ruko", "commercial complex",
+];
 
 const CATEGORY_CONFIG = {
   hunian: {
@@ -52,7 +57,7 @@ const CATEGORY_CONFIG = {
     signal: "positive",
     category: "kids-store",
     categoryLabel: "Kids Store",
-    keywords: ["kids store", "baby shop", "toko perlengkapan bayi", "toko mainan anak"],
+    keywords: ["toko perlengkapan bayi", "toko mainan anak", "kids store", "baby shop"],
     googleTypes: ["store", "toy_store", "baby_store"],
     fallbackName: "Kids Store",
   },
@@ -69,15 +74,14 @@ const CATEGORY_CONFIG = {
     category: "family-services",
     categoryLabel: "Affiliate keluarga",
     keywords: [
+      ...COMMERCIAL_AREA_KEYWORDS,
       ...EXTENSION_CATEGORY_CONFIG.affiliate.keywords,
-      "commercial area", "shopping mall", "shopping center", "plaza", "ruko", "commercial complex",
     ],
     googleTypes: ["park", "hospital", "restaurant", "playground"],
     fallbackName: "Affiliate keluarga",
   },
 };
 
-const VERCEL_MODE = Boolean(process.env.VERCEL);
 const SEARCH_READY_TIMEOUT_MS = VERCEL_MODE ? 5000 : 12000;
 const QUERY_POST_LOAD_DELAY_MS = VERCEL_MODE ? 300 : 1000;
 const MAX_SCROLL_ROUNDS = VERCEL_MODE ? 2 : 6;
@@ -86,7 +90,9 @@ const GOOGLE_MAPS_NAVIGATION_TIMEOUT_MS = VERCEL_MODE ? 10000 : 30000;
 // Keep each request bounded. The radius grid has broad coverage already; running
 // every keyword for every intersecting village made a single POI search exceed
 // serverless and desktop request limits.
-const MAX_CRAWL_TASKS = VERCEL_MODE ? 3 : Number(process.env.POI_MAX_CRAWL_TASKS || 150);
+const MAX_CRAWL_TASKS = VERCEL_MODE
+  ? Math.max(10, Math.min(24, Number(process.env.POI_MAX_CRAWL_TASKS || 20)))
+  : Number(process.env.POI_MAX_CRAWL_TASKS || 150);
 const CRAWL_DEADLINE_MS = Number(process.env.POI_CRAWL_DEADLINE_MS || 210000);
 const DEFAULT_SEARCH_RADIUS_METERS = 3000;
 const GRID_SEARCH_STEP_KM = 1.2;
@@ -241,12 +247,14 @@ function buildQueries(location = {}) {
       { mode: "kids_education", keyword: "bimba" },
       { mode: "kids_education", keyword: "PAUD" },
       { mode: "kids_education", keyword: "TK" },
+      { mode: "kids_store", keyword: "toko perlengkapan bayi" },
+      { mode: "kids_store", keyword: "toko mainan anak" },
       { mode: "kids_store", keyword: "kids store" },
       { mode: "kids_store", keyword: "baby shop" },
-      { mode: "kids_store", keyword: "toko mainan anak" },
       { mode: "day_care", keyword: "daycare" },
       { mode: "day_care", keyword: "childcare" },
       { mode: "day_care", keyword: "penitipan anak" },
+      { mode: "affiliate", keyword: "area komersial", categoryLabel: "Affiliate - Commercial Area" },
       { mode: "affiliate", keyword: "commercial area", categoryLabel: "Affiliate - Commercial Area" },
       { mode: "affiliate", keyword: "shopping mall", categoryLabel: "Affiliate - Commercial Area" },
       { mode: "affiliate", keyword: "shopping center", categoryLabel: "Affiliate - Commercial Area" },
@@ -309,6 +317,9 @@ function buildQueries(location = {}) {
       return keywords.map((keyword) => ({
         mode,
         keyword,
+        ...(mode === "affiliate" && COMMERCIAL_AREA_KEYWORDS.includes(keyword)
+          ? { categoryLabel: "Affiliate - Commercial Area" }
+          : {}),
         area,
         query: [keyword, locationLabel].filter(Boolean).join(", "),
       }));
@@ -323,6 +334,9 @@ function buildQueries(location = {}) {
     return keywords.map((keyword) => ({
       mode,
       keyword,
+      ...(mode === "affiliate" && COMMERCIAL_AREA_KEYWORDS.includes(keyword)
+        ? { categoryLabel: "Affiliate - Commercial Area" }
+        : {}),
       area: areas[0] || {},
       query: `${keyword} near ${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}${targetAreaLabel ? `, ${targetAreaLabel}` : ""}`,
       searchScope: point.label,
@@ -831,8 +845,7 @@ async function crawlGoogleMapsPois(location = {}) {
     debug.selectedTaskCount = tasks.length;
     debug.taskLimit = taskLimit;
     let nextTaskIndex = 0;
-    const mixWorkerLimit = mixSearch && VERCEL_MODE ? 4 : MAX_CRAWL_PAGES;
-    const workerCount = Math.min(mixWorkerLimit, Math.max(1, tasks.length));
+    const workerCount = Math.min(MAX_CRAWL_PAGES, Math.max(1, tasks.length));
 
     const workers = Array.from({ length: workerCount }, async () => {
       const page = await pageFactory();
