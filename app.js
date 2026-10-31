@@ -1980,7 +1980,7 @@ function renderPoiEvidencePanel(supporting = [], risks = [], meta = {}) {
   const sourceLabel = ["google-maps-crawl", "google-maps-crawl-only"].includes(meta?.sourceMode)
     ? "Google Maps asli"
     : ["mix-search", "mix-search-fallback"].includes(meta?.sourceMode)
-      ? "Mix Search (ArcGIS + Google Maps)"
+      ? "Mix Search (Hunian ArcGIS + POI lain Google Maps)"
     : ["arcgis-places", "arcgis-places-fallback"].includes(meta?.sourceMode)
       ? "ArcGIS Places"
     : ["google-maps-crawl-fallback", "openstreetmap-fallback"].includes(meta?.sourceMode)
@@ -4350,7 +4350,7 @@ async function analyzeLocation(lat, lon, radius) {
     }
     if (areaCoverage.length) {
       const areaAction = sourceMode === "mix-search"
-        ? "Mix Search mengambil hunian dari ArcGIS Places dan kompetitor/affiliate dari Google Maps Crawler."
+        ? "Mix Search mengambil perumahan hanya dari ArcGIS Places; Kids Store, Day Care, kompetitor, dan Affiliate dari Google Maps Crawler."
         : sourceMode === "arcgis-places"
         ? "ArcGIS Places mencari POI langsung dari titik dan radius."
         : sourceMode === "openstreetmap"

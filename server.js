@@ -84,7 +84,7 @@ async function launchConfiguredBrowser(launchOptions = {}) {
 
 const DEFAULT_PORT = Number(process.env.PORT || 3000);
 const HOST = "127.0.0.1";
-const POI_CACHE_VERSION = "v25-expanded-poi-category-crawl";
+const POI_CACHE_VERSION = "v26-mix-search-source-split";
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 15000);
 const LITELLM_BASE_URL = "https://litellm.koboi2026.biz.id/v1";
 const LITELLM_MODEL = "gpt-4o-mini";
@@ -2113,7 +2113,9 @@ async function discoverAreaCoverage(lat, lon, radius, seedLocation = {}) {
 function buildBackendCrawlPlan(searchAreas = [], seedLocation = {}) {
   const areas = Array.isArray(searchAreas) && searchAreas.length ? searchAreas : [seedLocation];
   const categories = [
-    { mode: "hunian", label: "housing complex", keywords: EXTENSION_CATEGORY_CONFIG.hunian.keywords },
+    ...(seedLocation.poiSearchMode === "mix-search"
+      ? []
+      : [{ mode: "hunian", label: "housing complex", keywords: EXTENSION_CATEGORY_CONFIG.hunian.keywords }]),
     { mode: "kids_education", label: "kids education", keywords: EXTENSION_CATEGORY_CONFIG.kids_education.keywords },
     { mode: "kids_store", label: "kids store", keywords: ["kids store", "baby shop", "toko perlengkapan bayi", "toko mainan anak"] },
     { mode: "day_care", label: "day care", keywords: ["daycare", "day care", "childcare", "penitipan anak"] },
@@ -2121,8 +2123,8 @@ function buildBackendCrawlPlan(searchAreas = [], seedLocation = {}) {
       mode: "affiliate",
       label: "affiliate",
       keywords: [
+        "area komersial", "commercial area", "shopping mall", "shopping center", "plaza", "ruko", "commercial complex",
         ...EXTENSION_CATEGORY_CONFIG.affiliate.keywords,
-        "commercial area", "shopping mall", "shopping center", "plaza", "ruko", "commercial complex",
       ],
     },
   ];
@@ -2400,12 +2402,7 @@ async function fetchArcgisPlacesPois(lat, lon, radius, requestedGroups) {
   const groups = [
     { key: "residential", label: "Hunian", target: 60, searches: ["perumahan", "cluster", "apartment", "housing", "residential"] },
     { key: "education", label: "Kompetitor", target: 20, searches: ["school", "preschool", "kindergarten", "bimba", "paud", "tk"] },
-    { key: "kids-store", label: "Kids Store", target: 20, searches: ["toko perlengkapan bayi", "toko mainan anak", "kids store", "baby shop"] },
-    { key: "day-care", label: "Day Care", target: 20, searches: ["daycare", "penitipan anak", "childcare", "day care"] },
-    {
-      key: "family-services", label: "Affiliate", target: 20, perSearchTarget: 5,
-      searches: ["area komersial", "commercial area", "shopping mall", "shopping center", "plaza", "ruko", "commercial complex", "McDonald's", "MCD", "KFC", "Burger King", "park", "taman", "hospital", "rumah sakit"],
-    },
+    { key: "family-services", label: "Affiliate", target: 20, perSearchTarget: 5, searches: ["McDonald's", "MCD", "KFC", "Burger King", "park", "taman", "hospital", "rumah sakit"] },
   ];
   const fetchGroup = async (group) => {
     let target = new URL("https://places-api.arcgis.com/arcgis/rest/services/places-service/v1/places/near-point");
@@ -2424,15 +2421,6 @@ async function fetchArcgisPlacesPois(lat, lon, radius, requestedGroups) {
       }
       if (group.key === "education") {
         return /(school|preschool|kindergarten|education|bimba|paud|tk|taman kanak)/i.test(text);
-      }
-      if (group.key === "kids-store") {
-        return /(kids store|baby shop|baby store|toy store|toko mainan|perlengkapan bayi|children.?s store)/i.test(text);
-      }
-      if (group.key === "day-care") {
-        return /(day.?care|daycare|childcare|penitipan anak|child care)/i.test(text);
-      }
-      if (/area komersial|commercial area|shopping mall|shopping center|plaza|ruko|commercial complex/i.test(search)) {
-        return /(commercial|shopping|mall|plaza|ruko|business park|retail center|pusat perbelanjaan|area komersial)/i.test(text);
       }
       if (/mcd|mc ?donald/i.test(search)) return /mcdonald/i.test(text);
       if (/kfc/i.test(search)) return /\bkfc\b|kentucky fried chicken/i.test(text);
@@ -2462,12 +2450,7 @@ async function fetchArcgisPlacesPois(lat, lon, radius, requestedGroups) {
         if (!seenPlaceIds.has(id)) {
           seenPlaceIds.add(id);
           countsBySearch.set(search, searchCount + 1);
-          rawPlaces.push({
-            ...place,
-            _poiCategoryLabel: group.key === "family-services" && /area komersial|commercial area|shopping mall|shopping center|plaza|ruko|commercial complex/i.test(search)
-              ? "Affiliate - Commercial Area"
-              : group.label,
-          });
+          rawPlaces.push(place);
         }
       });
       target = payload.pagination?.nextUrl ? new URL(payload.pagination.nextUrl) : null;
@@ -2479,7 +2462,6 @@ async function fetchArcgisPlacesPois(lat, lon, radius, requestedGroups) {
       lat: Number(place.location?.y),
       lon: Number(place.location?.x),
       category: group.key,
-      categoryLabel: place._poiCategoryLabel || group.label,
       source: "arcgis-places",
       distance: Number(place.distance) || null,
       tags: {
@@ -7908,7 +7890,7 @@ async function handlePois(req, res) {
       searchAreas: areaCoverage.length ? areaCoverage : [location],
       areaCoverage,
     };
-    const crawlPlan = useOpenStreetMap || useArcgisPlaces ? [] : buildBackendCrawlPlan(searchLocation.searchAreas, location);
+    const crawlPlan = useOpenStreetMap || useArcgisPlaces ? [] : buildBackendCrawlPlan(searchLocation.searchAreas, searchLocation);
     console.log(`POI_AREA_SCOPE kelurahan=${areaCoverage.length} queries=${crawlPlan.length}`);
     console.log(`POI_AREA_SCOPE_NAMES ${areaCoverage.map((area) => [area.village, area.subdistrict || area.district, area.city].filter(Boolean).join(", ")).filter(Boolean).join(" | ") || "-"}`);
 
@@ -8034,7 +8016,7 @@ async function handlePois(req, res) {
           : useOpenStreetMap
           ? (fallbackUsed ? "openstreetmap-fallback" : "openstreetmap")
           : (fallbackUsed ? "google-maps-crawl-fallback" : "google-maps-crawl-overpass"),
-        sourceModeLabel: useMixSearch ? "Mix Search (ArcGIS hunian + Google Maps kompetitor/affiliate)" : useArcgisPlaces ? "ArcGIS Places" : useOpenStreetMap ? "OpenStreetMap (Overpass)" : "Google Maps Crawler",
+        sourceModeLabel: useMixSearch ? "Mix Search (ArcGIS perumahan + Google Maps POI lain)" : useArcgisPlaces ? "ArcGIS Places" : useOpenStreetMap ? "OpenStreetMap (Overpass)" : "Google Maps Crawler",
         fallbackUsed,
         degradedSources: {
           googleHousingTimedOut: !useOpenStreetMap && googleHousingPipelineResult.status === "rejected",
