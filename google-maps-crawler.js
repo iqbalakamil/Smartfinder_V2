@@ -220,9 +220,13 @@ function buildQueries(location = {}) {
     };
     const area = areas[0] || {};
     const queries = [
-      { mode: "kids_education", keyword: "preschool OR kindergarten OR PAUD OR TK OR bimba" },
-      { mode: "affiliate", keyword: "McDonald's OR KFC OR Burger King OR fast food" },
-      { mode: "affiliate", keyword: "Pizza Hut OR Domino's OR Subway OR Starbucks OR J.CO OR HokBen" },
+      // Keep a dedicated education crawl: a long Google Maps OR expression
+      // can be interpreted as one literal phrase and return no schools.
+      { mode: "kids_education", keyword: "preschool bimba daycare kindergarten PAUD TK" },
+      // Preserve the original non-F&B affiliate families as well as the F&B
+      // brands requested for Mix Search, within the serverless crawl budget.
+      { mode: "affiliate", keyword: "taman playground park rumah sakit hospital" },
+      { mode: "affiliate", keyword: "McDonald's McDonalds KFC Burger King fast food Pizza Hut Domino's Subway Starbucks J.CO HokBen" },
     ];
     return queries.map((item) => ({
       ...item,
