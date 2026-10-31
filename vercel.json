@@ -1,7 +1,11 @@
 {
   "functions": {
     "api/**/*.js": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "includeFiles": [
+        "data/bhumi-banten.cache.json",
+        "data/bhumi-znt/data_tanah.geojson"
+      ]
     }
   }
 }

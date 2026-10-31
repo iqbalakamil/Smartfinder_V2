@@ -84,7 +84,7 @@ async function launchConfiguredBrowser(launchOptions = {}) {
 
 const DEFAULT_PORT = Number(process.env.PORT || 3000);
 const HOST = "127.0.0.1";
-const POI_CACHE_VERSION = "v16-dense-radius-grid-no-result-cap";
+const POI_CACHE_VERSION = "v17-mix-search-branded-affiliates";
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 15000);
 const LITELLM_BASE_URL = "https://litellm.koboi2026.biz.id/v1";
 const LITELLM_MODEL = "gpt-4o-mini";
@@ -885,7 +885,7 @@ async function handleBigZntProxy(req, res, url) {
       const xmin = Number(geometry?.xmin), xmax = Number(geometry?.xmax);
       const ymin = Number(geometry?.ymin), ymax = Number(geometry?.ymax);
       if ([xmin, xmax, ymin, ymax].every(Number.isFinite)) {
-        const intersectsBounds = (feature) => {
+      const intersectsBounds = (feature) => {
           const coordinates = [];
           const visit = (value) => {
             if (!Array.isArray(value)) return;
@@ -896,7 +896,17 @@ async function handleBigZntProxy(req, res, url) {
             value.forEach(visit);
           };
           visit(feature.geometry?.coordinates);
-          return coordinates.some(([lon, lat]) => lon >= xmin && lon <= xmax && lat >= ymin && lat <= ymax);
+        if (!coordinates.length) return false;
+        const featureBounds = {
+          xmin: Math.min(...coordinates.map(([lon]) => lon)),
+          ymin: Math.min(...coordinates.map(([, lat]) => lat)),
+          xmax: Math.max(...coordinates.map(([lon]) => lon)),
+          ymax: Math.max(...coordinates.map(([, lat]) => lat)),
+        };
+        // A viewport may sit entirely inside a ZNT polygon, so no polygon
+        // vertex has to fall inside the viewport for the two to intersect.
+        return featureBounds.xmax >= xmin && featureBounds.xmin <= xmax
+          && featureBounds.ymax >= ymin && featureBounds.ymin <= ymax;
         };
         const localFeatures = loadBhumiLocalFeatureIndex()
           .filter((feature) => (feature.properties?.bhumi_layer || feature.properties?.layer) === "umum:ZNTRANGE")
@@ -7677,6 +7687,7 @@ async function handlePois(req, res) {
       ...location,
       targetLat: lat,
       targetLon: lon,
+      poiSearchMode: sourceMode,
       searchAreas: areaCoverage.length ? areaCoverage : [location],
       areaCoverage,
     };

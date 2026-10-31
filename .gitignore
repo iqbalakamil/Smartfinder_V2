@@ -32,4 +32,6 @@ _backup_before_restore/
 .cache/
 .tmp/
 _*/
-data/bhumi-banten.cache.json
+# Static Banten ZNT cache is used as the deployed fallback when BIG has no
+# coverage and the BHUMI live endpoint cannot be reached.
+!data/bhumi-banten.cache.json

@@ -212,6 +212,27 @@ function buildQueries(location = {}) {
     location.city,
     location.province,
   ].filter(Boolean).join(", ") || buildLocationLabel(areas[0] || {});
+  if (location.poiSearchMode === "mix-search") {
+    const point = buildGridSearchPoints(location)[0] || {
+      lat: Number(location.targetLat ?? location.lat),
+      lon: Number(location.targetLon ?? location.lon),
+      label: "mix-center",
+    };
+    const area = areas[0] || {};
+    const queries = [
+      { mode: "kids_education", keyword: "preschool OR kindergarten OR PAUD OR TK OR bimba" },
+      { mode: "affiliate", keyword: "McDonald's OR KFC OR Burger King OR fast food" },
+      { mode: "affiliate", keyword: "Pizza Hut OR Domino's OR Subway OR Starbucks OR J.CO OR HokBen" },
+    ];
+    return queries.map((item) => ({
+      ...item,
+      area,
+      searchScope: "mix-center",
+      searchPoint: point,
+      query: `${item.keyword} near ${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}${targetAreaLabel ? `, ${targetAreaLabel}` : ""}`,
+    }));
+  }
+
   const areaQueries = areas.flatMap((area) => {
     const locationLabel = buildLocationLabel(area);
     return Object.entries(CATEGORY_CONFIG).flatMap(([mode, config]) => {
