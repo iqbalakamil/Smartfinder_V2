@@ -207,10 +207,11 @@
               Sumber pencarian POI
               <select id="poi-source" name="poi-source" class="demo-province-select">
                 <option value="maps-crawler">Google Maps Crawler</option>
+                <option value="mix-search">Mix Search (Hunian ArcGIS + kompetitor/affiliate Google Maps)</option>
                 <option value="openstreetmap">OpenStreetMap (Overpass) — hunian lebih terarah</option>
                 <option value="arcgis-places">ArcGIS Places</option>
               </select>
-              <small style="display:block; margin-top:5px; color:var(--muted);">ArcGIS Places membutuhkan privilege Places dan dapat dikenai biaya per request; OpenStreetMap memakai Overpass tanpa API berbayar.</small>
+              <small style="display:block; margin-top:5px; color:var(--muted);">Mix Search memakai ArcGIS Places untuk perumahan/hunian dan Google Maps Crawler untuk kompetitor serta affiliate.</small>
             </label>
 
             <div class="button-row">
@@ -1544,7 +1545,7 @@
       const status = document.getElementById('bhumi-layer-status');
       if (status) status.textContent = 'Mencari informasi...';
       try {
-        const responses = await Promise.all(active.map(async ([id]) => {
+        const settled = await Promise.allSettled(active.map(async ([id]) => {
           const config = BHUMI_RASTER_LAYERS[id];
           const response = await fetch('/api/bhumi-identify', {
             method: 'POST',
@@ -1555,18 +1556,25 @@
               width, height, bbox,
               x: Math.round(event.point.x), y: Math.round(event.point.y),
               lng: event.lngLat.lng, lat: event.lngLat.lat,
+              sample: ['umum:ZNTRANGE', 'umum:nbt3'].includes(config.layer),
             }),
           });
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(payload.error || `BHUMI HTTP ${response.status}`);
           const properties = bhumiResultProperties(payload.result);
-          return { label: config.label, layer: config.layer, properties, rows: bhumiDisplayRows(config.layer, properties) };
+          if (!properties || !Object.keys(properties).length) return { label: config.label, layer: config.layer, properties: null, rows: [], empty: true };
+          return { label: config.label, layer: config.layer, properties, rows: bhumiDisplayRows(config.layer, properties), source: payload.source };
         }));
+        const responses = settled.map((result, index) => result.status === 'fulfilled'
+          ? result.value
+          : ({ label: BHUMI_RASTER_LAYERS[active[index][0]].label, error: result.reason?.message || 'Endpoint gagal' }));
         const found = responses.filter((item) => item.properties && Object.keys(item.properties).length);
-        if (!found.length) throw new Error('Tidak ada objek BHUMI pada titik ini.');
-        const html = found.map((item) => `<div style="margin-bottom:10px;"><strong>${escapeBhumiHtml(item.label)}</strong>${item.rows.map((row) => `<div style="display:flex;justify-content:space-between;gap:12px;border-top:1px solid rgba(148,163,184,.18);padding:4px 0;"><span>${escapeBhumiHtml(row.label)}</span><b style="text-align:right;max-width:58%;">${escapeBhumiHtml(row.value == null || row.value === '' ? '-' : row.value)}</b></div>`).join('')}</div>`).join('');
+        const failed = responses.filter((item) => item.error);
+        if (!found.length && !failed.length) throw new Error('Tidak ada nilai tanah pada titik ini.');
+        const html = found.map((item) => `<div style="margin-bottom:10px;"><strong>${escapeBhumiHtml(item.label)}</strong>${item.rows.map((row) => `<div style="display:flex;justify-content:space-between;gap:12px;border-top:1px solid rgba(148,163,184,.18);padding:4px 0;"><span>${escapeBhumiHtml(row.label)}</span><b style="text-align:right;max-width:58%;">${escapeBhumiHtml(row.value == null || row.value === '' ? '-' : row.value)}</b></div>`).join('')}</div>`).join('')
+          + failed.map((item) => `<div style="margin-bottom:8px;color:#fca5a5"><strong>${escapeBhumiHtml(item.label)}</strong>: ${escapeBhumiHtml(item.error)}</div>`).join('');
         showCenteredMapInfo(`<div style="font:12px/1.45 system-ui;max-height:320px;overflow:auto;">${html}</div>`);
-        if (status) status.textContent = `${found.length} informasi ditemukan`;
+        if (status) status.textContent = `${found.length} informasi ditemukan${failed.length ? ` · ${failed.length} layer gagal` : ''}`;
       } catch (error) {
         if (status) status.textContent = error.message;
       }

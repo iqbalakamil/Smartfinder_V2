@@ -806,26 +806,35 @@ async function handleBhumiIdentify(req, res) {
     }
     const point = [Number(body.lng), Number(body.lat)];
     const hasPoint = point.every(Number.isFinite);
-    if (body.sample === true && hasPoint && layer === "umum:ZNTRANGE") {
+    if (body.sample === true && hasPoint && ["umum:ZNTRANGE", "umum:nbt3"].includes(layer)) {
+      let bigError = null;
+      let attributes = [];
       try {
-        const attributes = await fetchBigZntForPoint(point[0], point[1]);
-        const local = attributes.length ? null : findLocalBhumiResult(layer, point);
-        const features = attributes.length
-          ? attributes.map((properties) => ({ type: "Feature", properties }))
-          : (local?.features || []);
-        sendJson(res, 200, {
-          layer,
-          result: { type: "FeatureCollection", features },
-          source: attributes.length ? "big-znt-point-sample" : local ? "local-bhumi-znt-cache" : "big-znt-no-data",
-        });
+        attributes = await fetchBigZntForPoint(point[0], point[1]);
       } catch (error) {
-        const local = findLocalBhumiResult(layer, point);
-        if (local) {
-          sendJson(res, 200, { layer, result: local, source: "local-bhumi-znt-cache", warning: error.message });
-        } else {
-          sendJson(res, 502, { error: error.message || "Gagal mengambil sampel nilai tanah." });
+        bigError = error;
+      }
+      const local = attributes.length ? null : findLocalBhumiResult(layer, point);
+      const features = attributes.length
+        ? attributes.map((properties) => ({ type: "Feature", properties }))
+        : [...(local?.features || [])];
+      let resultSource = attributes.length ? "big-znt-point-sample" : local ? "local-bhumi-znt-cache" : null;
+      if (!features.length) {
+        try {
+          const bhumi = await fetchBhumiPersilForPoint(layer, body, point);
+          features.push(...(bhumi?.features || bhumi?.data?.features || []));
+          if (features.length) resultSource = "bhumi-point-fallback";
+        } catch (fallbackError) {
+          sendJson(res, 502, { error: `${bigError?.message || "BIG ZNT tidak menemukan data"}; fallback BHUMI: ${fallbackError.message || "gagal"}` });
+          return;
         }
       }
+      sendJson(res, 200, {
+        layer,
+        result: { type: "FeatureCollection", features },
+        source: resultSource || "big-znt-no-data",
+        ...(bigError ? { warning: bigError.message } : {}),
+      });
       return;
     }
     try {
@@ -2180,7 +2189,7 @@ async function fetchOverpassPois(lat, lon, radius, options = {}) {
   });
 }
 
-async function fetchArcgisPlacesPois(lat, lon, radius) {
+async function fetchArcgisPlacesPois(lat, lon, radius, requestedGroups) {
   if (!ARCGIS_API_KEY) throw new Error("ARCGIS_API_KEY belum dikonfigurasi di .env.");
   const groups = [
     { key: "residential", label: "Hunian", target: 60, searches: ["perumahan", "cluster", "apartment", "housing", "residential"] },
@@ -2254,7 +2263,8 @@ async function fetchArcgisPlacesPois(lat, lon, radius) {
       },
     })).filter((place) => Number.isFinite(place.lat) && Number.isFinite(place.lon));
   };
-  const grouped = await Promise.all(groups.map(fetchGroup));
+  const selectedGroups = Array.isArray(requestedGroups) ? groups.filter((group) => requestedGroups.includes(group.key)) : groups;
+  const grouped = await Promise.all(selectedGroups.map(fetchGroup));
   return grouped.flat();
 }
 
@@ -7637,11 +7647,12 @@ async function handlePois(req, res) {
     const lon = Number(requestContext.lon);
     const radius = 3000;
     const location = requestContext.location || {};
-    const sourceMode = ["openstreetmap", "arcgis-places"].includes(requestContext.sourceMode)
+    const sourceMode = ["openstreetmap", "arcgis-places", "mix-search"].includes(requestContext.sourceMode)
       ? requestContext.sourceMode
       : "maps-crawler";
     const useOpenStreetMap = sourceMode === "openstreetmap";
     const useArcgisPlaces = sourceMode === "arcgis-places";
+    const useMixSearch = sourceMode === "mix-search";
     console.log(`POI_REQUEST_START lat=${lat} lon=${lon} radius=3000`);
     const cacheKey = JSON.stringify({
       version: POI_CACHE_VERSION,
@@ -7688,12 +7699,12 @@ async function handlePois(req, res) {
         POI_GOOGLE_HOUSING_TIMEOUT_MS,
         "Google housing pipeline"
       ),
-      useArcgisPlaces ? Promise.resolve([]) : withTimeout(
+      (useArcgisPlaces || useMixSearch) ? Promise.resolve([]) : withTimeout(
         fetchOverpassPois(lat, lon, radius, { focusedResidential: useOpenStreetMap }),
         useOpenStreetMap ? 60000 : 20000,
         "Overpass radius POI"
       ),
-      useArcgisPlaces ? withTimeout(fetchArcgisPlacesPois(lat, lon, radius), 30000, "ArcGIS Places radius POI") : Promise.resolve([]),
+      (useArcgisPlaces || useMixSearch) ? withTimeout(fetchArcgisPlacesPois(lat, lon, radius, useMixSearch ? ["residential"] : undefined), 30000, "ArcGIS Places radius POI") : Promise.resolve([]),
     ]);
 
     const googleHousingPois = googleHousingPipelineResult.status === "fulfilled" ? googleHousingPipelineResult.value : [];
@@ -7724,12 +7735,18 @@ async function handlePois(req, res) {
       hasValidPoiCoordinates(item) &&
       calculateDistanceMeters(lat, lon, item.lat, item.lon) <= radius
     );
+    const googlePoisForMode = useMixSearch
+      ? googleHousingPoisWithinSelectedAreas.filter((item) => item.category !== "residential")
+      : googleHousingPoisWithinSelectedAreas;
+    const arcgisPoisForMode = useMixSearch
+      ? arcgisPlacesPoisInRadius.filter((item) => item.category === "residential")
+      : arcgisPlacesPoisInRadius;
     const realPoisInSelectedKelurahan = dedupePois([
-      ...googleHousingPoisWithinSelectedAreas,
-      ...overpassPoisInRadius,
-      ...arcgisPlacesPoisInRadius,
+      ...googlePoisForMode,
+      ...(useMixSearch ? [] : overpassPoisInRadius),
+      ...arcgisPoisForMode,
     ]);
-    const fallbackUsed = googleHousingPois.length === 0 && overpassPoisInRadius.length === 0;
+    const fallbackUsed = googlePoisForMode.length === 0 && (useMixSearch || overpassPoisInRadius.length === 0) && arcgisPoisForMode.length === 0;
     // Jangan pernah mengembalikan titik sintetis. Jika sumber nyata gagal,
     // dashboard menampilkan hasil kosong/parsial agar tidak menyesatkan.
     const poisToReturn = realPoisInSelectedKelurahan;
@@ -7744,7 +7761,7 @@ async function handlePois(req, res) {
       items: dedupePois([...poisToReturn]),
       meta: {
         usedGooglePlaces: false,
-        usedGoogleMapsCrawler: !useOpenStreetMap && !useArcgisPlaces,
+        usedGoogleMapsCrawler: !useOpenStreetMap && (!useArcgisPlaces || useMixSearch),
         googleMapsTotal: googleHousingPois.length,
         googleMapsWithCoords: googleHousingPoisWithCoords.length,
         googleMapsWithinRadius: googleHousingPoisInRadius.length,
@@ -7781,12 +7798,14 @@ async function handlePois(req, res) {
         crawlDebug,
         crawlScope: "all-radius-kelurahan-all-keywords",
         externalResearch: { summary: "", sources: [], metricHighlights: [] },
-        sourceMode: useArcgisPlaces
+        sourceMode: useMixSearch
+          ? (fallbackUsed ? "mix-search-fallback" : "mix-search")
+          : useArcgisPlaces
           ? (fallbackUsed ? "arcgis-places-fallback" : "arcgis-places")
           : useOpenStreetMap
           ? (fallbackUsed ? "openstreetmap-fallback" : "openstreetmap")
           : (fallbackUsed ? "google-maps-crawl-fallback" : "google-maps-crawl-overpass"),
-        sourceModeLabel: useArcgisPlaces ? "ArcGIS Places" : useOpenStreetMap ? "OpenStreetMap (Overpass)" : "Google Maps Crawler",
+        sourceModeLabel: useMixSearch ? "Mix Search (ArcGIS hunian + Google Maps kompetitor/affiliate)" : useArcgisPlaces ? "ArcGIS Places" : useOpenStreetMap ? "OpenStreetMap (Overpass)" : "Google Maps Crawler",
         fallbackUsed,
         degradedSources: {
           googleHousingTimedOut: !useOpenStreetMap && googleHousingPipelineResult.status === "rejected",

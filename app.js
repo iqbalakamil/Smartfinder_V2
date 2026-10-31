@@ -1945,6 +1945,8 @@ function renderPoiEvidencePanel(supporting = [], risks = [], meta = {}) {
 
   const sourceLabel = ["google-maps-crawl", "google-maps-crawl-only"].includes(meta?.sourceMode)
     ? "Google Maps asli"
+    : ["mix-search", "mix-search-fallback"].includes(meta?.sourceMode)
+      ? "Mix Search (ArcGIS + Google Maps)"
     : ["arcgis-places", "arcgis-places-fallback"].includes(meta?.sourceMode)
       ? "ArcGIS Places"
     : ["google-maps-crawl-fallback", "openstreetmap-fallback"].includes(meta?.sourceMode)
@@ -4271,6 +4273,8 @@ async function analyzeLocation(lat, lon, radius) {
       ? "OpenStreetMap / Overpass"
       : sourceMode === "arcgis-places"
         ? "ArcGIS Places"
+        : sourceMode === "mix-search"
+          ? "Mix Search"
         : "Google Maps crawler";
     setStatus(`Menjalankan pencarian POI dari ${sourceModeLabel}...`);
     advanceResearchWorkflow(4);
@@ -4300,15 +4304,19 @@ async function analyzeLocation(lat, lon, radius) {
       const counts = Object.entries(poiPayload.meta.categoryBreakdown).map(([category, count]) => `${category}: ${count}`).join(", ") || "tidak ada";
       appendActivityLog(`Komposisi POI yang diterima backend: ${counts}.`);
     }
-    if (sourceMode === "arcgis-places" && poiPayload.meta?.arcgisPlacesByGroup) {
+    if (["arcgis-places", "mix-search"].includes(sourceMode) && poiPayload.meta?.arcgisPlacesByGroup) {
       const groups = poiPayload.meta.arcgisPlacesByGroup;
-      appendActivityLog(`ArcGIS Places: ${groups.residential || 0}/60 hunian, ${groups.education || 0}/20 kompetitor, ${groups["family-services"] || 0}/20 affiliate.`, "success");
+      appendActivityLog(sourceMode === "mix-search"
+        ? `Mix Search · ArcGIS Places: ${groups.residential || 0}/60 hunian.`
+        : `ArcGIS Places: ${groups.residential || 0}/60 hunian, ${groups.education || 0}/20 kompetitor, ${groups["family-services"] || 0}/20 affiliate.`, "success");
     }
-    if (sourceMode === "arcgis-places" && poiPayload.meta?.arcgisPlacesError) {
+    if (["arcgis-places", "mix-search"].includes(sourceMode) && poiPayload.meta?.arcgisPlacesError) {
       appendActivityLog(`ArcGIS Places error: ${poiPayload.meta.arcgisPlacesError}`, "error");
     }
     if (areaCoverage.length) {
-      const areaAction = sourceMode === "arcgis-places"
+      const areaAction = sourceMode === "mix-search"
+        ? "Mix Search mengambil hunian dari ArcGIS Places dan kompetitor/affiliate dari Google Maps Crawler."
+        : sourceMode === "arcgis-places"
         ? "ArcGIS Places mencari POI langsung dari titik dan radius."
         : sourceMode === "openstreetmap"
           ? "Overpass mencari POI langsung dari titik dan radius."
