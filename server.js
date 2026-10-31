@@ -84,7 +84,7 @@ async function launchConfiguredBrowser(launchOptions = {}) {
 
 const DEFAULT_PORT = Number(process.env.PORT || 3000);
 const HOST = "127.0.0.1";
-const POI_CACHE_VERSION = "v20-mix-search-spatial-coverage";
+const POI_CACHE_VERSION = "v21-mix-search-coordinate-anchored";
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 15000);
 const LITELLM_BASE_URL = "https://litellm.koboi2026.biz.id/v1";
 const LITELLM_MODEL = "gpt-4o-mini";

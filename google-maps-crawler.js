@@ -241,7 +241,7 @@ function buildQueries(location = {}) {
       area,
       searchScope: point.label,
       searchPoint: point,
-      query: `${item.keyword} near ${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}${targetAreaLabel ? `, ${targetAreaLabel}` : ""}`,
+      query: `${item.keyword} near ${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}`,
     })));
   }
 
