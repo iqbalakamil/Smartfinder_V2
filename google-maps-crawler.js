@@ -217,32 +217,36 @@ function buildQueries(location = {}) {
     const area = areas[0] || {};
     const lat = Number(location.targetLat ?? location.lat);
     const lon = Number(location.targetLon ?? location.lon);
-    const metersPerDegreeLon = 111320 * Math.max(0.2, Math.cos((lat * Math.PI) / 180));
-    const sampleCenters = [
-      { lat, lon, label: "mix-center" },
-      ...[30, 150, 270].map((bearing, index) => {
-        const radians = bearing * Math.PI / 180;
-        const distance = 1500;
-        return {
-          lat: lat + (distance * Math.cos(radians)) / 111320,
-          lon: lon + (distance * Math.sin(radians)) / metersPerDegreeLon,
-          label: `mix-ring-${index + 1}`,
-        };
-      }),
+    const queries = [
+      { mode: "kids_education", keyword: "preschool" },
+      { mode: "kids_education", keyword: "bimba" },
+      { mode: "kids_education", keyword: "daycare" },
+      { mode: "kids_education", keyword: "PAUD" },
+      { mode: "kids_education", keyword: "TK" },
+      { mode: "affiliate", keyword: "taman" },
+      { mode: "affiliate", keyword: "playground" },
+      { mode: "affiliate", keyword: "rumah sakit" },
+      { mode: "affiliate", keyword: "McDonald's" },
+      { mode: "affiliate", keyword: "KFC" },
+      { mode: "affiliate", keyword: "Burger King" },
+      { mode: "affiliate", keyword: "Pizza Hut OR Domino's Pizza" },
+      { mode: "affiliate", keyword: "Starbucks" },
+      { mode: "affiliate", keyword: "Subway" },
+      { mode: "affiliate", keyword: "J.CO" },
+      { mode: "affiliate", keyword: "HokBen" },
     ];
-    const queryFamilies = [
-      { mode: "kids_education", keyword: "preschool OR bimba OR daycare OR kindergarten OR PAUD OR TK" },
-      { mode: "affiliate", keyword: "taman OR playground OR park OR rumah sakit OR hospital" },
-      { mode: "affiliate", keyword: "McDonald's OR KFC OR Burger King" },
-      { mode: "affiliate", keyword: "Pizza Hut OR Domino's OR Starbucks OR Subway OR J.CO OR HokBen" },
-    ];
-    return sampleCenters.flatMap((point) => queryFamilies.map((item) => ({
+    const point = {
+      lat,
+      lon,
+      label: "mix-center",
+    };
+    return queries.map((item) => ({
       ...item,
       area,
-      searchScope: point.label,
+      searchScope: "mix-center",
       searchPoint: point,
       query: `${item.keyword} near ${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}`,
-    })));
+    }));
   }
 
   const areaQueries = areas.flatMap((area) => {
