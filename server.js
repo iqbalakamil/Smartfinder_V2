@@ -84,7 +84,7 @@ async function launchConfiguredBrowser(launchOptions = {}) {
 
 const DEFAULT_PORT = Number(process.env.PORT || 3000);
 const HOST = "127.0.0.1";
-const POI_CACHE_VERSION = "v18-mix-search-education-and-full-affiliates";
+const POI_CACHE_VERSION = "v19-mix-search-multi-query-coverage";
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 15000);
 const LITELLM_BASE_URL = "https://litellm.koboi2026.biz.id/v1";
 const LITELLM_MODEL = "gpt-4o-mini";
@@ -851,6 +851,7 @@ async function handleBhumiIdentify(req, res) {
       } catch (error) {
         bigError = error;
       }
+      console.log(`[CGIS ZNT] BIG point query lon=${point[0].toFixed(6)} lat=${point[1].toFixed(6)} features=${attributes.length}${bigError ? ` error=${bigError.message}` : ""}`);
       let local = attributes.length ? null : findLocalBhumiResult(layer, point);
       const features = attributes.length
         ? attributes.map((properties) => ({ type: "Feature", properties }))
@@ -884,6 +885,7 @@ async function handleBhumiIdentify(req, res) {
           return;
         }
       }
+      console.log(`[CGIS ZNT] identify source=${resultSource || "no-data"} features=${features.length}`);
       sendJson(res, 200, {
         layer,
         result: { type: "FeatureCollection", features },

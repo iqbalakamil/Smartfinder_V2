@@ -59,10 +59,11 @@ const CATEGORY_CONFIG = {
 };
 
 const VERCEL_MODE = Boolean(process.env.VERCEL);
-const SEARCH_READY_TIMEOUT_MS = VERCEL_MODE ? 10000 : 12000;
-const QUERY_POST_LOAD_DELAY_MS = VERCEL_MODE ? 900 : 1000;
-const MAX_SCROLL_ROUNDS = VERCEL_MODE ? 4 : 6;
+const SEARCH_READY_TIMEOUT_MS = VERCEL_MODE ? 5000 : 12000;
+const QUERY_POST_LOAD_DELAY_MS = VERCEL_MODE ? 300 : 1000;
+const MAX_SCROLL_ROUNDS = VERCEL_MODE ? 2 : 6;
 const SCROLL_DELAY_MS = VERCEL_MODE ? 300 : 350;
+const GOOGLE_MAPS_NAVIGATION_TIMEOUT_MS = VERCEL_MODE ? 10000 : 30000;
 // Keep each request bounded. The radius grid has broad coverage already; running
 // every keyword for every intersecting village made a single POI search exceed
 // serverless and desktop request limits.
@@ -220,13 +221,20 @@ function buildQueries(location = {}) {
     };
     const area = areas[0] || {};
     const queries = [
-      // Keep a dedicated education crawl: a long Google Maps OR expression
-      // can be interpreted as one literal phrase and return no schools.
-      { mode: "kids_education", keyword: "preschool bimba daycare kindergarten PAUD TK" },
-      // Preserve the original non-F&B affiliate families as well as the F&B
-      // brands requested for Mix Search, within the serverless crawl budget.
-      { mode: "affiliate", keyword: "taman playground park rumah sakit hospital" },
-      { mode: "affiliate", keyword: "McDonald's McDonalds KFC Burger King fast food Pizza Hut Domino's Subway Starbucks J.CO HokBen" },
+      // Use one clear search intent per task: long multi-keyword phrases are
+      // often treated as conjunctive text by Google Maps and return few rows.
+      { mode: "kids_education", keyword: "preschool" },
+      { mode: "kids_education", keyword: "bimba" },
+      { mode: "kids_education", keyword: "daycare" },
+      { mode: "kids_education", keyword: "TK" },
+      { mode: "kids_education", keyword: "PAUD" },
+      { mode: "affiliate", keyword: "taman" },
+      { mode: "affiliate", keyword: "playground" },
+      { mode: "affiliate", keyword: "rumah sakit" },
+      { mode: "affiliate", keyword: "McDonald's" },
+      { mode: "affiliate", keyword: "KFC" },
+      { mode: "affiliate", keyword: "Burger King" },
+      { mode: "affiliate", keyword: "Pizza Hut OR Domino's OR Starbucks OR Subway OR J.CO OR HokBen" },
     ];
     return queries.map((item) => ({
       ...item,
@@ -618,7 +626,7 @@ async function scrapeGoogleMapsResults(options = {}) {
 
 async function crawlQuery(page, query) {
   const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}&hl=id&gl=id&authuser=0`;
-  await page.goto(url, { waitUntil: "domcontentloaded", timeout: VERCEL_MODE ? 25000 : 30000 });
+  await page.goto(url, { waitUntil: "domcontentloaded", timeout: GOOGLE_MAPS_NAVIGATION_TIMEOUT_MS });
   await maybeDismissGoogleConsent(page);
   await page.waitForFunction(() => Boolean(
     document.querySelector('div[role="feed"]') ||
@@ -755,9 +763,16 @@ async function crawlGoogleMapsPois(location = {}) {
     };
 
     const all = [];
-    const tasks = selectBalancedCrawlTasks(buildQueries(location), MAX_CRAWL_TASKS);
+    const mixSearch = location.poiSearchMode === "mix-search";
+    const taskLimit = mixSearch && VERCEL_MODE
+      ? Math.max(3, Math.min(12, Number(process.env.POI_MIX_SEARCH_TASKS || 12)))
+      : MAX_CRAWL_TASKS;
+    const tasks = selectBalancedCrawlTasks(buildQueries(location), taskLimit);
+    debug.selectedTaskCount = tasks.length;
+    debug.taskLimit = taskLimit;
     let nextTaskIndex = 0;
-    const workerCount = Math.min(MAX_CRAWL_PAGES, Math.max(1, tasks.length));
+    const mixWorkerLimit = mixSearch && VERCEL_MODE ? 4 : MAX_CRAWL_PAGES;
+    const workerCount = Math.min(mixWorkerLimit, Math.max(1, tasks.length));
 
     const workers = Array.from({ length: workerCount }, async () => {
       const page = await pageFactory();
