@@ -5362,15 +5362,56 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
+const fsdAttachmentDb = new Promise((resolve, reject) => {
+  const request = indexedDB.open("smartfinder-fsd-attachments", 1);
+  request.onupgradeneeded = () => request.result.createObjectStore("attachments", { keyPath: "key" });
+  request.onsuccess = () => resolve(request.result);
+  request.onerror = () => reject(request.error || new Error("Penyimpanan lampiran tidak tersedia"));
+});
+
+async function getFsdAttachments(key) {
+  const db = await fsdAttachmentDb;
+  return new Promise((resolve, reject) => {
+    const request = db.transaction("attachments", "readonly").objectStore("attachments").get(key);
+    request.onsuccess = () => resolve(request.result?.files || {});
+    request.onerror = () => reject(request.error || new Error("Lampiran FSD tidak dapat dibaca"));
+  });
+}
+
+async function setFsdAttachments(key, files) {
+  const db = await fsdAttachmentDb;
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction("attachments", "readwrite");
+    transaction.objectStore("attachments").put({ key, files });
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error || new Error("Lampiran FSD tidak dapat disimpan"));
+    transaction.onabort = () => reject(transaction.error || new Error("Penyimpanan lampiran FSD dibatalkan"));
+  });
+}
+
 function fsdStorageKey() {
   return `smartfinder-fsd:${currentMapContext?.lat ?? ""},${currentMapContext?.lon ?? ""}`;
 }
 
-function loadFsdLocal() {
+async function loadFsdLocal() {
   if (!fsdForm || !currentMapContext) return;
   fsdForm.elements.namedItem("coordinates").value = `${currentMapContext.lat}, ${currentMapContext.lon}`;
   try {
-    const saved = JSON.parse(localStorage.getItem(fsdStorageKey()) || "{}");
+    const key = fsdStorageKey();
+    const saved = JSON.parse(localStorage.getItem(key) || "{}");
+    const files = await getFsdAttachments(key);
+    let migrated = false;
+    for (const [name, value] of Object.entries(saved)) {
+      if (Array.isArray(value) && value.some((file) => file?.data)) {
+        files[name] = value;
+        delete saved[name];
+        migrated = true;
+      }
+    }
+    if (migrated) {
+      await setFsdAttachments(key, files);
+      localStorage.setItem(key, JSON.stringify(saved));
+    }
     const branchHost = document.getElementById("fsd-branches");
     if (branchHost) {
       branchHost.innerHTML = "";
@@ -5406,6 +5447,7 @@ function readFsdFile(file) {
 
 async function saveFsdLocal() {
   if (!fsdForm || !currentMapContext) return;
+  const key = fsdStorageKey();
   const saved = {};
   for (const field of fsdForm.elements) {
     if (!field.name || field.type === "file") continue;
@@ -5413,15 +5455,19 @@ async function saveFsdLocal() {
   }
   saved.branchCount = fsdForm.querySelectorAll(".fsd-branch-row").length;
   try {
-    const old = JSON.parse(localStorage.getItem(fsdStorageKey()) || "{}");
-    for (const field of fsdForm.querySelectorAll('input[type="file"]')) {
-      if (field.files?.length) saved[field.name] = await Promise.all(Array.from(field.files, readFsdFile));
-      else if (old[field.name]) saved[field.name] = old[field.name];
+    const old = JSON.parse(localStorage.getItem(key) || "{}");
+    const files = await getFsdAttachments(key);
+    for (const [name, value] of Object.entries(old)) {
+      if (Array.isArray(value) && value.some((file) => file?.data)) files[name] = value;
     }
-    localStorage.setItem(fsdStorageKey(), JSON.stringify(saved));
+    for (const field of fsdForm.querySelectorAll('input[type="file"]')) {
+      if (field.files?.length) files[field.name] = await Promise.all(Array.from(field.files, readFsdFile));
+    }
+    await setFsdAttachments(key, files);
+    localStorage.setItem(key, JSON.stringify(saved));
     fsdSaveStatus.textContent = "Tersimpan lokal otomatis di komputer ini";
   } catch (error) {
-    fsdSaveStatus.textContent = error?.name === "QuotaExceededError" ? "Penyimpanan lokal penuh; kurangi ukuran lampiran" : "Gagal menyimpan lokal: " + (error.message || "");
+    fsdSaveStatus.textContent = error?.name === "QuotaExceededError" ? "Penyimpanan perangkat penuh; hapus beberapa file atau kosongkan ruang" : "Gagal menyimpan lokal: " + (error.message || "");
   }
 }
 
@@ -5440,6 +5486,7 @@ async function downloadFsdPdf() {
   if (!currentMapContext) return;
   await saveFsdLocal();
   const data = JSON.parse(localStorage.getItem(fsdStorageKey()) || "{}");
+  Object.assign(data, await getFsdAttachments(fsdStorageKey()));
   const analysisDoc = new DOMParser().parseFromString(buildPdfReportHtml(), "text/html");
   const analysisBody = analysisDoc.body.innerHTML;
   const rows = [
