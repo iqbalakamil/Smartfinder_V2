@@ -715,6 +715,7 @@
               <button type="button" id="toggle-branch-map" class="button button-branch">📍 Peta Cabang</button>
               <a href="/foot-traffic-dashboard.html" target="_blank" class="button button-branch" style="text-decoration:none;">📊 Foot Traffic</a>
               <button type="button" id="download-pdf" class="button button-branch" disabled title="Unduh rangkuman analisa sebagai PDF">⬇️ Download PDF</button>
+              <button type="button" id="generate-fsd" class="button button-branch" disabled title="Buat dokumen FSD untuk area terpilih">📄 Generate dokumen FSD</button>
               <button type="button" id="download-poi-xls" class="button button-branch" disabled title="Aktif setelah crawl POI selesai">⬇️ Download POI XLS</button>
             </div>
           </div>
@@ -860,7 +861,19 @@
   </div>
 
   <script src="./hotspot%20map%20V.2/xlsx.full.min.js"></script>
-  <script src="./app.js?v=20260920sesgrid13" type="module"></script>
+  <dialog id="fsd-dialog" class="fsd-dialog"><form id="fsd-form">
+    <header class="fsd-dialog-header"><div><small>SMART FINDER · DOKUMEN AREA</small><h2>Generate dokumen FSD</h2><p>Data formulir dan lampiran tersimpan di browser komputer ini.</p></div><button type="button" id="fsd-close" aria-label="Tutup">✕</button></header>
+    <div class="fsd-tabs"><button type="button" class="active" data-fsd-tab="description">Description</button><button type="button" data-fsd-tab="requirement">Requirement</button></div>
+    <section class="fsd-pane active" data-fsd-pane="description"><h3>Informasi wilayah</h3><label>Koordinat wilayah<input name="coordinates" readonly></label><p class="fsd-note">Hasil analisa area akan dilampirkan otomatis saat PDF FSD dibuat.</p>
+      <h3>Spesifikasi ruko</h3><div class="fsd-grid"><label>Panjang (m)<input name="length" type="number" min="0" step="0.1"></label><label>Lebar (m)<input name="width" type="number" min="0" step="0.1"></label><label>Jumlah lantai<input name="floors" type="number" min="1" step="1"></label><label>Ukuran area parkir<input name="parkingSize" placeholder="Contoh: 20 m²"></label><label>Jenis area parkir<select name="parkingType"><option value="">Pilih</option><option>Sharing</option><option>Non sharing</option></select></label><label>Jumlah kamar mandi<input name="bathrooms" type="number" min="0" step="1"></label><label>Harga sewa (Rp/bulan)<input name="rent" type="number" min="0" step="100000"></label></div>
+      <h3>Foto ruko</h3><div class="fsd-grid"><label>Tampak depan<input name="photoFront" type="file" accept="image/*"></label><label>Dalam lantai 1<input name="photoFloor1" type="file" accept="image/*"></label><label>Dalam lantai 2<input name="photoFloor2" type="file" accept="image/*"></label></div>
+      <h3>Cabang terdekat</h3><div class="fsd-grid"><label>Nama cabang<input name="branchName"></label><label>Jarak (km)<input name="branchDistance" type="number" min="0" step="0.1"></label></div><h3>Peta sebaran member <small>(opsional)</small></h3><label>Upload gambar<input name="memberMap" type="file" accept="image/*"></label>
+    </section>
+    <section class="fsd-pane" data-fsd-pane="requirement"><h3>Lampiran</h3><div class="fsd-grid"><label>Desain ruangan · gambar<input name="roomDesign" type="file" accept="image/*"></label><label>Desain playground · gambar<input name="playgroundDesign" type="file" accept="image/*"></label><label>RAB renovasi & pengadaan · file<input name="renovationBudget" type="file" accept=".pdf,.xlsx,.xls,.doc,.docx,.csv,image/*"></label></div>
+      <h3>Kebutuhan karyawan</h3><label>Kepala Unit<input value="1 orang" readonly></label><p class="fsd-note">2 Guru · pilih program masing-masing</p><div class="fsd-grid"><label>Program Guru 1<select name="teacherProgram1"><option value="">Pilih program</option><option>Bimba</option><option>Preschool</option><option>English</option><option>TPA</option></select></label><label>Program Guru 2<select name="teacherProgram2"><option value="">Pilih program</option><option>Bimba</option><option>Preschool</option><option>English</option><option>TPA</option></select></label></div><h3>Tambahan lain</h3><label>Form isian tambahan<textarea name="additionalNotes" rows="4"></textarea></label><label>PIC yang bertanggung jawab<input name="pic"></label>
+    </section><footer class="fsd-dialog-footer"><span id="fsd-save-status">Tersimpan lokal otomatis</span><button type="button" id="fsd-download" class="button button-branch">⬇️ Download FSD PDF</button></footer>
+  </form></dialog>
+  <script src="./app.js?v=20261105fsd1" type="module"></script>
   <script type="module">
     // === MAPLIBRE GL JS: 2 MODE (2D & SATELIT) ===
     import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.7.0/dist/maplibre-gl.mjs';

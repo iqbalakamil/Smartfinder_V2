@@ -72,6 +72,10 @@ const resultsBody = document.getElementById("results-body");
 const useMyLocationBtn = document.getElementById("use-my-location");
 const downloadPdfBtn = document.getElementById("download-pdf");
 const downloadPoiXlsBtn = document.getElementById("download-poi-xls");
+const generateFsdBtn = document.getElementById("generate-fsd");
+const fsdDialog = document.getElementById("fsd-dialog");
+const fsdForm = document.getElementById("fsd-form");
+const fsdSaveStatus = document.getElementById("fsd-save-status");
 const cancelProcessBtn = document.getElementById("cancel-process");
 const coordinatesInput = document.getElementById("coordinates");
 const addressSearchEl = document.getElementById("address-search");
@@ -468,6 +472,7 @@ function syncActionButtons() {
   useMyLocationBtn.disabled = isProcessing;
   // PDF boleh diunduh begitu titik analisa siap; riset lanjutan bisa tetap berjalan.
   downloadPdfBtn.disabled = !currentMapContext;
+  if (generateFsdBtn) generateFsdBtn.disabled = !currentMapContext;
   if (downloadPoiXlsBtn) {
     downloadPoiXlsBtn.disabled = isProcessing || !latestBasePois.length;
   }
@@ -5356,6 +5361,93 @@ form.addEventListener("submit", async (event) => {
     syncActionButtons();
   }
 });
+
+function fsdStorageKey() {
+  return `smartfinder-fsd:${currentMapContext?.lat ?? ""},${currentMapContext?.lon ?? ""}`;
+}
+
+function loadFsdLocal() {
+  if (!fsdForm || !currentMapContext) return;
+  fsdForm.elements.namedItem("coordinates").value = `${currentMapContext.lat}, ${currentMapContext.lon}`;
+  try {
+    const saved = JSON.parse(localStorage.getItem(fsdStorageKey()) || "{}");
+    for (const [name, value] of Object.entries(saved)) {
+      const field = fsdForm.elements.namedItem(name);
+      if (field && field.type !== "file") field.value = value;
+    }
+    fsdSaveStatus.textContent = "Data dan lampiran tersimpan lokal otomatis";
+  } catch { fsdSaveStatus.textContent = "Tidak dapat membaca data FSD lokal"; }
+}
+
+function readFsdFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve({ name: file.name, type: file.type || "application/octet-stream", data: reader.result });
+    reader.onerror = () => reject(reader.error || new Error("File tidak dapat dibaca"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function saveFsdLocal() {
+  if (!fsdForm || !currentMapContext) return;
+  const saved = {};
+  for (const field of fsdForm.elements) {
+    if (!field.name || field.type === "file") continue;
+    saved[field.name] = field.value;
+  }
+  try {
+    const old = JSON.parse(localStorage.getItem(fsdStorageKey()) || "{}");
+    for (const field of fsdForm.querySelectorAll('input[type="file"]')) {
+      if (field.files?.[0]) saved[field.name] = await readFsdFile(field.files[0]);
+      else if (old[field.name]) saved[field.name] = old[field.name];
+    }
+    localStorage.setItem(fsdStorageKey(), JSON.stringify(saved));
+    fsdSaveStatus.textContent = "Tersimpan lokal otomatis di komputer ini";
+  } catch (error) {
+    fsdSaveStatus.textContent = error?.name === "QuotaExceededError" ? "Penyimpanan lokal penuh; kurangi ukuran lampiran" : "Gagal menyimpan lokal: " + (error.message || "");
+  }
+}
+
+function fsdPrintValue(value) {
+  if (value && typeof value === "object" && value.data) {
+    const fileName = escapeHtml(value.name || "Lampiran");
+    if (value.type.startsWith("image/")) return `<figure><img src="${value.data}" alt="${fileName}"><figcaption>${fileName}</figcaption></figure>`;
+    if (value.type === "application/pdf") return `<figure><object data="${value.data}" type="application/pdf" width="100%" height="850"><a href="${value.data}">${fileName}</a></object><figcaption>${fileName}</figcaption></figure>`;
+    return `<p>Lampiran tersimpan lokal: <b>${fileName}</b> (${escapeHtml(value.type)}). Pratinjau PDF tidak tersedia untuk format ini.</p>`;
+  }
+  return escapeHtml(value == null || value === "" ? "-" : String(value));
+}
+
+async function downloadFsdPdf() {
+  if (!currentMapContext) return;
+  await saveFsdLocal();
+  const data = JSON.parse(localStorage.getItem(fsdStorageKey()) || "{}");
+  const analysisDoc = new DOMParser().parseFromString(buildPdfReportHtml(), "text/html");
+  const analysisBody = analysisDoc.body.innerHTML;
+  const rows = [
+    ["Koordinat wilayah", data.coordinates], ["Panjang ruko", data.length ? `${data.length} m` : ""], ["Lebar ruko", data.width ? `${data.width} m` : ""],
+    ["Jumlah lantai", data.floors], ["Ukuran area parkir", data.parkingSize], ["Jenis area parkir", data.parkingType], ["Jumlah kamar mandi", data.bathrooms],
+    ["Harga sewa", data.rent ? `Rp ${Number(data.rent).toLocaleString("id-ID")}/bulan` : ""], ["Cabang terdekat", data.branchName], ["Jarak", data.branchDistance ? `${data.branchDistance} km` : ""],
+  ];
+  const table = rows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${fsdPrintValue(value)}</td></tr>`).join("");
+  const attachment = (label, field) => `<section><h3>${label}</h3>${fsdPrintValue(data[field])}</section>`;
+  const popup = window.open("", "_blank", "width=1100,height=900");
+  if (!popup) { setStatus("Popup diblokir browser. Izinkan popup untuk membuat FSD PDF.", true); return; }
+  const area = [districtNameEl?.textContent, cityNameEl?.textContent].filter(Boolean).join(", ") || "Area analisa";
+  popup.document.open();
+  popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>FSD - ${escapeHtml(area)}</title><style>body{font:14px Arial,sans-serif;color:#172033;line-height:1.5;margin:28px}h1{color:#075985}h2{margin-top:24px;color:#0f766e;border-bottom:2px solid #ccfbf1;padding-bottom:6px}h3{color:#334155}table{width:100%;border-collapse:collapse}th,td{border:1px solid #cbd5e1;padding:9px;text-align:left}th{width:34%;background:#f1f5f9}figure{margin:12px 0;page-break-inside:avoid}figure img{max-width:100%;max-height:650px;object-fit:contain}figcaption{font-size:11px;color:#64748b}.fsd-section{page-break-inside:avoid}.fsd-print-page{break-before:page}@media print{body{margin:16mm}}</style></head><body><h1>Functional Specification Document (FSD)</h1><p><b>Wilayah:</b> ${escapeHtml(area)}<br><b>Tanggal:</b> ${new Date().toLocaleDateString("id-ID")}</p><h2>Description</h2><table>${table}</table>${attachment("Foto ruko tampak depan", "photoFront")}${attachment("Foto ruko dalam lantai 1", "photoFloor1")}${attachment("Foto ruko dalam lantai 2", "photoFloor2")}${attachment("Peta sebaran member cabang terdekat (opsional)", "memberMap")}<h2>Requirement</h2>${attachment("Desain ruangan", "roomDesign")}${attachment("Desain playground", "playgroundDesign")}${attachment("RAB renovasi & pengadaan", "renovationBudget")}<section><h3>Kebutuhan karyawan</h3><table><tr><th>Kepala Unit</th><td>1 orang</td></tr><tr><th>Guru 1</th><td>${fsdPrintValue(data.teacherProgram1)}</td></tr><tr><th>Guru 2</th><td>${fsdPrintValue(data.teacherProgram2)}</td></tr></table></section><section><h3>Tambahan lain</h3><p>${fsdPrintValue(data.additionalNotes)}</p><p><b>PIC:</b> ${fsdPrintValue(data.pic)}</p></section><h2 class="fsd-print-page">Lampiran: Hasil Analisa Area</h2>${analysisBody}<script>window.onload=()=>setTimeout(()=>window.print(),700);</script></body></html>`);
+  popup.document.close();
+}
+
+generateFsdBtn?.addEventListener("click", () => { loadFsdLocal(); fsdDialog?.showModal(); });
+document.getElementById("fsd-close")?.addEventListener("click", () => fsdDialog?.close());
+document.querySelectorAll("[data-fsd-tab]").forEach((tab) => tab.addEventListener("click", () => {
+  document.querySelectorAll("[data-fsd-tab]").forEach((item) => item.classList.toggle("active", item === tab));
+  document.querySelectorAll("[data-fsd-pane]").forEach((pane) => pane.classList.toggle("active", pane.dataset.fsdPane === tab.dataset.fsdTab));
+}));
+fsdForm?.addEventListener("input", saveFsdLocal);
+fsdForm?.addEventListener("change", saveFsdLocal);
+document.getElementById("fsd-download")?.addEventListener("click", downloadFsdPdf);
 
 downloadPdfBtn.addEventListener("click", () => {
   openPdfPoiPicker();

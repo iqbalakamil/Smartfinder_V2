@@ -13,6 +13,29 @@
   --radius: 16px;
 }
 
+.fsd-dialog { width:min(900px,94vw); max-height:90vh; padding:0; color:#e2e8f0; background:#0f172a; border:1px solid rgba(56,189,248,.4); border-radius:16px; box-shadow:0 24px 80px #000b; }
+.fsd-dialog::backdrop { background:#020617cc; backdrop-filter:blur(4px); }
+.fsd-dialog form { display:flex; flex-direction:column; max-height:90vh; }
+.fsd-dialog-header,.fsd-dialog-footer { display:flex; justify-content:space-between; align-items:center; gap:14px; padding:18px 22px; background:#111c30; }
+.fsd-dialog-header { border-bottom:1px solid #334155; }
+.fsd-dialog-header small { color:#38bdf8; letter-spacing:.08em; }
+.fsd-dialog-header h2 { margin:5px 0; color:#f8fafc; }
+.fsd-dialog-header p,.fsd-note { margin:4px 0; color:#94a3b8; font-size:12px; }
+.fsd-dialog-header button { color:#e2e8f0; background:transparent; border:0; font-size:20px; cursor:pointer; }
+.fsd-tabs { display:flex; gap:8px; padding:12px 22px 0; }
+.fsd-tabs button { border:1px solid #334155; border-radius:8px; padding:9px 18px; color:#cbd5e1; background:#1e293b; cursor:pointer; }
+.fsd-tabs button.active { color:#fff; background:#0369a1; border-color:#38bdf8; }
+.fsd-pane { display:none; overflow:auto; padding:12px 22px 20px; }
+.fsd-pane.active { display:block; }
+.fsd-pane h3 { margin:18px 0 10px; padding-bottom:6px; border-bottom:1px solid #334155; color:#7dd3fc; font-size:14px; }
+.fsd-pane label { display:flex; flex-direction:column; gap:6px; color:#cbd5e1; font-size:12px; }
+.fsd-pane input,.fsd-pane select,.fsd-pane textarea { width:100%; padding:9px; color:#f8fafc; background:#0b1220; border:1px solid #475569; border-radius:7px; }
+.fsd-pane input[type=file] { font-size:11px; }
+.fsd-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }
+.fsd-dialog-footer { border-top:1px solid #334155; }
+.fsd-dialog-footer span { color:#94a3b8; font-size:11px; }
+@media print { .fsd-print-page { break-before:page; } .fsd-print-page img { max-width:100%; max-height:650px; object-fit:contain; } }
+
 * {
   box-sizing: border-box;
 }
