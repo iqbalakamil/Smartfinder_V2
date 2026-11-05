@@ -5487,6 +5487,8 @@ async function loadFsdLocal() {
       const field = fsdForm.elements.namedItem(name);
       if (field && field.type !== "file") field.value = value;
     }
+    const rentField = fsdForm.elements.namedItem("rent");
+    if (rentField?.value) rentField.value = idrFormat.format(rabNumber(rentField.value));
     updateFsdRabTotals();
     if (saved.branchName && !saved.branchName0) fsdForm.elements.namedItem("branchName0").value = saved.branchName;
     if (saved.branchDistance && !saved.branchDistance0) fsdForm.elements.namedItem("branchDistance0").value = saved.branchDistance;
@@ -5622,7 +5624,7 @@ async function downloadFsdPdf() {
   const rows = [
     ["Koordinat wilayah", data.coordinates], ["Panjang ruko", data.length ? `${data.length} m` : ""], ["Lebar ruko", data.width ? `${data.width} m` : ""],
     ["Jumlah lantai", data.floors], ["Ukuran area parkir", data.parkingSize], ["Jenis area parkir", data.parkingType], ["Jumlah kamar mandi", data.bathrooms],
-    ["Harga sewa", data.rent ? `Rp ${Number(data.rent).toLocaleString("id-ID")}/bulan` : ""],
+    ["Harga sewa", data.rent ? `Rp ${idrFormat.format(rabNumber(data.rent))}/tahun` : ""],
   ];
   const table = rows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${fsdPrintValue(value)}</td></tr>`).join("");
   const attachment = (label, field, number) => `<section class="fsd-section"><h2>${number}. ${label}</h2>${fsdPrintValue(data[field])}</section>`;
@@ -5651,6 +5653,10 @@ fsdRabHost?.addEventListener("focusout", (event) => {
   const value = rabNumber(event.target.value);
   event.target.value = value ? idrFormat.format(value) : "";
   updateFsdRabTotals();
+});
+fsdForm?.elements.namedItem("rent")?.addEventListener("focusout", (event) => {
+  const value = rabNumber(event.target.value);
+  event.target.value = value ? idrFormat.format(value) : "";
 });
 document.getElementById("fsd-download")?.addEventListener("click", downloadFsdPdf);
 

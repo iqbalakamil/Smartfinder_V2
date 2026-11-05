@@ -689,6 +689,14 @@
         "category":  "Legalitas"
     },
     {
+        "no":  "",
+        "name":  "Modal Kerja",
+        "unit":  "LS",
+        "price":  10000000,
+        "qty":  1,
+        "category":  "Modal Kerja"
+    },
+    {
         "no":  "87",
         "name":  "BIMBA SMARTKIDZ",
         "unit":  "LS",
@@ -730,8 +738,8 @@
     },
     {
         "no":  "92",
-        "name":  "SEWA RUKO 2 TAHUN",
-        "unit":  "",
+        "name":  "SEWA RUKO",
+        "unit":  "Tahun",
         "price":  90000000,
         "qty":  2,
         "category":  "Sewa Ruko"
