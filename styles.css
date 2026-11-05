@@ -32,6 +32,7 @@
 .fsd-pane input,.fsd-pane select,.fsd-pane textarea { width:100%; padding:9px; color:#f8fafc; background:#0b1220; border:1px solid #475569; border-radius:7px; }
 .fsd-pane input[type=file] { font-size:11px; }
 .fsd-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }
+.fsd-branch-row { margin:0 0 10px; padding:12px; border:1px solid #334155; border-radius:9px; }
 .fsd-dialog-footer { border-top:1px solid #334155; }
 .fsd-dialog-footer span { color:#94a3b8; font-size:11px; }
 @media print { .fsd-print-page { break-before:page; } .fsd-print-page img { max-width:100%; max-height:650px; object-fit:contain; } }

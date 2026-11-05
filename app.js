@@ -5371,12 +5371,28 @@ function loadFsdLocal() {
   fsdForm.elements.namedItem("coordinates").value = `${currentMapContext.lat}, ${currentMapContext.lon}`;
   try {
     const saved = JSON.parse(localStorage.getItem(fsdStorageKey()) || "{}");
+    const branchHost = document.getElementById("fsd-branches");
+    if (branchHost) {
+      branchHost.innerHTML = "";
+      for (let i = 0; i < Math.max(1, Number(saved.branchCount) || 1); i++) addFsdBranchRow(i);
+    }
     for (const [name, value] of Object.entries(saved)) {
       const field = fsdForm.elements.namedItem(name);
       if (field && field.type !== "file") field.value = value;
     }
+    if (saved.branchName && !saved.branchName0) fsdForm.elements.namedItem("branchName0").value = saved.branchName;
+    if (saved.branchDistance && !saved.branchDistance0) fsdForm.elements.namedItem("branchDistance0").value = saved.branchDistance;
     fsdSaveStatus.textContent = "Data dan lampiran tersimpan lokal otomatis";
   } catch { fsdSaveStatus.textContent = "Tidak dapat membaca data FSD lokal"; }
+}
+
+function addFsdBranchRow(index) {
+  const host = document.getElementById("fsd-branches");
+  if (!host) return;
+  const row = document.createElement("div");
+  row.className = "fsd-grid fsd-branch-row";
+  row.innerHTML = `<label>Nama cabang<input name="branchName${index}"></label><label>Jarak (km)<input name="branchDistance${index}" type="number" min="0" step="0.1"></label><label>Foto/peta cabang<input name="branchPhoto${index}" type="file" accept="image/*" multiple></label>`;
+  host.append(row);
 }
 
 function readFsdFile(file) {
@@ -5395,6 +5411,7 @@ async function saveFsdLocal() {
     if (!field.name || field.type === "file") continue;
     saved[field.name] = field.value;
   }
+  saved.branchCount = fsdForm.querySelectorAll(".fsd-branch-row").length;
   try {
     const old = JSON.parse(localStorage.getItem(fsdStorageKey()) || "{}");
     for (const field of fsdForm.querySelectorAll('input[type="file"]')) {
@@ -5428,20 +5445,23 @@ async function downloadFsdPdf() {
   const rows = [
     ["Koordinat wilayah", data.coordinates], ["Panjang ruko", data.length ? `${data.length} m` : ""], ["Lebar ruko", data.width ? `${data.width} m` : ""],
     ["Jumlah lantai", data.floors], ["Ukuran area parkir", data.parkingSize], ["Jenis area parkir", data.parkingType], ["Jumlah kamar mandi", data.bathrooms],
-    ["Harga sewa", data.rent ? `Rp ${Number(data.rent).toLocaleString("id-ID")}/bulan` : ""], ["Cabang terdekat", data.branchName], ["Jarak", data.branchDistance ? `${data.branchDistance} km` : ""],
+    ["Harga sewa", data.rent ? `Rp ${Number(data.rent).toLocaleString("id-ID")}/bulan` : ""],
   ];
   const table = rows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${fsdPrintValue(value)}</td></tr>`).join("");
-  const attachment = (label, field) => `<section><h3>${label}</h3>${fsdPrintValue(data[field])}</section>`;
+  const attachment = (label, field, number) => `<section class="fsd-section"><h2>${number}. ${label}</h2>${fsdPrintValue(data[field])}</section>`;
+  const branches = Array.from({length:Number(data.branchCount)||1},(_,i)=>`<tr><th>${escapeHtml(data[`branchName${i}`]||`Cabang ${i+1}`)}</th><td>${escapeHtml(data[`branchDistance${i}`] ? `${data[`branchDistance${i}`]} km` : "-")}</td></tr>`).join("");
+  const branchPhotos = Array.from({length:Number(data.branchCount)||1},(_,i)=>fsdPrintValue(data[`branchPhoto${i}`])).join("");
   const popup = window.open("", "_blank", "width=1100,height=900");
   if (!popup) { setStatus("Popup diblokir browser. Izinkan popup untuk membuat FSD PDF.", true); return; }
   const area = [districtNameEl?.textContent, cityNameEl?.textContent].filter(Boolean).join(", ") || "Area analisa";
   popup.document.open();
-  popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>FSD - ${escapeHtml(area)}</title><style>body{font:14px Arial,sans-serif;color:#172033;line-height:1.5;margin:28px}h1{color:#075985}h2{margin-top:24px;color:#0f766e;border-bottom:2px solid #ccfbf1;padding-bottom:6px}h3{color:#334155}table{width:100%;border-collapse:collapse}th,td{border:1px solid #cbd5e1;padding:9px;text-align:left}th{width:34%;background:#f1f5f9}figure{margin:12px 0;page-break-inside:avoid}figure img{max-width:100%;max-height:650px;object-fit:contain}figcaption{font-size:11px;color:#64748b}.fsd-section{page-break-inside:avoid}.fsd-print-page{break-before:page}@media print{body{margin:16mm}}</style></head><body><h1>Functional Specification Document (FSD)</h1><p><b>Wilayah:</b> ${escapeHtml(area)}<br><b>Tanggal:</b> ${new Date().toLocaleDateString("id-ID")}</p><h2>Description</h2><table>${table}</table>${attachment("Foto ruko tampak depan", "photoFront")}${attachment("Foto ruko dalam lantai 1", "photoFloor1")}${attachment("Foto ruko dalam lantai 2", "photoFloor2")}${attachment("Peta sebaran member cabang terdekat (opsional)", "memberMap")}<h2>Requirement</h2>${attachment("Desain ruangan", "roomDesign")}${attachment("Desain playground", "playgroundDesign")}${attachment("RAB renovasi & pengadaan", "renovationBudget")}<section><h3>Kebutuhan karyawan</h3><table><tr><th>Kepala Unit</th><td>1 orang</td></tr><tr><th>Guru 1</th><td>${fsdPrintValue(data.teacherProgram1)}</td></tr><tr><th>Guru 2</th><td>${fsdPrintValue(data.teacherProgram2)}</td></tr></table></section><section><h3>Tambahan lain</h3><p>${fsdPrintValue(data.additionalNotes)}</p><p><b>PIC:</b> ${fsdPrintValue(data.pic)}</p></section><h2 class="fsd-print-page">Lampiran: Hasil Analisa Area</h2>${analysisBody}<script>window.onload=()=>setTimeout(()=>window.print(),700);</script></body></html>`);
+  popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>FSD - ${escapeHtml(area)}</title><style>body{font:14px Arial,sans-serif;color:#172033;line-height:1.5;margin:28px}h1{color:#075985}h2{font-size:19px;font-weight:700;margin:18px 0 10px;color:#0f766e;border-bottom:2px solid #ccfbf1;padding-bottom:6px}h3{color:#334155}table{width:100%;border-collapse:collapse}th,td{border:1px solid #cbd5e1;padding:9px;text-align:left}th{width:34%;background:#f1f5f9}figure{margin:12px 0;page-break-inside:avoid;break-inside:avoid}figure img{max-width:100%;max-height:600px;object-fit:contain}figcaption{font-size:11px;color:#64748b}.fsd-section{page-break-inside:avoid;break-inside:avoid}.fsd-section h2{page-break-after:avoid;break-after:avoid}.fsd-section img{max-height:520px}.fsd-print-page{break-before:page}@media print{body{margin:16mm}}</style></head><body><h1>Functional Specification Document (FSD)</h1><p><b>Wilayah:</b> ${escapeHtml(area)}<br><b>Tanggal:</b> ${new Date().toLocaleDateString("id-ID")}</p><section class="fsd-section"><h2>1. Informasi wilayah & spesifikasi ruko</h2><table>${table}</table></section>${attachment("Foto ruko tampak depan", "photoFront",2)}${attachment("Foto ruko lantai 1", "photoFloor1",3)}${attachment("Foto ruko lantai 2", "photoFloor2",4)}${attachment("Foto ruko lantai 3", "photoFloor3",5)}<section class="fsd-section"><h2>6. Peta sebaran member cabang terdekat</h2><table>${branches}</table>${branchPhotos}</section>${attachment("Desain ruangan", "roomDesign",7)}${attachment("Desain playground", "playgroundDesign",8)}${attachment("RAB renovasi & Pengadaan", "renovationBudget",9)}<section class="fsd-section"><h2>10. Kebutuhan karyawan</h2><table><tr><th>Kepala Unit</th><td>1 orang</td></tr><tr><th>Guru 1</th><td>${fsdPrintValue(data.teacherProgram1)}</td></tr><tr><th>Guru 2</th><td>${fsdPrintValue(data.teacherProgram2)}</td></tr></table></section><section class="fsd-section"><h2>11. Tambahan lain</h2><p>${fsdPrintValue(data.additionalNotes)}</p><p><b>PIC:</b> ${fsdPrintValue(data.pic)}</p></section><h2 class="fsd-print-page">Lampiran: Hasil Analisa Area</h2>${analysisBody}<script>window.onload=()=>setTimeout(()=>window.print(),700);</script></body></html>`);
   popup.document.close();
 }
 
 generateFsdBtn?.addEventListener("click", () => { loadFsdLocal(); fsdDialog?.showModal(); });
 document.getElementById("fsd-close")?.addEventListener("click", () => fsdDialog?.close());
+document.getElementById("fsd-add-branch")?.addEventListener("click", () => { addFsdBranchRow(fsdForm.querySelectorAll(".fsd-branch-row").length); saveFsdLocal(); });
 document.querySelectorAll("[data-fsd-tab]").forEach((tab) => tab.addEventListener("click", () => {
   document.querySelectorAll("[data-fsd-tab]").forEach((item) => item.classList.toggle("active", item === tab));
   document.querySelectorAll("[data-fsd-pane]").forEach((pane) => pane.classList.toggle("active", pane.dataset.fsdPane === tab.dataset.fsdTab));
