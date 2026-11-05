@@ -5398,7 +5398,7 @@ async function saveFsdLocal() {
   try {
     const old = JSON.parse(localStorage.getItem(fsdStorageKey()) || "{}");
     for (const field of fsdForm.querySelectorAll('input[type="file"]')) {
-      if (field.files?.[0]) saved[field.name] = await readFsdFile(field.files[0]);
+      if (field.files?.length) saved[field.name] = await Promise.all(Array.from(field.files, readFsdFile));
       else if (old[field.name]) saved[field.name] = old[field.name];
     }
     localStorage.setItem(fsdStorageKey(), JSON.stringify(saved));
@@ -5409,6 +5409,7 @@ async function saveFsdLocal() {
 }
 
 function fsdPrintValue(value) {
+  if (Array.isArray(value)) return value.length ? value.map((file) => fsdPrintValue(file)).join("") : "-";
   if (value && typeof value === "object" && value.data) {
     const fileName = escapeHtml(value.name || "Lampiran");
     if (value.type.startsWith("image/")) return `<figure><img src="${value.data}" alt="${fileName}"><figcaption>${fileName}</figcaption></figure>`;
