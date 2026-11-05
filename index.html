@@ -870,10 +870,11 @@
       <h3>Peta sebaran member cabang terdekat</h3><div id="fsd-branches"></div><button type="button" id="fsd-add-branch" class="button button-branch">+ Tambah cabang</button><p class="fsd-note">Isi nama cabang, jarak, dan unggah foto atau peta untuk setiap cabang.</p>
     </section>
     <section class="fsd-pane" data-fsd-pane="requirement"><h3>Lampiran</h3><div class="fsd-grid"><label>Desain ruangan · gambar<input name="roomDesign" type="file" accept="image/*" multiple></label><label>Desain playground · gambar<input name="playgroundDesign" type="file" accept="image/*" multiple></label><label>RAB renovasi & pengadaan · dokumen<input name="renovationBudget" type="file" accept=".pdf,.xlsx,.xls,.doc,.docx,.csv,image/*" multiple></label></div><p class="fsd-note">File RAB akan dimasukkan dalam dokumen FSD; PDF dan gambar tampil langsung, file spreadsheet/teks disertakan namanya.</p>
+      <h3>Rencana Anggaran Biaya (RAB)</h3><p class="fsd-note">Ubah harga satuan atau jumlah. Total per item, subtotal kategori, dan total keseluruhan dihitung otomatis. Angka memakai format pemisah ribuan Indonesia. Baris Gaji Guru mengikuti sumber: harga per orang, 2 orang, dikalikan jumlah bulan.</p><div id="fsd-rab"></div>
       <h3>Kebutuhan karyawan</h3><label>Kepala Unit<input value="1 orang" readonly></label><p class="fsd-note">2 Guru · pilih program masing-masing</p><div class="fsd-grid"><label>Program Guru 1<select name="teacherProgram1"><option value="">Pilih program</option><option>Bimba</option><option>Preschool</option><option>English</option><option>TPA</option></select></label><label>Program Guru 2<select name="teacherProgram2"><option value="">Pilih program</option><option>Bimba</option><option>Preschool</option><option>English</option><option>TPA</option></select></label></div><h3>Tambahan lain</h3><label>Form isian tambahan<textarea name="additionalNotes" rows="4"></textarea></label><label>PIC yang bertanggung jawab<input name="pic"></label>
     </section><footer class="fsd-dialog-footer"><span id="fsd-save-status">Tersimpan lokal otomatis</span><button type="button" id="fsd-download" class="button button-branch">⬇️ Download FSD PDF</button></footer>
   </form></dialog>
-  <script src="./app.js?v=20261105fsd1" type="module"></script>
+  <script src="./app.js?v=20261105fsdrab1" type="module"></script>
   <script type="module">
     // === MAPLIBRE GL JS: 2 MODE (2D & SATELIT) ===
     import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.7.0/dist/maplibre-gl.mjs';

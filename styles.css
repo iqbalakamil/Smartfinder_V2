@@ -33,6 +33,17 @@
 .fsd-pane input[type=file] { font-size:11px; }
 .fsd-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }
 .fsd-branch-row { margin:0 0 10px; padding:12px; border:1px solid #334155; border-radius:9px; }
+.fsd-rab-group { margin:16px 0 22px; }
+.fsd-rab-group h4 { margin:0; padding:10px 12px; color:#bae6fd; background:#172554; border:1px solid #334155; border-bottom:0; }
+.fsd-rab-scroll { overflow-x:auto; border:1px solid #334155; }
+.fsd-rab-table { min-width:740px; width:100%; border-collapse:collapse; font-size:11px; }
+.fsd-rab-table th,.fsd-rab-table td { padding:7px; border:1px solid #334155; text-align:left; }
+.fsd-rab-table th { color:#cbd5e1; background:#111c30; }
+.fsd-rab-table td:nth-child(2) { min-width:220px; }
+.fsd-rab-table input.fsd-rab-number { min-width:100px; padding:6px; text-align:right; }
+.fsd-rab-line-total,.fsd-rab-subtotal th:last-child { min-width:125px; text-align:right !important; white-space:nowrap; }
+.fsd-rab-subtotal th { color:#f8fafc; background:#1e293b; }
+.fsd-rab-grand-total { position:sticky; bottom:0; display:flex; justify-content:space-between; gap:16px; padding:14px 16px; color:#fff; background:#075985; border:1px solid #38bdf8; border-radius:8px; font-size:15px; }
 .fsd-dialog-footer { border-top:1px solid #334155; }
 .fsd-dialog-footer span { color:#94a3b8; font-size:11px; }
 @media print { .fsd-print-page { break-before:page; } .fsd-print-page img { max-width:100%; max-height:650px; object-fit:contain; } }

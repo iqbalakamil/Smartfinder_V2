@@ -1,0 +1,835 @@
+[
+    {
+        "no":  "1",
+        "name":  "AC Merek SHARP",
+        "unit":  "Unit",
+        "price":  4500000,
+        "qty":  8,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "",
+        "name":  "Pemasangan AC",
+        "unit":  "Unit",
+        "price":  1000000,
+        "qty":  21,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "2",
+        "name":  "Vinyl lantai",
+        "unit":  "Unit",
+        "price":  365000,
+        "qty":  40,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "3",
+        "name":  "Karpet Tangga",
+        "unit":  "Unit",
+        "price":  70000,
+        "qty":  20,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "4",
+        "name":  "Laptop Untuk Kepala Unit Merek \"Lenovo\" 14inch",
+        "unit":  "Unit",
+        "price":  7200000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "5",
+        "name":  "Printer",
+        "unit":  "Unit",
+        "price":  2500000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "6",
+        "name":  "Meja Resepsionis",
+        "unit":  "Unit",
+        "price":  4500000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "7",
+        "name":  "Kursi Admin",
+        "unit":  "Unit",
+        "price":  550000,
+        "qty":  2,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "8",
+        "name":  "Lemari merchandise",
+        "unit":  "Unit",
+        "price":  1350500,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "9",
+        "name":  "Kursi tamu resepsionis",
+        "unit":  "Unit",
+        "price":  500000,
+        "qty":  2,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "10",
+        "name":  "Bingkai akrilik (3) + Wadah tisue (1) + jam dinding (1)",
+        "unit":  "Unit",
+        "price":  500000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "11",
+        "name":  "HP Admin",
+        "unit":  "Unit",
+        "price":  3000000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "12",
+        "name":  "Tambah daya listrik (16.500 watt)",
+        "unit":  "Unit",
+        "price":  7000000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "13",
+        "name":  "ongkos pasang playground",
+        "unit":  "Unit",
+        "price":  0,
+        "qty":  0,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "14",
+        "name":  "Papan nama acrilic / neon box",
+        "unit":  "Unit",
+        "price":  20000000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "15",
+        "name":  "Preschool/ mainan edukasi",
+        "unit":  "Unit",
+        "price":  2649999,
+        "qty":  2,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "16",
+        "name":  "CCTV + instalasi(MMC 128GB)",
+        "unit":  "Unit",
+        "price":  947000,
+        "qty":  12,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "17",
+        "name":  "Smart TV 43\" + braket",
+        "unit":  "Unit",
+        "price":  3500000,
+        "qty":  3,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "18",
+        "name":  "Playground ABATA",
+        "unit":  "Unit",
+        "price":  40000000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "19",
+        "name":  "Internet (indihome/ Biznet)",
+        "unit":  "Unit",
+        "price":  1000000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "20",
+        "name":  "Stiker ruangan",
+        "unit":  "Unit",
+        "price":  5500000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "22",
+        "name":  "sofa 2 sit",
+        "unit":  "Unit",
+        "price":  0,
+        "qty":  3,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "23",
+        "name":  "kursi bimbel",
+        "unit":  "Unit",
+        "price":  320000,
+        "qty":  0,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "24",
+        "name":  "Set meja kursi bimba",
+        "unit":  "Unit",
+        "price":  2500000,
+        "qty":  6,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "25",
+        "name":  "Perlengkapan logistik (ADMINISTRASI)",
+        "unit":  "Unit",
+        "price":  18892500,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "26",
+        "name":  "Ongkir barangbarang",
+        "unit":  "Unit",
+        "price":  800000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "27",
+        "name":  "Papan nama ruangan (acrilic)",
+        "unit":  "Unit",
+        "price":  55000,
+        "qty":  6,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "28",
+        "name":  "tempat sampah besar (diluar)",
+        "unit":  "Unit",
+        "price":  390000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "29",
+        "name":  "Tempat sampah dalam kelas",
+        "unit":  "Unit",
+        "price":  195000,
+        "qty":  5,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "30",
+        "name":  "Tempat sampah sedang (di lorong)",
+        "unit":  "Unit",
+        "price":  260000,
+        "qty":  2,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "31",
+        "name":  "Tempat sampah kamar mandi",
+        "unit":  "Unit",
+        "price":  156000,
+        "qty":  2,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "32",
+        "name":  "Sofa 2 sit",
+        "unit":  "Unit",
+        "price":  768750,
+        "qty":  5,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "33",
+        "name":  "Rak sepatu biasa",
+        "unit":  "Unit",
+        "price":  1300000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "34",
+        "name":  "Keset ruang admin",
+        "unit":  "Unit",
+        "price":  208000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "35",
+        "name":  "keset kamar mandi",
+        "unit":  "Unit",
+        "price":  75000,
+        "qty":  2,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "36",
+        "name":  "tangga kloset anak",
+        "unit":  "Unit",
+        "price":  260000,
+        "qty":  2,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "37",
+        "name":  "cermin kloset",
+        "unit":  "Unit",
+        "price":  195000,
+        "qty":  2,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "38",
+        "name":  "lemari guru bimba",
+        "unit":  "Unit",
+        "price":  422500,
+        "qty":  2,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "39",
+        "name":  "lemari guru preschool",
+        "unit":  "Unit",
+        "price":  737250,
+        "qty":  3,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "40",
+        "name":  "papan tulis lipat",
+        "unit":  "Unit",
+        "price":  649000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "41",
+        "name":  "air purifier (convenant)",
+        "unit":  "Unit",
+        "price":  606970,
+        "qty":  3,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "42",
+        "name":  "pohon artificial",
+        "unit":  "Unit",
+        "price":  156000,
+        "qty":  3,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "43",
+        "name":  "rak buku playroom",
+        "unit":  "Unit",
+        "price":  649000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "44",
+        "name":  "Bantal duduk anak",
+        "unit":  "Unit",
+        "price":  0,
+        "qty":  0,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "45",
+        "name":  "Karpet bulu",
+        "unit":  "Unit",
+        "price":  177700,
+        "qty":  0,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "46",
+        "name":  "Meja besar (ruangan guru)",
+        "unit":  "Unit",
+        "price":  0,
+        "qty":  0,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "47",
+        "name":  "Lemari modul (ruangan guru)",
+        "unit":  "Unit",
+        "price":  1125000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "48",
+        "name":  "Loker guru",
+        "unit":  "Unit",
+        "price":  1000000,
+        "qty":  0,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "49",
+        "name":  "rak dispenser",
+        "unit":  "Unit",
+        "price":  224900,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "50",
+        "name":  "Flip chart",
+        "unit":  "Unit",
+        "price":  520650,
+        "qty":  0,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "51",
+        "name":  "Sofa ruang pusat",
+        "unit":  "Unit",
+        "price":  0,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "52",
+        "name":  "coffe table",
+        "unit":  "Unit",
+        "price":  207800,
+        "qty":  0,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "53",
+        "name":  "Creative studio / FUN MATH/playroom",
+        "unit":  "Unit",
+        "price":  3000000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "54",
+        "name":  "Ongkos Kirim",
+        "unit":  "Unit",
+        "price":  1000000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "55",
+        "name":  "Evamet",
+        "unit":  "Unit",
+        "price":  195000,
+        "qty":  12,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "56",
+        "name":  "Meja dan kursi Play Room/bukubuku",
+        "unit":  "Unit",
+        "price":  3450000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "57",
+        "name":  "Lemari Admin",
+        "unit":  "Unit",
+        "price":  500000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "58",
+        "name":  "Mini speaker Bluetooth",
+        "unit":  "Unit",
+        "price":  403000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "59",
+        "name":  "Matras Play Ground",
+        "unit":  "Unit",
+        "price":  455000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "60",
+        "name":  "Tangga Unit",
+        "unit":  "Unit",
+        "price":  546000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "61",
+        "name":  "Papan tulis besar",
+        "unit":  "Unit",
+        "price":  500000,
+        "qty":  1,
+        "category":  "Inventaris \u0026 Peralatan Kantor"
+    },
+    {
+        "no":  "62",
+        "name":  "Renovasi Ruko:  Partisi Gypsum Ruang Kelas, Pengecatan, Sekat Folding Grc Frame Alu",
+        "unit":  "Unit",
+        "price":  94000000,
+        "qty":  1,
+        "category":  "Renovasi Ruko"
+    },
+    {
+        "no":  "63",
+        "name":  "Deposit Renovasi",
+        "unit":  "Unit",
+        "price":  0,
+        "qty":  1,
+        "category":  "Renovasi Ruko"
+    },
+    {
+        "no":  "64",
+        "name":  "Rekrutmen Calon Karyawan, Psikotes, Tes Keahlian, Interview",
+        "unit":  "LS",
+        "price":  2500000,
+        "qty":  2,
+        "category":  "Rekrutmen \u0026 Training Karyawan (SDM)"
+    },
+    {
+        "no":  "65",
+        "name":  "Training Kebimbelan",
+        "unit":  "Unit",
+        "price":  0,
+        "qty":  0,
+        "category":  "Rekrutmen \u0026 Training Karyawan (SDM)"
+    },
+    {
+        "no":  "66",
+        "name":  "Training Smart Teaching",
+        "unit":  "LS",
+        "price":  0,
+        "qty":  0,
+        "category":  "Rekrutmen \u0026 Training Karyawan (SDM)"
+    },
+    {
+        "no":  "67",
+        "name":  "Training Guru Standar SD (termasuk Mentoring, Magang, Konsumsi, Perlengkapan selama 15 Hari, by. Trainer)",
+        "unit":  "LS",
+        "price":  0,
+        "qty":  0,
+        "category":  "Rekrutmen \u0026 Training Karyawan (SDM)"
+    },
+    {
+        "no":  "68",
+        "name":  "Training Guru Standar SMP (termasuk Mentoring, Magang, Konsumsi, Perlengkapan selama 30 Hari, by. Trainer)",
+        "unit":  "LS",
+        "price":  0,
+        "qty":  0,
+        "category":  "Rekrutmen \u0026 Training Karyawan (SDM)"
+    },
+    {
+        "no":  "69",
+        "name":  "Training Guru Standar SMA (termasuk Mentoring, Magang, Konsumsi, Perlengkapan selama 30 Hari, by. Trainer)",
+        "unit":  "LS",
+        "price":  0,
+        "qty":  0,
+        "category":  "Rekrutmen \u0026 Training Karyawan (SDM)"
+    },
+    {
+        "no":  "70",
+        "name":  "Training Marketing",
+        "unit":  "LS",
+        "price":  0,
+        "qty":  0,
+        "category":  "Rekrutmen \u0026 Training Karyawan (SDM)"
+    },
+    {
+        "no":  "71",
+        "name":  "Training HRD",
+        "unit":  "LS",
+        "price":  0,
+        "qty":  0,
+        "category":  "Rekrutmen \u0026 Training Karyawan (SDM)"
+    },
+    {
+        "no":  "72",
+        "name":  "Training Admin dan Lap Keuangan",
+        "unit":  "LS",
+        "price":  0,
+        "qty":  0,
+        "category":  "Rekrutmen \u0026 Training Karyawan (SDM)"
+    },
+    {
+        "no":  "73",
+        "name":  "Uang Transport peserta training selama 30 hari (5 0rang)",
+        "unit":  "LS",
+        "price":  0,
+        "qty":  0,
+        "category":  "Rekrutmen \u0026 Training Karyawan (SDM)"
+    },
+    {
+        "no":  "74",
+        "name":  "Penginapan untuk pesera training di kantor Pusat",
+        "unit":  "LS",
+        "price":  0,
+        "qty":  0,
+        "category":  "Rekrutmen \u0026 Training Karyawan (SDM)"
+    },
+    {
+        "no":  "75",
+        "name":  "Training Guru BIMBA SMART KIDZ",
+        "unit":  "LS",
+        "price":  0,
+        "qty":  0,
+        "category":  "Rekrutmen \u0026 Training Karyawan (SDM)"
+    },
+    {
+        "no":  "76",
+        "name":  "Training Guru TPA ALFAUZAN",
+        "unit":  "LS",
+        "price":  0,
+        "qty":  0,
+        "category":  "Rekrutmen \u0026 Training Karyawan (SDM)"
+    },
+    {
+        "no":  "77",
+        "name":  "Training Guru SMART ENGLISH COURSE",
+        "unit":  "LS",
+        "price":  0,
+        "qty":  0,
+        "category":  "Rekrutmen \u0026 Training Karyawan (SDM)"
+    },
+    {
+        "no":  "78",
+        "name":  "Gaji Guru",
+        "unit":  "2 Orang",
+        "price":  2500000,
+        "qty":  3,
+        "category":  "Gaji Karyawan",
+        "multiplier":  2
+    },
+    {
+        "no":  "79",
+        "name":  "Gaji Guru + Akademik",
+        "unit":  "1 Orang",
+        "price":  2500000,
+        "qty":  3,
+        "category":  "Gaji Karyawan"
+    },
+    {
+        "no":  "80",
+        "name":  "Gaji KU/Admin/ Marketing",
+        "unit":  "1 Orang",
+        "price":  4500000,
+        "qty":  3,
+        "category":  "Gaji Karyawan"
+    },
+    {
+        "no":  "81",
+        "name":  "Gaji Branding",
+        "unit":  "1 Orang",
+        "price":  0,
+        "qty":  0,
+        "category":  "Gaji Karyawan"
+    },
+    {
+        "no":  "82",
+        "name":  "Gaji SPV",
+        "unit":  "1 Orang",
+        "price":  0,
+        "qty":  0,
+        "category":  "Gaji Karyawan"
+    },
+    {
+        "no":  "83",
+        "name":  "Perijinan Domisili dan Rekomendasi Usaha",
+        "unit":  "",
+        "price":  5000000,
+        "qty":  1,
+        "category":  "Legalitas"
+    },
+    {
+        "no":  "84",
+        "name":  "Perijinan Dinas Pendidikan Setempat Ijin Paud",
+        "unit":  "",
+        "price":  0,
+        "qty":  1,
+        "category":  "Legalitas"
+    },
+    {
+        "no":  "85",
+        "name":  "Akte Notaris",
+        "unit":  "",
+        "price":  2250000,
+        "qty":  1,
+        "category":  "Legalitas"
+    },
+    {
+        "no":  "86",
+        "name":  "Pajak Reklame",
+        "unit":  "",
+        "price":  7000000,
+        "qty":  1,
+        "category":  "Legalitas"
+    },
+    {
+        "no":  "87",
+        "name":  "BIMBA SMARTKIDZ",
+        "unit":  "LS",
+        "price":  81443000,
+        "qty":  1,
+        "category":  "Franchise Fee untuk 4 Brand selama 5 Tahun"
+    },
+    {
+        "no":  "88",
+        "name":  "BIMBEL SMART",
+        "unit":  "",
+        "price":  0,
+        "qty":  0,
+        "category":  "Franchise Fee untuk 4 Brand selama 5 Tahun"
+    },
+    {
+        "no":  "89",
+        "name":  "SMART ENGLISH COURSE",
+        "unit":  "",
+        "price":  0,
+        "qty":  0,
+        "category":  "Franchise Fee untuk 4 Brand selama 5 Tahun"
+    },
+    {
+        "no":  "90",
+        "name":  "TPA ALFAUZAN",
+        "unit":  "",
+        "price":  0,
+        "qty":  0,
+        "category":  "Franchise Fee untuk 4 Brand selama 5 Tahun"
+    },
+    {
+        "no":  "91",
+        "name":  "PSRESCHOOL",
+        "unit":  "",
+        "price":  0,
+        "qty":  0,
+        "category":  "Franchise Fee untuk 4 Brand selama 5 Tahun"
+    },
+    {
+        "no":  "92",
+        "name":  "SEWA RUKO 2 TAHUN",
+        "unit":  "",
+        "price":  90000000,
+        "qty":  2,
+        "category":  "Sewa Ruko"
+    },
+    {
+        "no":  "93",
+        "name":  "Pph Sewa",
+        "unit":  "",
+        "price":  9000000,
+        "qty":  2,
+        "category":  "Sewa Ruko"
+    },
+    {
+        "no":  "94",
+        "name":  "Deposit Sewa",
+        "unit":  "",
+        "price":  15000000,
+        "qty":  1,
+        "category":  "Sewa Ruko"
+    },
+    {
+        "no":  "95",
+        "name":  "Fee Kemitraan",
+        "unit":  "",
+        "price":  80000000,
+        "qty":  1,
+        "category":  "Divisi Kemitraan"
+    },
+    {
+        "no":  "96",
+        "name":  "Brosur 5 Rim",
+        "unit":  "LS",
+        "price":  400000,
+        "qty":  2,
+        "category":  "Perlengkapan Marketing"
+    },
+    {
+        "no":  "97",
+        "name":  "Flyer",
+        "unit":  "",
+        "price":  250000,
+        "qty":  7,
+        "category":  "Perlengkapan Marketing"
+    },
+    {
+        "no":  "98",
+        "name":  "Roll Banner",
+        "unit":  "LS",
+        "price":  400000,
+        "qty":  4,
+        "category":  "Perlengkapan Marketing"
+    },
+    {
+        "no":  "99",
+        "name":  "Spanduk Promo 1 Bh",
+        "unit":  "LS",
+        "price":  150000,
+        "qty":  5,
+        "category":  "Perlengkapan Marketing"
+    },
+    {
+        "no":  "100",
+        "name":  "Stiker Pintu Kaca Depan",
+        "unit":  "LS",
+        "price":  0,
+        "qty":  1,
+        "category":  "Perlengkapan Marketing"
+    },
+    {
+        "no":  "101",
+        "name":  "Tenda Ukuran 3x3",
+        "unit":  "LS",
+        "price":  0,
+        "qty":  2,
+        "category":  "Perlengkapan Marketing"
+    },
+    {
+        "no":  "102",
+        "name":  "Grand Opening BimbeL SMART, Sosialisasi dan Marketing Ofline",
+        "unit":  "LS",
+        "price":  40000000,
+        "qty":  1,
+        "category":  "Perlengkapan Marketing (Grand Opening)"
+    },
+    {
+        "no":  "103",
+        "name":  "Operasional bulanan; Listik, air, kebersihan/Keamanan, Rumah Tangga",
+        "unit":  "LS",
+        "price":  8000000,
+        "qty":  1,
+        "category":  "Perlengkapan Marketing (Grand Opening)"
+    },
+    {
+        "no":  "",
+        "name":  "Budget Marketing Online",
+        "unit":  "",
+        "price":  30000000,
+        "qty":  1,
+        "category":  "Digital Marketing"
+    }
+]
