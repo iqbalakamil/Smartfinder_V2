@@ -5476,6 +5476,9 @@ function fsdPrintValue(value) {
   if (value && typeof value === "object" && value.data) {
     const fileName = escapeHtml(value.name || "Lampiran");
     if (value.type.startsWith("image/")) return `<figure><img src="${value.data}" alt="${fileName}"><figcaption>${fileName}</figcaption></figure>`;
+    if (value.type === "application/pdf" && Array.isArray(value.pdfPages)) {
+      return `<div class="fsd-rab-pdf">${value.pdfPages.map((page, index) => `<figure class="fsd-rab-pdf-page"><img src="${page}" alt="${fileName}, halaman ${index + 1}"><figcaption>${fileName} · halaman ${index + 1}</figcaption></figure>`).join("")}</div>`;
+    }
     if (/\.(xlsx|xls|csv)$/i.test(value.name || "") && window.XLSX) {
       try {
         const workbook = XLSX.read(value.data.split(",").pop(), { type: "base64", cellDates: true });
@@ -5495,17 +5498,55 @@ function fsdPrintValue(value) {
         return `<p>Lampiran spreadsheet tidak dapat dibaca: <b>${fileName}</b></p>`;
       }
     }
-    if (value.type === "application/pdf") return `<figure><object data="${value.data}" type="application/pdf" width="100%" height="850"><a href="${value.data}">${fileName}</a></object><figcaption>${fileName}</figcaption></figure>`;
+    if (value.type === "application/pdf") return `<p>PDF belum dapat dirender untuk dicetak: <b>${fileName}</b></p>`;
     return `<p>Lampiran tersimpan lokal: <b>${fileName}</b> (${escapeHtml(value.type)}). Pratinjau PDF tidak tersedia untuk format ini.</p>`;
   }
   return escapeHtml(value == null || value === "" ? "-" : String(value));
 }
 
+async function renderFsdPdfAttachments(data) {
+  const pdfFiles = Object.values(data).flatMap((value) => Array.isArray(value) ? value : [value])
+    .filter((file) => file?.type === "application/pdf" && file.data && !file.pdfPages);
+  if (!pdfFiles.length) return;
+  const pdfjs = await import(new URL("vendor/pdfjs-dist/build/pdf.mjs", document.baseURI).href);
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL("vendor/pdfjs-dist/build/pdf.worker.mjs", document.baseURI).href;
+  for (const file of pdfFiles) {
+    const base64 = file.data.split(",").pop();
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+    const pdf = await pdfjs.getDocument({ data: bytes }).promise;
+    file.pdfPages = [];
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+      const page = await pdf.getPage(pageNumber);
+      const viewport = page.getViewport({ scale: 1.8 });
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+      file.pdfPages.push(canvas.toDataURL("image/png"));
+      canvas.width = 0;
+      canvas.height = 0;
+    }
+    await pdf.destroy();
+  }
+}
+
 async function downloadFsdPdf() {
   if (!currentMapContext) return;
+  const popup = window.open("", "_blank", "width=1100,height=900");
+  if (!popup) { setStatus("Popup diblokir browser. Izinkan popup untuk membuat FSD PDF.", true); return; }
   await saveFsdLocal();
   const data = JSON.parse(localStorage.getItem(fsdStorageKey()) || "{}");
   Object.assign(data, await getFsdAttachments(fsdStorageKey()));
+  try {
+    await renderFsdPdfAttachments(data);
+  } catch (error) {
+    console.error("Lampiran PDF RAB tidak dapat diproses:", error);
+    setStatus(`Lampiran PDF RAB gagal diproses: ${error.message || "format PDF tidak didukung"}`, true);
+    popup.close();
+    return;
+  }
   const analysisDoc = new DOMParser().parseFromString(buildPdfReportHtml(), "text/html");
   const analysisBody = analysisDoc.body.innerHTML;
   const rows = [
@@ -5517,12 +5558,10 @@ async function downloadFsdPdf() {
   const attachment = (label, field, number) => `<section class="fsd-section"><h2>${number}. ${label}</h2>${fsdPrintValue(data[field])}</section>`;
   const branches = Array.from({length:Number(data.branchCount)||1},(_,i)=>`<tr><th>${escapeHtml(data[`branchName${i}`]||`Cabang ${i+1}`)}</th><td>${escapeHtml(data[`branchDistance${i}`] ? `${data[`branchDistance${i}`]} km` : "-")}</td></tr>`).join("");
   const branchPhotos = Array.from({length:Number(data.branchCount)||1},(_,i)=>fsdPrintValue(data[`branchPhoto${i}`])).join("");
-  const popup = window.open("", "_blank", "width=1100,height=900");
-  if (!popup) { setStatus("Popup diblokir browser. Izinkan popup untuk membuat FSD PDF.", true); return; }
   const area = [districtNameEl?.textContent, cityNameEl?.textContent].filter(Boolean).join(", ") || "Area analisa";
   const approvalPagesHtml = Array.from({ length: 3 }, (_, index) => `<section class="fsd-approval-page"><img src="${new URL(`dokumen/lembar_persetujuan_${index + 1}.png`, document.baseURI).href}" alt="Lembar persetujuan halaman ${index + 1}"></section>`).join("");
   popup.document.open();
-  popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>FSD - ${escapeHtml(area)}</title><style>@page{size:A4 portrait;margin:0}@page fsd-xlsx-landscape{size:A4 landscape;margin:10mm}body{font:14px Arial,sans-serif;color:#172033;line-height:1.5;margin:0}.fsd-content{padding:12mm}h1{color:#075985}h2{font-size:19px;font-weight:700;margin:18px 0 10px;color:#0f766e;border-bottom:2px solid #ccfbf1;padding-bottom:6px}h3{color:#334155}table{width:100%;border-collapse:collapse}th,td{border:1px solid #cbd5e1;padding:9px;text-align:left}th{width:34%;background:#f1f5f9}figure{margin:12px 0;page-break-inside:avoid;break-inside:avoid}figure img{max-width:100%;max-height:600px;object-fit:contain}figcaption{font-size:11px;color:#64748b}.fsd-section{page-break-inside:auto;break-inside:auto}.fsd-section h2{page-break-after:avoid;break-after:avoid}.fsd-section img{max-height:520px}.fsd-print-page{break-before:page}.fsd-approval-page{break-after:page;page-break-after:always;break-inside:avoid;page-break-inside:avoid;width:210mm;height:297mm;padding:10mm;box-sizing:border-box;display:flex;align-items:center;justify-content:center;margin:0}.fsd-approval-page img{display:block;width:auto;height:auto;max-width:100%;max-height:100%;object-fit:contain}.fsd-spreadsheet{width:100%;max-width:100%;table-layout:fixed;border-collapse:collapse;page-break-inside:auto;break-inside:auto}.fsd-spreadsheet thead{display:table-header-group}.fsd-spreadsheet tr{break-inside:avoid;page-break-inside:avoid}.fsd-spreadsheet th,.fsd-spreadsheet td{width:auto;min-width:0;padding:3px;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}.fsd-xlsx{page:fsd-xlsx-landscape;break-before:page;break-inside:auto;page-break-inside:auto}.fsd-xlsx-sheet{break-inside:auto;page-break-inside:auto}.fsd-xlsx h3{break-after:avoid;page-break-after:avoid}@media print{body{margin:0}.fsd-content{padding:12mm}.fsd-approval-page{margin:0}}</style></head><body>${approvalPagesHtml}<main class="fsd-content"><h1>Functional Specification Document (FSD)</h1><p><b>Wilayah:</b> ${escapeHtml(area)}<br><b>Tanggal:</b> ${new Date().toLocaleDateString("id-ID")}</p><section class="fsd-section"><h2>1. Informasi wilayah & spesifikasi ruko</h2><table>${table}</table></section>${attachment("Foto ruko tampak depan", "photoFront",2)}${attachment("Foto ruko lantai 1", "photoFloor1",3)}${attachment("Foto ruko lantai 2", "photoFloor2",4)}${attachment("Foto ruko lantai 3", "photoFloor3",5)}<section class="fsd-section"><h2>6. Peta sebaran member cabang terdekat</h2><table>${branches}</table>${branchPhotos}</section>${attachment("Desain ruangan", "roomDesign",7)}${attachment("Desain playground", "playgroundDesign",8)}${attachment("RAB renovasi & Pengadaan", "renovationBudget",9)}<section class="fsd-section"><h2>10. Kebutuhan karyawan</h2><table><tr><th>Kepala Unit</th><td>1 orang</td></tr><tr><th>Guru 1</th><td>${fsdPrintValue(data.teacherProgram1)}</td></tr><tr><th>Guru 2</th><td>${fsdPrintValue(data.teacherProgram2)}</td></tr></table></section><section class="fsd-section"><h2>11. Tambahan lain</h2><p>${fsdPrintValue(data.additionalNotes)}</p><p><b>PIC:</b> ${fsdPrintValue(data.pic)}</p></section><h2 class="fsd-print-page">Lampiran: Hasil Analisa Area</h2>${analysisBody}</main><script>window.onload=async()=>{await Promise.all(Array.from(document.images,image=>image.decode().catch(()=>{})));setTimeout(()=>window.print(),300);};</script></body></html>`);
+  popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>FSD - ${escapeHtml(area)}</title><style>@page{size:A4 portrait;margin:0}@page fsd-xlsx-landscape{size:A4 landscape;margin:10mm}body{font:14px Arial,sans-serif;color:#172033;line-height:1.5;margin:0}.fsd-content{padding:12mm}h1{color:#075985}h2{font-size:19px;font-weight:700;margin:18px 0 10px;color:#0f766e;border-bottom:2px solid #ccfbf1;padding-bottom:6px}h3{color:#334155}table{width:100%;border-collapse:collapse}th,td{border:1px solid #cbd5e1;padding:9px;text-align:left}th{width:34%;background:#f1f5f9}figure{margin:12px 0;page-break-inside:avoid;break-inside:avoid}figure img{max-width:100%;max-height:600px;object-fit:contain}figcaption{font-size:11px;color:#64748b}.fsd-section{page-break-inside:auto;break-inside:auto}.fsd-section h2{page-break-after:avoid;break-after:avoid}.fsd-section img{max-height:520px}.fsd-rab-pdf-page{width:186mm;height:273mm;margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;break-before:page;page-break-before:always;break-inside:avoid;page-break-inside:avoid}.fsd-rab-pdf-page:first-child{break-before:auto;page-break-before:auto}.fsd-rab-pdf-page img{display:block;max-width:186mm;max-height:260mm;object-fit:contain}.fsd-rab-pdf-page figcaption{margin-top:3mm}.fsd-print-page{break-before:page}.fsd-approval-page{break-after:page;page-break-after:always;break-inside:avoid;page-break-inside:avoid;width:210mm;height:297mm;padding:10mm;box-sizing:border-box;display:flex;align-items:center;justify-content:center;margin:0}.fsd-approval-page img{display:block;width:auto;height:auto;max-width:100%;max-height:100%;object-fit:contain}.fsd-spreadsheet{width:100%;max-width:100%;table-layout:fixed;border-collapse:collapse;page-break-inside:auto;break-inside:auto}.fsd-spreadsheet thead{display:table-header-group}.fsd-spreadsheet tr{break-inside:avoid;page-break-inside:avoid}.fsd-spreadsheet th,.fsd-spreadsheet td{width:auto;min-width:0;padding:3px;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}.fsd-xlsx{page:fsd-xlsx-landscape;break-before:page;break-inside:auto;page-break-inside:auto}.fsd-xlsx-sheet{break-inside:auto;page-break-inside:auto}.fsd-xlsx h3{break-after:avoid;page-break-after:avoid}@media print{body{margin:0}.fsd-content{padding:12mm}.fsd-approval-page{margin:0}}</style></head><body>${approvalPagesHtml}<main class="fsd-content"><h1>Functional Specification Document (FSD)</h1><p><b>Wilayah:</b> ${escapeHtml(area)}<br><b>Tanggal:</b> ${new Date().toLocaleDateString("id-ID")}</p><section class="fsd-section"><h2>1. Informasi wilayah & spesifikasi ruko</h2><table>${table}</table></section>${attachment("Foto ruko tampak depan", "photoFront",2)}${attachment("Foto ruko lantai 1", "photoFloor1",3)}${attachment("Foto ruko lantai 2", "photoFloor2",4)}${attachment("Foto ruko lantai 3", "photoFloor3",5)}<section class="fsd-section"><h2>6. Peta sebaran member cabang terdekat</h2><table>${branches}</table>${branchPhotos}</section>${attachment("Desain ruangan", "roomDesign",7)}${attachment("Desain playground", "playgroundDesign",8)}${attachment("RAB renovasi & Pengadaan", "renovationBudget",9)}<section class="fsd-section"><h2>10. Kebutuhan karyawan</h2><table><tr><th>Kepala Unit</th><td>1 orang</td></tr><tr><th>Guru 1</th><td>${fsdPrintValue(data.teacherProgram1)}</td></tr><tr><th>Guru 2</th><td>${fsdPrintValue(data.teacherProgram2)}</td></tr></table></section><section class="fsd-section"><h2>11. Tambahan lain</h2><p>${fsdPrintValue(data.additionalNotes)}</p><p><b>PIC:</b> ${fsdPrintValue(data.pic)}</p></section><h2 class="fsd-print-page">Lampiran: Hasil Analisa Area</h2>${analysisBody}</main><script>window.onload=async()=>{await Promise.all(Array.from(document.images,image=>image.decode().catch(()=>{})));setTimeout(()=>window.print(),300);};</script></body></html>`);
   popup.document.close();
 }
 
