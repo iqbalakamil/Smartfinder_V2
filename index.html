@@ -1412,6 +1412,7 @@
                   body: JSON.stringify({
                     service_layer_name: layer, query_layers: layer,
                     width: 512, height: 512, bbox, x: 256, y: 256, lng: cell.lng, lat: cell.lat,
+                    sample: ['umum:ZNTRANGE', 'umum:nbt3'].includes(layer),
                   }),
                 });
                 const payload = await response.json().catch(() => ({}));

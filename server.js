@@ -117,8 +117,6 @@ const WORLDPOP_POLL_ATTEMPTS = Number(process.env.WORLDPOP_POLL_ATTEMPTS || 5);
 const WORLDPOP_POLL_DELAY_MS = Number(process.env.WORLDPOP_POLL_DELAY_MS || 1200);
 const DUKCAPIL_REQUEST_TIMEOUT_MS = Number(process.env.DUKCAPIL_REQUEST_TIMEOUT_MS || 60000);
 const ARCGIS_API_KEY = String(process.env.ARCGIS_API_KEY || "").trim();
-const BHUMI_TOKEN = String(process.env.BHUMI_TOKEN || "").trim();
-let bhumiTokenCache = BHUMI_TOKEN;
 const bhumiSampleCache = new Map();
 const bigZntPointCache = new Map();
 const BIG_ZNT_QUERY_URL = "https://kspservices.big.go.id/satupeta/rest/services/PUBLIK/PERIZINAN_DAN_PERTANAHAN/MapServer/60/query";
@@ -217,6 +215,23 @@ function withTimeout(promise, timeoutMs, label = "Operation") {
       clearTimeout(timer);
     }
   });
+}
+
+async function fetchBigWithRetry(url, timeoutMs, label) {
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await withTimeout(
+        fetch(url, { headers: { Accept: "application/json" } }),
+        timeoutMs,
+        label,
+      );
+    } catch (error) {
+      lastError = error;
+      if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 350));
+    }
+  }
+  throw lastError;
 }
 
 const RESEARCH_HINTS = [
@@ -397,13 +412,13 @@ function parseBody(req) {
   });
 }
 
-function decryptBhumiPayload(encrypted) {
+function decryptBhumiPayload(encrypted, passphrase = "s3CRetCR1pT0") {
   const raw = Buffer.from(String(encrypted || ""), "base64");
   if (raw.subarray(0, 8).toString("utf8") !== "Salted__") {
     throw new Error("Format respons terenkripsi BHUMI tidak dikenali.");
   }
   const salt = raw.subarray(8, 16);
-  const password = Buffer.from("s3CRetCR1pT0", "utf8");
+  const password = Buffer.from(String(passphrase), "utf8");
   let previous = Buffer.alloc(0);
   let derived = Buffer.alloc(0);
   while (derived.length < 48) {
@@ -415,78 +430,70 @@ function decryptBhumiPayload(encrypted) {
 }
 
 async function fetchBhumiPersil(body) {
+  const ticketResponse = await withTimeout(fetch("https://bhumi.atrbpn.go.id/expapi/auth-ticket", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: "https://bhumi.atrbpn.go.id", Referer: "https://bhumi.atrbpn.go.id/" },
+  }), BHUMI_REQUEST_TIMEOUT_MS, "BHUMI auth ticket request");
+  const ticket = await ticketResponse.json().catch(() => ({}));
+  if (!ticketResponse.ok || !ticket.ticketId || !ticket.challengeSeed) {
+    throw new Error(ticket.message || `BHUMI auth ticket HTTP ${ticketResponse.status}`);
+  }
+
+  // Current BHUMI requires an ephemeral P-256 public key and a one-use
+  // auth ticket for each getPersil request.
+  const keyPair = crypto.generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  const publicKeyDer = crypto.createPublicKey(keyPair.publicKey).export({ type: "spki", format: "der" });
+  const clientPubKey = publicKeyDer.subarray(-65).toString("hex");
   const requestBody = JSON.stringify({ ...body, url: "/expapi/getPersil", service: "/bhumigs/umum" });
-  const fetchPersil = async (token) => withTimeout(fetch("https://bhumi.atrbpn.go.id/expapi/getPersil", {
+  const response = await withTimeout(fetch("https://bhumi.atrbpn.go.id/expapi/getPersil", {
     method: "POST",
     headers: {
-      Authorization: token,
       "Content-Type": "application/json",
       Accept: "application/json",
       Origin: "https://bhumi.atrbpn.go.id",
-      Referer: "https://bhumi.atrbpn.go.id/peta",
+      Referer: "https://bhumi.atrbpn.go.id/",
+      "x-timestamp": Date.now().toString(),
+      "x-client-pubkey": clientPubKey,
+      "x-ticket-id": ticket.ticketId,
     },
     body: requestBody,
   }), BHUMI_REQUEST_TIMEOUT_MS, "BHUMI persil request");
-
-  let response = await fetchPersil(await loginBhumi());
-  if (response.status === 401 || response.status === 403) {
-    response = await fetchPersil(await loginBhumi(true));
-  }
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.message || `BHUMI HTTP ${response.status}`);
-  return payload.encrypted && payload.data ? decryptBhumiPayload(payload.data) : payload;
-}
-
-function extractBhumiToken(rawToken) {
-  let token = String(rawToken || "").trim();
-  try {
-    const parsed = JSON.parse(token);
-    if (typeof parsed === "string") token = parsed;
-    else if (parsed && typeof parsed === "object") {
-      token = parsed.token || parsed.access_token || parsed.accessToken || parsed.authorization || parsed.data || "";
-      if (typeof token === "object") token = token.token || token.access_token || "";
+  if (!response.ok) {
+    const reason = payload.error || payload.message || `HTTP ${response.status}`;
+    if (response.status === 401 || response.status === 403) {
+      throw new Error(`BHUMI menolak token (HTTP ${response.status}). Token di .env mungkin kedaluwarsa atau perlu diperbarui lewat login resmi BHUMI.`);
     }
-  } catch {}
-  return String(token || "").trim().replace(/^"|"$/g, "");
-}
+    throw new Error(`BHUMI getPersil ${reason}`);
+  }
+  if (!payload.encrypted || !payload.data || !payload.ecdh || !payload.serverPubKey) return payload;
 
-async function loginBhumi(force = false) {
-  if (bhumiTokenCache && !force) return bhumiTokenCache;
-  const loginResponse = await withTimeout(fetch("https://bhumi.atrbpn.go.id/expapi/loginApi", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Origin: "https://bhumi.atrbpn.go.id",
-      Referer: "https://bhumi.atrbpn.go.id/peta",
-      "User-Agent": "Mozilla/5.0",
-    },
-    body: JSON.stringify({ username: "user", password: "password" }),
-  }), BHUMI_REQUEST_TIMEOUT_MS, "BHUMI login request");
-  if (!loginResponse.ok) throw new Error(`BHUMI login HTTP ${loginResponse.status}`);
-  bhumiTokenCache = extractBhumiToken(await loginResponse.text());
-  if (!bhumiTokenCache) throw new Error("BHUMI login tidak mengembalikan token.");
-  return bhumiTokenCache;
+  const serverPublicKeyDer = Buffer.concat([
+    Buffer.from("3059301306072a8648ce3d020106082a8648ce3d030107034200", "hex"),
+    Buffer.from(payload.serverPubKey, "hex"),
+  ]);
+  const sharedSecret = crypto.diffieHellman({
+    privateKey: keyPair.privateKey,
+    publicKey: crypto.createPublicKey({ key: serverPublicKeyDer, type: "spki", format: "der" }),
+  }).toString("hex");
+  const sessionPassphrase = crypto.createHash("sha256")
+    .update(`${sharedSecret}:${ticket.challengeSeed}`)
+    .digest("hex");
+  return decryptBhumiPayload(payload.data, sessionPassphrase);
 }
 
 async function handleBhumiWms(req, res, url) {
   try {
-    const upstreamUrl = new URL("https://bhumi.atrbpn.go.id/expapi/bhumigeos/umum/wms");
+    const upstreamUrl = new URL("https://bhumi.atrbpn.go.id/mprx/service");
     for (const [key, value] of url.searchParams) upstreamUrl.searchParams.set(key, value);
-    const requestWms = (token) => withTimeout(fetch(upstreamUrl, {
+    const response = await withTimeout(fetch(upstreamUrl, {
       headers: {
-        Authorization: token,
         Origin: "https://bhumi.atrbpn.go.id",
-        Referer: "https://bhumi.atrbpn.go.id/peta",
+        Referer: "https://bhumi.atrbpn.go.id/",
         "User-Agent": "Mozilla/5.0",
         Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
       },
     }), BHUMI_REQUEST_TIMEOUT_MS, "BHUMI WMS request");
-    let token = await loginBhumi();
-    let response = await requestWms(token);
-    if (response.status === 401 || response.status === 403) {
-      token = await loginBhumi(true);
-      response = await requestWms(token);
-    }
     const body = Buffer.from(await response.arrayBuffer());
     res.writeHead(response.status, {
       "Content-Type": response.headers.get("content-type") || "image/png",
@@ -809,11 +816,7 @@ async function fetchBigZntForPoint(lon, lat) {
     resultRecordCount: "20",
   });
   const request = (async () => {
-    const response = await withTimeout(
-      fetch(`${BIG_ZNT_QUERY_URL}?${params}`, { headers: { Accept: "application/json" } }),
-      BIG_ZNT_TIMEOUT_MS,
-      "BIG ZNT point query",
-    );
+    const response = await fetchBigWithRetry(`${BIG_ZNT_QUERY_URL}?${params}`, BIG_ZNT_TIMEOUT_MS, "BIG ZNT point query");
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || payload.error) throw new Error(payload.error?.message || `BIG ZNT HTTP ${response.status}`);
     return (payload.features || []).map((item) => item?.attributes || {}).filter((attributes) => Object.keys(attributes).length);
@@ -863,11 +866,7 @@ async function fetchBigLandUseForPoint(lon, lat) {
     returnGeometry: "false",
     resultRecordCount: "20",
   });
-  const response = await withTimeout(
-    fetch(`${BIG_LAND_USE_QUERY_URL}?${params}`, { headers: { Accept: "application/json" } }),
-    BIG_LAND_USE_TIMEOUT_MS,
-    "BIG land-use point query",
-  );
+  const response = await fetchBigWithRetry(`${BIG_LAND_USE_QUERY_URL}?${params}`, BIG_LAND_USE_TIMEOUT_MS, "BIG land-use point query");
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || payload.error) throw new Error(payload.error?.message || `BIG land-use HTTP ${response.status}`);
   return (payload.features || []).map((item) => item?.attributes || {}).filter((attributes) => Object.keys(attributes).length);
@@ -877,7 +876,7 @@ async function handleBhumiIdentify(req, res) {
   try {
     const body = await parseBody(req);
     const layer = String(body.service_layer_name || "");
-    if (!["umum:ZNTRANGE", "umum:PenggunaanTanah", "umum:nbt3"].includes(layer)) {
+    if (!["umum:ZNTRANGE", "umum:PenggunaanTanah", "umum:nbt3", "umum:Persil"].includes(layer)) {
       sendJson(res, 400, { error: "Layer BHUMI tidak didukung." });
       return;
     }
@@ -1015,11 +1014,7 @@ async function handleBigZntProxy(req, res, url) {
     const target = new URL(BIG_ZNT_QUERY_URL);
     for (const [key, value] of url.searchParams) target.searchParams.set(key, value);
     if (!target.searchParams.has("f")) target.searchParams.set("f", "json");
-    const response = await withTimeout(
-      fetch(target, { headers: { Accept: "application/json" } }),
-      BIG_ZNT_TIMEOUT_MS,
-      "BIG ZNT proxy",
-    );
+    const response = await fetchBigWithRetry(target, BIG_ZNT_TIMEOUT_MS, "BIG ZNT proxy");
     const contentType = response.headers.get("content-type") || "application/json; charset=utf-8";
     const payload = await response.json().catch(() => null);
     let responsePayload = payload;
