@@ -5536,14 +5536,16 @@ async function downloadFsdPdf() {
   if (!currentMapContext) return;
   const popup = window.open("", "_blank", "width=1100,height=900");
   if (!popup) { setStatus("Popup diblokir browser. Izinkan popup untuk membuat FSD PDF.", true); return; }
-  await saveFsdLocal();
-  const data = JSON.parse(localStorage.getItem(fsdStorageKey()) || "{}");
-  Object.assign(data, await getFsdAttachments(fsdStorageKey()));
+  setStatus("Menyiapkan dokumen FSD dan lampiran PDF RAB…");
+  let data;
   try {
+    await saveFsdLocal();
+    data = JSON.parse(localStorage.getItem(fsdStorageKey()) || "{}");
+    Object.assign(data, await getFsdAttachments(fsdStorageKey()));
     await renderFsdPdfAttachments(data);
   } catch (error) {
-    console.error("Lampiran PDF RAB tidak dapat diproses:", error);
-    setStatus(`Lampiran PDF RAB gagal diproses: ${error.message || "format PDF tidak didukung"}`, true);
+    console.error("Dokumen FSD atau lampiran PDF RAB tidak dapat diproses:", error);
+    setStatus(`Dokumen FSD gagal disiapkan: ${error.message || "terjadi kesalahan"}`, true);
     popup.close();
     return;
   }
@@ -5563,6 +5565,7 @@ async function downloadFsdPdf() {
   popup.document.open();
   popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>FSD - ${escapeHtml(area)}</title><style>@page{size:A4 portrait;margin:0}@page fsd-xlsx-landscape{size:A4 landscape;margin:10mm}body{font:14px Arial,sans-serif;color:#172033;line-height:1.5;margin:0}.fsd-content{padding:12mm}h1{color:#075985}h2{font-size:19px;font-weight:700;margin:18px 0 10px;color:#0f766e;border-bottom:2px solid #ccfbf1;padding-bottom:6px}h3{color:#334155}table{width:100%;border-collapse:collapse}th,td{border:1px solid #cbd5e1;padding:9px;text-align:left}th{width:34%;background:#f1f5f9}figure{margin:12px 0;page-break-inside:avoid;break-inside:avoid}figure img{max-width:100%;max-height:600px;object-fit:contain}figcaption{font-size:11px;color:#64748b}.fsd-section{page-break-inside:auto;break-inside:auto}.fsd-section h2{page-break-after:avoid;break-after:avoid}.fsd-section img{max-height:520px}.fsd-rab-pdf-page{width:186mm;height:273mm;margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;break-before:page;page-break-before:always;break-inside:avoid;page-break-inside:avoid}.fsd-rab-pdf-page:first-child{break-before:auto;page-break-before:auto}.fsd-rab-pdf-page img{display:block;max-width:186mm;max-height:260mm;object-fit:contain}.fsd-rab-pdf-page figcaption{margin-top:3mm}.fsd-print-page{break-before:page}.fsd-approval-page{break-after:page;page-break-after:always;break-inside:avoid;page-break-inside:avoid;width:210mm;height:297mm;padding:10mm;box-sizing:border-box;display:flex;align-items:center;justify-content:center;margin:0}.fsd-approval-page img{display:block;width:auto;height:auto;max-width:100%;max-height:100%;object-fit:contain}.fsd-spreadsheet{width:100%;max-width:100%;table-layout:fixed;border-collapse:collapse;page-break-inside:auto;break-inside:auto}.fsd-spreadsheet thead{display:table-header-group}.fsd-spreadsheet tr{break-inside:avoid;page-break-inside:avoid}.fsd-spreadsheet th,.fsd-spreadsheet td{width:auto;min-width:0;padding:3px;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}.fsd-xlsx{page:fsd-xlsx-landscape;break-before:page;break-inside:auto;page-break-inside:auto}.fsd-xlsx-sheet{break-inside:auto;page-break-inside:auto}.fsd-xlsx h3{break-after:avoid;page-break-after:avoid}@media print{body{margin:0}.fsd-content{padding:12mm}.fsd-approval-page{margin:0}}</style></head><body>${approvalPagesHtml}<main class="fsd-content"><h1>Functional Specification Document (FSD)</h1><p><b>Wilayah:</b> ${escapeHtml(area)}<br><b>Tanggal:</b> ${new Date().toLocaleDateString("id-ID")}</p><section class="fsd-section"><h2>1. Informasi wilayah & spesifikasi ruko</h2><table>${table}</table></section>${attachment("Foto ruko tampak depan", "photoFront",2)}${attachment("Foto ruko lantai 1", "photoFloor1",3)}${attachment("Foto ruko lantai 2", "photoFloor2",4)}${attachment("Foto ruko lantai 3", "photoFloor3",5)}<section class="fsd-section"><h2>6. Peta sebaran member cabang terdekat</h2><table>${branches}</table>${branchPhotos}</section>${attachment("Desain ruangan", "roomDesign",7)}${attachment("Desain playground", "playgroundDesign",8)}${attachment("RAB renovasi & Pengadaan", "renovationBudget",9)}<section class="fsd-section"><h2>10. Kebutuhan karyawan</h2><table><tr><th>Kepala Unit</th><td>1 orang</td></tr><tr><th>Guru 1</th><td>${fsdPrintValue(data.teacherProgram1)}</td></tr><tr><th>Guru 2</th><td>${fsdPrintValue(data.teacherProgram2)}</td></tr></table></section><section class="fsd-section"><h2>11. Tambahan lain</h2><p>${fsdPrintValue(data.additionalNotes)}</p><p><b>PIC:</b> ${fsdPrintValue(data.pic)}</p></section><h2 class="fsd-print-page">Lampiran: Hasil Analisa Area</h2>${analysisBody}</main><script>window.onload=async()=>{await Promise.all(Array.from(document.images,image=>image.decode().catch(()=>{})));setTimeout(()=>window.print(),300);};</script></body></html>`);
   popup.document.close();
+  setStatus("Dokumen FSD siap. Pilih ‘Save as PDF’ pada dialog cetak.");
 }
 
 generateFsdBtn?.addEventListener("click", () => { loadFsdLocal(); fsdDialog?.showModal(); });
