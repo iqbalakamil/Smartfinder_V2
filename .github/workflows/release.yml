@@ -32,8 +32,19 @@ jobs:
       - name: Build desktop installer
         shell: pwsh
         run: |
-          npm run desktop:build 2>&1 | Tee-Object electron-builder.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Set-Content -Path electron-builder.log -Value ""
+          $buildExitCode = 1
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            "Build attempt $attempt of 3" | Tee-Object -FilePath electron-builder.log -Append
+            npm run desktop:build 2>&1 | Tee-Object -FilePath electron-builder.log -Append
+            $buildExitCode = $LASTEXITCODE
+            if ($buildExitCode -eq 0) { exit 0 }
+            if ($attempt -lt 3) {
+              "Build failed with exit code $buildExitCode; retrying after a short delay." | Tee-Object -FilePath electron-builder.log -Append
+              Start-Sleep -Seconds (15 * $attempt)
+            }
+          }
+          exit $buildExitCode
       - name: Upload builder log
         if: always()
         uses: actions/upload-artifact@v4
