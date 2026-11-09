@@ -139,6 +139,19 @@ const BIG_LAND_USE_QUERY_URL = "https://kspservices.big.go.id/satupeta/rest/serv
 const BIG_ZNT_TIMEOUT_MS = Number(process.env.BIG_ZNT_TIMEOUT_MS || 20000);
 const BIG_LAND_USE_TIMEOUT_MS = Number(process.env.BIG_LAND_USE_TIMEOUT_MS || 20000);
 const BHUMI_REQUEST_TIMEOUT_MS = Number(process.env.BHUMI_REQUEST_TIMEOUT_MS || 15000);
+const BHUMI_USER_AGENT = process.env.BHUMI_USER_AGENT || "Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Mobile Safari/537.36";
+const BHUMI_SEC_CH_UA = process.env.BHUMI_SEC_CH_UA || '"Not:A-Brand";v="8", "Chromium";v="156", "Google Chrome";v="156"';
+const BHUMI_SEC_CH_UA_MOBILE = process.env.BHUMI_SEC_CH_UA_MOBILE || "?1";
+const BHUMI_SEC_CH_UA_PLATFORM = process.env.BHUMI_SEC_CH_UA_PLATFORM || '"Android"';
+const bhumiSessionCookieJar = new Map(String(process.env.BHUMI_COOKIE || "")
+  .split(";")
+  .map((part) => part.trim())
+  .filter(Boolean)
+  .map((part) => {
+    const separator = part.indexOf("=");
+    return separator > 0 ? [part.slice(0, separator).trim(), part.slice(separator + 1).trim()] : ["", ""];
+  })
+  .filter(([name, value]) => name && value));
 let bhumiLocalFeatureIndex = null;
 let bhumiPersistentWriteTimer = null;
 // BIG now supplies polygons for land-use and ZNT, so BHUMI only needs a
@@ -231,6 +244,58 @@ function withTimeout(promise, timeoutMs, label = "Operation") {
       clearTimeout(timer);
     }
   });
+}
+
+function bhumiBrowserHeaders({ json = true } = {}) {
+  const headers = {
+    Accept: json ? "application/json, text/plain, */*" : "*/*",
+    "Accept-Language": "en-US,en;q=0.9",
+    Origin: "https://bhumi.atrbpn.go.id",
+    Referer: "https://bhumi.atrbpn.go.id/",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-CH-UA": BHUMI_SEC_CH_UA,
+    "Sec-CH-UA-Mobile": BHUMI_SEC_CH_UA_MOBILE,
+    "Sec-CH-UA-Platform": BHUMI_SEC_CH_UA_PLATFORM,
+    "User-Agent": BHUMI_USER_AGENT,
+  };
+  if (json) headers["Content-Type"] = "application/json";
+  if (bhumiSessionCookieJar.size) {
+    headers.Cookie = [...bhumiSessionCookieJar].map(([name, value]) => `${name}=${value}`).join("; ");
+  }
+  return headers;
+}
+
+function updateBhumiCookies(response) {
+  const setCookies = response.headers.getSetCookie?.()
+    || [response.headers.get("set-cookie")].filter(Boolean);
+  for (const setCookie of setCookies) {
+    const [pair, ...attributes] = setCookie.split(";");
+    const separator = pair.indexOf("=");
+    if (separator <= 0) continue;
+    const name = pair.slice(0, separator).trim();
+    const value = pair.slice(separator + 1).trim();
+    const expired = attributes.some((attribute) => /^\s*max-age\s*=\s*0\s*$/i.test(attribute));
+    if (expired || !value) bhumiSessionCookieJar.delete(name);
+    else bhumiSessionCookieJar.set(name, value);
+  }
+}
+
+async function fetchBhumiAuthTicket() {
+  const response = await withTimeout(fetch("https://bhumi.atrbpn.go.id/expapi/auth-ticket", {
+    method: "POST",
+    headers: bhumiBrowserHeaders(),
+  }), BHUMI_REQUEST_TIMEOUT_MS, "BHUMI auth ticket request");
+  updateBhumiCookies(response);
+  const ticket = await response.json().catch(() => ({}));
+  if (!response.ok || !ticket.ticketId || !ticket.challengeSeed) {
+    if (response.status === 403) {
+      throw new Error("BHUMI auth ticket HTTP 403; gateway membutuhkan cookie browser BHUMI aktif. Isi BHUMI_COOKIE di .env lokal dengan cookie sesi baru.");
+    }
+    throw new Error(ticket.message || `BHUMI auth ticket HTTP ${response.status}`);
+  }
+  return ticket;
 }
 
 async function fetchBigWithRetry(url, timeoutMs, label) {
@@ -448,14 +513,7 @@ function decryptBhumiPayload(encrypted, passphrase = "s3CRetCR1pT0") {
 }
 
 async function fetchBhumiPersilOnce(body) {
-  const ticketResponse = await withTimeout(fetch("https://bhumi.atrbpn.go.id/expapi/auth-ticket", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Origin: "https://bhumi.atrbpn.go.id", Referer: "https://bhumi.atrbpn.go.id/" },
-  }), BHUMI_REQUEST_TIMEOUT_MS, "BHUMI auth ticket request");
-  const ticket = await ticketResponse.json().catch(() => ({}));
-  if (!ticketResponse.ok || !ticket.ticketId || !ticket.challengeSeed) {
-    throw new Error(ticket.message || `BHUMI auth ticket HTTP ${ticketResponse.status}`);
-  }
+  const ticket = await fetchBhumiAuthTicket();
 
   // Current BHUMI requires an ephemeral P-256 public key and a one-use
   // auth ticket for each getPersil request.
@@ -466,16 +524,14 @@ async function fetchBhumiPersilOnce(body) {
   const response = await withTimeout(fetch("https://bhumi.atrbpn.go.id/expapi/getPersil", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      Origin: "https://bhumi.atrbpn.go.id",
-      Referer: "https://bhumi.atrbpn.go.id/",
+      ...bhumiBrowserHeaders(),
       "x-timestamp": Date.now().toString(),
       "x-client-pubkey": clientPubKey,
       "x-ticket-id": ticket.ticketId,
     },
     body: requestBody,
   }), BHUMI_REQUEST_TIMEOUT_MS, "BHUMI persil request");
+  updateBhumiCookies(response);
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     const reason = payload.error || payload.message || `HTTP ${response.status}`;
@@ -524,14 +580,7 @@ async function fetchBhumiPersil(body) {
 }
 
 async function fetchBhumiAnalisaPersilOnce({ latitude, longitude, luas }) {
-  const ticketResponse = await withTimeout(fetch("https://bhumi.atrbpn.go.id/expapi/auth-ticket", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Origin: "https://bhumi.atrbpn.go.id", Referer: "https://bhumi.atrbpn.go.id/" },
-  }), BHUMI_REQUEST_TIMEOUT_MS, "BHUMI auth ticket request");
-  const ticket = await ticketResponse.json().catch(() => ({}));
-  if (!ticketResponse.ok || !ticket.ticketId || !ticket.challengeSeed) {
-    throw new Error(ticket.message || `BHUMI auth ticket HTTP ${ticketResponse.status}`);
-  }
+  const ticket = await fetchBhumiAuthTicket();
 
   const keyPair = crypto.generateKeyPairSync("ec", { namedCurve: "prime256v1" });
   const publicKeyDer = crypto.createPublicKey(keyPair.publicKey).export({ type: "spki", format: "der" });
@@ -539,16 +588,14 @@ async function fetchBhumiAnalisaPersilOnce({ latitude, longitude, luas }) {
   const response = await withTimeout(fetch("https://bhumi.atrbpn.go.id/expapi/analisaPersil", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      Origin: "https://bhumi.atrbpn.go.id",
-      Referer: "https://bhumi.atrbpn.go.id/",
+      ...bhumiBrowserHeaders(),
       "x-timestamp": Date.now().toString(),
       "x-client-pubkey": clientPubKey,
       "x-ticket-id": ticket.ticketId,
     },
     body: JSON.stringify({ latitude, longitude, luas }),
   }), BHUMI_REQUEST_TIMEOUT_MS, "BHUMI analisaPersil request");
+  updateBhumiCookies(response);
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     const reason = payload.error || payload.message || `HTTP ${response.status}`;
