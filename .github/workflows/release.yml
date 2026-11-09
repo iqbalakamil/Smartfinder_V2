@@ -18,7 +18,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          npm ci 2>&1 | Tee-Object npm-ci.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Set release version
         shell: pwsh
         run: |
@@ -35,7 +39,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: electron-builder-log-${{ github.run_number }}
-          path: electron-builder.log
+          path: |
+            npm-ci.log
+            electron-builder.log
           if-no-files-found: warn
       - name: Publish builder failure diagnostic
         if: failure()
@@ -45,14 +51,22 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const log = fs.existsSync(process.env.BUILDER_LOG)
-              ? fs.readFileSync(process.env.BUILDER_LOG, 'utf8')
-              : 'builder log tidak ditemukan';
+            const logs = ['npm-ci.log', process.env.BUILDER_LOG]
+              .filter((file) => fs.existsSync(file))
+              .map((file) => `--- ${file} ---\n${fs.readFileSync(file, 'utf8')}`);
+            const log = logs.join('\n\n') || 'log build tidak ditemukan';
+            const body = [
+              `Diagnostic otomatis untuk run ${context.runNumber}.`,
+              '',
+              '```text',
+              log.slice(-60000),
+              '```'
+            ].join('\n');
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: `Build diagnostic run ${context.runNumber}`,
-              body: `Diagnostic otomatis untuk run ${context.runNumber}.\\n\\n\\`\\`\\`text\\n${log.slice(-60000)}\\n\\`\\`\\``
+              body
             });
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
