@@ -1370,7 +1370,11 @@ function buildPdfDemographyCharts(report) {
   const births = [2020, 2021, 2022, 2023, 2024].map((year) => ({
     label: String(year), value: report?.pertumbuhan_penduduk?.[`lahir_tahun_${year}`],
   }));
-  return `<div class="pdf-chart-stack"><div class="card"><h3>Kelompok Usia</h3>${buildPdfVerticalBarChart(ageGroups.map(([label, key], index) => ({ label, value: report?.kelompok_usia?.[key], color: ["#0f766e", "#1d4ed8", "#3b82f6", "#f59e0b"][index % 4] })))}</div><div class="card"><h3>Jumlah Kelahiran per Tahun</h3>${buildPdfLineChart(births, { valueFormatter: formatNumber })}</div><div class="card"><h3>Pekerjaan</h3>${buildPdfPieChart(occupations)}</div></div>`;
+  const reportTables = Object.entries(report)
+    .filter(([key, value]) => key !== "raw_attributes" && value != null && typeof value === "object")
+    .map(([key, value]) => buildNestedJsonTables(formatJsonKeyLabel(key), value))
+    .join("");
+  return `<div class="pdf-chart-stack"><div class="card"><h3>Data Demografi Dukcapil</h3>${reportTables || '<p class="muted">Tabel demografi tidak tersedia.</p>'}</div><div class="card"><h3>Kelompok Usia</h3>${buildPdfVerticalBarChart(ageGroups.map(([label, key], index) => ({ label, value: report?.kelompok_usia?.[key], color: ["#0f766e", "#1d4ed8", "#3b82f6", "#f59e0b"][index % 4] })))}</div><div class="card"><h3>Jumlah Kelahiran per Tahun</h3>${buildPdfLineChart(births, { valueFormatter: formatNumber })}</div><div class="card"><h3>Pekerjaan</h3>${buildPdfPieChart(occupations)}</div></div>`;
 }
 
 function buildPdfReportHtml(landValueSummary = null, selectedPois = null) {
@@ -1393,7 +1397,10 @@ function buildPdfReportHtml(landValueSummary = null, selectedPois = null) {
   const quality = latestStructuredAnalysis?.data_quality || {};
   const topDistrict = latestStructuredAnalysis?.district_analysis?.[0] || {};
   const scenarios = market?.market_size_scenarios || {};
-  const demographyReport = getPdfDemographyReport(latestStructuredAnalysis);
+  const demographyReport = getPdfDemographyReport(latestStructuredAnalysis)
+    || getPdfDemographyReport(latestAnalysisContext?.demographyPayload)
+    || latestAnalysisContext?.demographyPayload?.report
+    || null;
   const areaCoverage = Array.isArray(latestAnalysisContext?.areaCoverage) ? latestAnalysisContext.areaCoverage : [];
   const landValueRows = landValueSummary?.samples?.length
     ? landValueSummary.samples.map((sample) => [sample.label, sample.value])
@@ -5635,7 +5642,21 @@ async function downloadFsdPdf() {
     popup.close();
     return;
   }
-  const analysisDoc = new DOMParser().parseFromString(buildPdfReportHtml(), "text/html");
+  const analysisWaitStartedAt = Date.now();
+  while (isProcessing && Date.now() - analysisWaitStartedAt < 180000) {
+    setStatus("Menunggu data analisa dan demografi selesai sebelum menyusun FSD...");
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  let landValueSummary = null;
+  try {
+    if (currentMapContext) {
+      setStatus("Mengambil sampel nilai tanah dan penggunaan tanah untuk lampiran FSD...");
+      landValueSummary = await collectPdfLandValueSamples();
+    }
+  } catch (error) {
+    console.warn("Data nilai tanah FSD tidak dapat diambil:", error);
+  }
+  const analysisDoc = new DOMParser().parseFromString(buildPdfReportHtml(landValueSummary), "text/html");
   const analysisBody = analysisDoc.body.innerHTML;
   const analysisStyles = Array.from(analysisDoc.head.querySelectorAll("style"), (style) => style.outerHTML).join("");
   const rows = [
