@@ -523,6 +523,77 @@ async function fetchBhumiPersil(body) {
   throw lastError;
 }
 
+async function fetchBhumiAnalisaPersilOnce({ latitude, longitude, luas }) {
+  const ticketResponse = await withTimeout(fetch("https://bhumi.atrbpn.go.id/expapi/auth-ticket", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: "https://bhumi.atrbpn.go.id", Referer: "https://bhumi.atrbpn.go.id/" },
+  }), BHUMI_REQUEST_TIMEOUT_MS, "BHUMI auth ticket request");
+  const ticket = await ticketResponse.json().catch(() => ({}));
+  if (!ticketResponse.ok || !ticket.ticketId || !ticket.challengeSeed) {
+    throw new Error(ticket.message || `BHUMI auth ticket HTTP ${ticketResponse.status}`);
+  }
+
+  const keyPair = crypto.generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  const publicKeyDer = crypto.createPublicKey(keyPair.publicKey).export({ type: "spki", format: "der" });
+  const clientPubKey = publicKeyDer.subarray(-65).toString("hex");
+  const response = await withTimeout(fetch("https://bhumi.atrbpn.go.id/expapi/analisaPersil", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Origin: "https://bhumi.atrbpn.go.id",
+      Referer: "https://bhumi.atrbpn.go.id/",
+      "x-timestamp": Date.now().toString(),
+      "x-client-pubkey": clientPubKey,
+      "x-ticket-id": ticket.ticketId,
+    },
+    body: JSON.stringify({ latitude, longitude, luas }),
+  }), BHUMI_REQUEST_TIMEOUT_MS, "BHUMI analisaPersil request");
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const reason = payload.error || payload.message || `HTTP ${response.status}`;
+    if (response.status === 401 || response.status === 403) {
+      throw new Error(`BHUMI analisaPersil ditolak (HTTP ${response.status}).`);
+    }
+    throw new Error(`BHUMI analisaPersil ${reason}`);
+  }
+  if (!payload.encrypted || !payload.data || !payload.ecdh || !payload.serverPubKey) return payload;
+
+  const serverPublicKeyDer = Buffer.concat([
+    Buffer.from("3059301306072a8648ce3d020106082a8648ce3d030107034200", "hex"),
+    Buffer.from(payload.serverPubKey, "hex"),
+  ]);
+  const sharedSecret = crypto.diffieHellman({
+    privateKey: keyPair.privateKey,
+    publicKey: crypto.createPublicKey({ key: serverPublicKeyDer, type: "spki", format: "der" }),
+  }).toString("hex");
+  const sessionPassphrase = crypto.createHash("sha256")
+    .update(`${sharedSecret}:${ticket.challengeSeed}`)
+    .digest("hex");
+  return decryptBhumiPayload(payload.data, sessionPassphrase);
+}
+
+async function fetchBhumiAnalisaPersil(body) {
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await fetchBhumiAnalisaPersilOnce(body);
+    } catch (error) {
+      lastError = error;
+      const causeCode = error?.cause?.code;
+      const transient = error?.name === "TypeError"
+        || error?.code === "ETIMEDOUT"
+        || ["ECONNRESET", "ECONNREFUSED", "EAI_AGAIN", "ENETUNREACH", "UND_ERR_CONNECT_TIMEOUT"].includes(causeCode);
+      if (!transient || attempt === 1) break;
+      await new Promise((resolve) => setTimeout(resolve, 700));
+    }
+  }
+  if (lastError?.cause?.code && lastError.message === "fetch failed") {
+    throw new Error(`BHUMI analisaPersil fetch failed (${lastError.cause.code})`);
+  }
+  throw lastError;
+}
+
 async function handleBhumiWms(req, res, url) {
   try {
     const upstreamUrl = new URL("https://bhumi.atrbpn.go.id/mprx/service");
@@ -963,12 +1034,43 @@ async function handleBhumiIdentify(req, res) {
         }
       }
       if (!features.length) {
+        let analisaError = null;
+        try {
+          const requestedArea = Number(body.luas);
+          const analisa = await fetchBhumiAnalisaPersil({
+            latitude: point[1],
+            longitude: point[0],
+            // The dashboard samples land value per m². Use the supplied
+            // parcel size when available, otherwise request a 1 m² sample.
+            luas: Number.isFinite(requestedArea) && requestedArea > 0 ? requestedArea : 1,
+          });
+          const analysisFeature = bhumiAnalisaLandValue(analisa);
+          if (analysisFeature) {
+            features.push(analysisFeature);
+            resultSource = "bhumi-analisa-persil";
+          } else {
+            analisaError = new Error("respons tidak memuat rentang nilai tanah yang dikenali");
+          }
+        } catch (error) {
+          analisaError = error;
+        }
+        if (features.length) {
+          console.log(`[CGIS ZNT] identify source=${resultSource} features=${features.length}`);
+          sendJson(res, 200, {
+            layer,
+            result: { type: "FeatureCollection", features },
+            source: resultSource,
+            ...(bigError ? { warning: bigError.message } : {}),
+          });
+          return;
+        }
         try {
           const bhumi = await fetchBhumiPersilForPoint(layer, body, point);
           features.push(...(bhumi?.features || bhumi?.data?.features || []));
           if (features.length) resultSource = "bhumi-point-fallback";
         } catch (fallbackError) {
-          sendJson(res, 502, { error: `${bigError?.message || "BIG ZNT tidak menemukan data"}; fallback BHUMI: ${fallbackError.message || "gagal"}` });
+          const fallbackDetails = [analisaError && `analisaPersil: ${analisaError.message}`, `getPersil: ${fallbackError.message || "gagal"}`].filter(Boolean).join("; ");
+          sendJson(res, 502, { error: `${bigError?.message || "BIG ZNT tidak menemukan data"}; fallback BHUMI: ${fallbackDetails}` });
           return;
         }
       }
@@ -1135,6 +1237,45 @@ function bhumiFeaturePropertiesList(result) {
   }
   const properties = bhumiFeatureProperties(result);
   return properties && typeof properties === "object" ? [properties] : [];
+}
+
+function bhumiAnalisaLandValue(result) {
+  const scalars = [];
+  const visit = (value, keyPath = "", seen = new Set()) => {
+    if (value == null || typeof value !== "object") {
+      if (value != null) scalars.push({ key: keyPath.toLowerCase().replace(/[^a-z0-9]/g, ""), value });
+      return;
+    }
+    if (seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => visit(item, `${keyPath}${index}`, seen));
+      return;
+    }
+    for (const [key, child] of Object.entries(value)) {
+      visit(child, `${keyPath}.${key}`, seen);
+    }
+  };
+  visit(result);
+
+  const rangePattern = /(?:rp\s*)?\d[\d.,]*\s*(?:-|–|—|s\.d\.?|sampai|hingga|to)\s*(?:rp\s*)?\d[\d.,]*/i;
+  const preferred = scalars.find(({ key, value }) => /range|rentang|nilaitanah|landvalue|hargatanah/.test(key)
+    && typeof value === "string" && rangePattern.test(value));
+  const anyRange = preferred || scalars.find(({ value }) => typeof value === "string" && rangePattern.test(value));
+  if (!anyRange) return null;
+
+  const properties = {};
+  for (const { key, value } of scalars) {
+    if (!key) continue;
+    const name = key.split(".").pop();
+    if (name && properties[name] == null) properties[name] = value;
+  }
+  properties.range = anyRange.value;
+  const zone = scalars.find(({ key, value }) => /zona|zone|nozn/.test(key) && value != null);
+  const year = scalars.find(({ key, value }) => /tahun|year|thn/.test(key) && value != null);
+  if (zone && properties.nozn == null) properties.nozn = zone.value;
+  if (year && properties.thnsk == null) properties.thnsk = year.value;
+  return { type: "Feature", properties };
 }
 
 function bhumiValue(properties, names) {
