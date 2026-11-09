@@ -1,9 +1,24 @@
 require("dotenv").config({ quiet: true });
 const http = require("http");
 const https = require("https");
+const tls = require("tls");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const BHUMI_ISSUER_CERT_PATH = path.join(__dirname, "certs", "digicert-global-g2-tls-rsa-sha256-2020-ca1.pem");
+if (fs.existsSync(BHUMI_ISSUER_CERT_PATH)) {
+  const bhumiIssuerCertificate = new crypto.X509Certificate(fs.readFileSync(BHUMI_ISSUER_CERT_PATH));
+  if (bhumiIssuerCertificate.fingerprint256 !== "C8:02:5F:9F:C6:5F:DF:C9:5B:3C:A8:CC:78:67:B9:A5:87:B5:27:79:73:95:79:17:46:3F:C8:13:D0:B6:25:A9"
+    || !bhumiIssuerCertificate.ca) {
+    throw new Error("Sertifikat perantara DigiCert untuk koneksi BHUMI tidak valid.");
+  }
+  // BHUMI currently omits its DigiCert intermediate from the TLS chain.
+  // Add the verified intermediate while retaining Node's normal trusted roots.
+  tls.setDefaultCACertificates([
+    ...tls.getCACertificates(),
+    fs.readFileSync(BHUMI_ISSUER_CERT_PATH, "utf8"),
+  ]);
+}
 const { execFile, execFileSync } = require("child_process");
 const { crawlGoogleMapsPois } = require("./google-maps-crawler");
 const EXTENSION_CATEGORY_CONFIG = require("./hotspot map V.2/category-config.js");
@@ -432,7 +447,7 @@ function decryptBhumiPayload(encrypted, passphrase = "s3CRetCR1pT0") {
   return JSON.parse(Buffer.concat([decipher.update(raw.subarray(16)), decipher.final()]).toString("utf8"));
 }
 
-async function fetchBhumiPersil(body) {
+async function fetchBhumiPersilOnce(body) {
   const ticketResponse = await withTimeout(fetch("https://bhumi.atrbpn.go.id/expapi/auth-ticket", {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: "https://bhumi.atrbpn.go.id", Referer: "https://bhumi.atrbpn.go.id/" },
@@ -483,6 +498,29 @@ async function fetchBhumiPersil(body) {
     .update(`${sharedSecret}:${ticket.challengeSeed}`)
     .digest("hex");
   return decryptBhumiPayload(payload.data, sessionPassphrase);
+}
+
+async function fetchBhumiPersil(body) {
+  let lastError;
+  // BHUMI issues a one-use ticket, so each retry must restart the whole
+  // handshake and obtain a fresh ticket and key pair.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await fetchBhumiPersilOnce(body);
+    } catch (error) {
+      lastError = error;
+      const causeCode = error?.cause?.code;
+      const transient = error?.name === "TypeError"
+        || error?.code === "ETIMEDOUT"
+        || ["ECONNRESET", "ECONNREFUSED", "EAI_AGAIN", "ENETUNREACH", "UND_ERR_CONNECT_TIMEOUT"].includes(causeCode);
+      if (!transient || attempt === 1) break;
+      await new Promise((resolve) => setTimeout(resolve, 700));
+    }
+  }
+  if (lastError?.cause?.code && lastError.message === "fetch failed") {
+    throw new Error(`BHUMI fetch failed (${lastError.cause.code})`);
+  }
+  throw lastError;
 }
 
 async function handleBhumiWms(req, res, url) {
