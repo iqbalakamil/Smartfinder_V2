@@ -222,14 +222,16 @@ async function fetchBigWithRetry(url, timeoutMs, label) {
   let lastError;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      return await withTimeout(
-        fetch(url, { headers: { Accept: "application/json" } }),
-        timeoutMs,
-        label,
-      );
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        return await fetch(url, { headers: { Accept: "application/json" }, signal: controller.signal });
+      } finally {
+        clearTimeout(timer);
+      }
     } catch (error) {
       lastError = error;
-      if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 350));
+      if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 500));
     }
   }
   throw lastError;
@@ -1172,11 +1174,7 @@ async function fetchBigZntForHexagon(feature) {
     returnGeometry: "false",
     resultRecordCount: "1000",
   });
-  const response = await withTimeout(
-    fetch(`${BIG_ZNT_QUERY_URL}?${params}`, { headers: { Accept: "application/json" } }),
-    BIG_ZNT_TIMEOUT_MS,
-    "BIG ZNT query",
-  );
+  const response = await fetchBigWithRetry(`${BIG_ZNT_QUERY_URL}?${params}`, BIG_ZNT_TIMEOUT_MS, "BIG ZNT query");
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || payload.error) {
     throw new Error(payload.error?.message || `BIG ZNT HTTP ${response.status}`);
@@ -1200,11 +1198,7 @@ async function fetchBigLandUseForHexagon(feature) {
     returnGeometry: "false",
     resultRecordCount: "1000",
   });
-  const response = await withTimeout(
-    fetch(`${BIG_LAND_USE_QUERY_URL}?${params}`, { headers: { Accept: "application/json" } }),
-    BIG_LAND_USE_TIMEOUT_MS,
-    "BIG land-use query",
-  );
+  const response = await fetchBigWithRetry(`${BIG_LAND_USE_QUERY_URL}?${params}`, BIG_LAND_USE_TIMEOUT_MS, "BIG land-use query");
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || payload.error) {
     throw new Error(payload.error?.message || `BIG land-use HTTP ${response.status}`);
@@ -1233,11 +1227,7 @@ async function fetchBigFreeholdForHexagon(feature) {
     returnGeometry: "false",
     resultRecordCount: "1000",
   });
-  const response = await withTimeout(
-    fetch(`https://kspservices.big.go.id/satupeta/rest/services/PUBLIK/PERIZINAN_DAN_PERTANAHAN/MapServer/${layerId}/query?${params}`, { headers: { Accept: "application/json" } }),
-    BIG_ZNT_TIMEOUT_MS,
-    "BIG freehold query",
-  );
+  const response = await fetchBigWithRetry(`https://kspservices.big.go.id/satupeta/rest/services/PUBLIK/PERIZINAN_DAN_PERTANAHAN/MapServer/${layerId}/query?${params}`, BIG_ZNT_TIMEOUT_MS, "BIG freehold query");
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || payload.error) {
     throw new Error(payload.error?.message || `BIG freehold HTTP ${response.status}`);
@@ -1259,11 +1249,7 @@ async function fetchBigSlumForHexagon(feature) {
     returnGeometry: "false",
     resultRecordCount: "1000",
   });
-  const response = await withTimeout(
-    fetch(`https://kspservices.big.go.id/satupeta/rest/services/PUBLIK/KAWASAN_KHUSUS_DAN_TRANSMIGRASI/MapServer/5/query?${params}`, { headers: { Accept: "application/json" } }),
-    BIG_LAND_USE_TIMEOUT_MS,
-    "BIG slum query",
-  );
+  const response = await fetchBigWithRetry(`https://kspservices.big.go.id/satupeta/rest/services/PUBLIK/KAWASAN_KHUSUS_DAN_TRANSMIGRASI/MapServer/5/query?${params}`, BIG_LAND_USE_TIMEOUT_MS, "BIG slum query");
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || payload.error) {
     throw new Error(payload.error?.message || `BIG slum HTTP ${response.status}`);
