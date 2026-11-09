@@ -84,7 +84,7 @@ async function launchConfiguredBrowser(launchOptions = {}) {
 
 const DEFAULT_PORT = Number(process.env.PORT || 3000);
 const HOST = "127.0.0.1";
-const POI_CACHE_VERSION = "v26-mix-search-source-split";
+const POI_CACHE_VERSION = "v27-mix-search-keep-unlocated-crawler-pois";
 const REQUEST_TIMEOUT_MS = Number(process.env.REQUEST_TIMEOUT_MS || 15000);
 const LITELLM_BASE_URL = "https://litellm.koboi2026.biz.id/v1";
 const LITELLM_MODEL = "gpt-4o-mini";
@@ -7943,7 +7943,11 @@ async function handlePois(req, res) {
       calculateDistanceMeters(lat, lon, item.lat, item.lon) <= radius
     );
     const googlePoisForMode = useMixSearch
-      ? googleHousingPoisWithinSelectedAreas.filter((item) => item.category !== "residential")
+      ? googleHousingPois.filter((item) => {
+          if (item.category === "residential") return false;
+          const normalized = normalizeBackendCrawlerPoi(item);
+          return !normalized || calculateDistanceMeters(lat, lon, normalized.lat, normalized.lon) <= radius;
+        })
       : googleHousingPoisWithinSelectedAreas;
     const arcgisPoisForMode = useMixSearch
       ? arcgisPlacesPoisInRadius.filter((item) => item.category === "residential")
@@ -7962,7 +7966,8 @@ async function handlePois(req, res) {
       counts[category] = (counts[category] || 0) + 1;
       return counts;
     }, {});
-    syncBackendHotmapPois(realPoisInSelectedKelurahan);
+    const locatedPoisInSelectedKelurahan = realPoisInSelectedKelurahan.filter((item) => Boolean(normalizeBackendCrawlerPoi(item)));
+    syncBackendHotmapPois(locatedPoisInSelectedKelurahan);
 
     const payload = {
       items: dedupePois([...poisToReturn]),
@@ -7984,10 +7989,11 @@ async function handlePois(req, res) {
           groups[place.category] = (groups[place.category] || 0) + 1;
           return groups;
         }, {}),
-        realPoisInRadius: realPoisInSelectedKelurahan.length,
+        realPoisInRadius: locatedPoisInSelectedKelurahan.length,
+        realPoisReturned: realPoisInSelectedKelurahan.length,
         categoryBreakdown,
         radiusFilterApplied: true,
-        radiusFilterNote: "Kelurahan dipetakan lebih dulu untuk menyusun query crawler; setiap POI berkoordinat kemudian divalidasi ulang dan hanya titik dalam radius 3 km yang dikirim ke peta.",
+        radiusFilterNote: "POI dengan koordinat divalidasi terhadap radius 3 km untuk marker peta. Hasil Google Maps tanpa koordinat tetap dikirim untuk daftar dan laporan, tetapi tidak dibuatkan marker.",
         googleMapsCoordSources: googleHousingPoisWithCoords.reduce((accumulator, item) => {
           const key = item.tags?.coord_source || "unknown";
           accumulator[key] = (accumulator[key] || 0) + 1;
@@ -7997,7 +8003,7 @@ async function handlePois(req, res) {
         hotmapV2InRadius: 0,
         hotmapV2ImportedAt: 0,
         backendHotmapTotal: backendHotmapMeta.total,
-        backendHotmapInRadius: realPoisInSelectedKelurahan.length,
+        backendHotmapInRadius: locatedPoisInSelectedKelurahan.length,
         backendHotmapImportedAt: backendHotmapMeta.importedAt,
         effectiveRadius: radius,
         areaCoverage,
