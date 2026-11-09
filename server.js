@@ -512,14 +512,25 @@ function decryptBhumiPayload(encrypted, passphrase = "s3CRetCR1pT0") {
   return JSON.parse(Buffer.concat([decipher.update(raw.subarray(16)), decipher.final()]).toString("utf8"));
 }
 
+function createBhumiEcdhSession() {
+  const ecdh = crypto.createECDH("prime256v1");
+  const clientPubKey = ecdh.generateKeys("hex", "uncompressed");
+  return { ecdh, clientPubKey };
+}
+
+function deriveBhumiSessionPassphrase(ecdh, serverPubKey, challengeSeed) {
+  const sharedSecret = ecdh.computeSecret(Buffer.from(String(serverPubKey || "").replace(/^0x/i, ""), "hex")).toString("hex");
+  return crypto.createHash("sha256")
+    .update(`${sharedSecret}:${challengeSeed}`)
+    .digest("hex");
+}
+
 async function fetchBhumiPersilOnce(body) {
   const ticket = await fetchBhumiAuthTicket();
 
   // Current BHUMI requires an ephemeral P-256 public key and a one-use
   // auth ticket for each getPersil request.
-  const keyPair = crypto.generateKeyPairSync("ec", { namedCurve: "prime256v1" });
-  const publicKeyDer = crypto.createPublicKey(keyPair.publicKey).export({ type: "spki", format: "der" });
-  const clientPubKey = publicKeyDer.subarray(-65).toString("hex");
+  const { ecdh, clientPubKey } = createBhumiEcdhSession();
   const requestBody = JSON.stringify({ ...body, url: "/expapi/getPersil", service: "/bhumigs/umum" });
   const response = await withTimeout(fetch("https://bhumi.atrbpn.go.id/expapi/getPersil", {
     method: "POST",
@@ -542,17 +553,7 @@ async function fetchBhumiPersilOnce(body) {
   }
   if (!payload.encrypted || !payload.data || !payload.ecdh || !payload.serverPubKey) return payload;
 
-  const serverPublicKeyDer = Buffer.concat([
-    Buffer.from("3059301306072a8648ce3d020106082a8648ce3d030107034200", "hex"),
-    Buffer.from(payload.serverPubKey, "hex"),
-  ]);
-  const sharedSecret = crypto.diffieHellman({
-    privateKey: keyPair.privateKey,
-    publicKey: crypto.createPublicKey({ key: serverPublicKeyDer, type: "spki", format: "der" }),
-  }).toString("hex");
-  const sessionPassphrase = crypto.createHash("sha256")
-    .update(`${sharedSecret}:${ticket.challengeSeed}`)
-    .digest("hex");
+  const sessionPassphrase = deriveBhumiSessionPassphrase(ecdh, payload.serverPubKey, ticket.challengeSeed);
   return decryptBhumiPayload(payload.data, sessionPassphrase);
 }
 
@@ -582,9 +583,7 @@ async function fetchBhumiPersil(body) {
 async function fetchBhumiAnalisaPersilOnce({ latitude, longitude, luas }) {
   const ticket = await fetchBhumiAuthTicket();
 
-  const keyPair = crypto.generateKeyPairSync("ec", { namedCurve: "prime256v1" });
-  const publicKeyDer = crypto.createPublicKey(keyPair.publicKey).export({ type: "spki", format: "der" });
-  const clientPubKey = publicKeyDer.subarray(-65).toString("hex");
+  const { ecdh, clientPubKey } = createBhumiEcdhSession();
   const response = await withTimeout(fetch("https://bhumi.atrbpn.go.id/expapi/analisaPersil", {
     method: "POST",
     headers: {
@@ -606,17 +605,7 @@ async function fetchBhumiAnalisaPersilOnce({ latitude, longitude, luas }) {
   }
   if (!payload.encrypted || !payload.data || !payload.ecdh || !payload.serverPubKey) return payload;
 
-  const serverPublicKeyDer = Buffer.concat([
-    Buffer.from("3059301306072a8648ce3d020106082a8648ce3d030107034200", "hex"),
-    Buffer.from(payload.serverPubKey, "hex"),
-  ]);
-  const sharedSecret = crypto.diffieHellman({
-    privateKey: keyPair.privateKey,
-    publicKey: crypto.createPublicKey({ key: serverPublicKeyDer, type: "spki", format: "der" }),
-  }).toString("hex");
-  const sessionPassphrase = crypto.createHash("sha256")
-    .update(`${sharedSecret}:${ticket.challengeSeed}`)
-    .digest("hex");
+  const sessionPassphrase = deriveBhumiSessionPassphrase(ecdh, payload.serverPubKey, ticket.challengeSeed);
   return decryptBhumiPayload(payload.data, sessionPassphrase);
 }
 
