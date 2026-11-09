@@ -152,6 +152,7 @@ const bhumiSessionCookieJar = new Map(String(process.env.BHUMI_COOKIE || "")
     return separator > 0 ? [part.slice(0, separator).trim(), part.slice(separator + 1).trim()] : ["", ""];
   })
   .filter(([name, value]) => name && value));
+let bhumiCookieConfigMtime = -1;
 let bhumiLocalFeatureIndex = null;
 let bhumiPersistentWriteTimer = null;
 // BIG now supplies polygons for land-use and ZNT, so BHUMI only needs a
@@ -246,7 +247,8 @@ function withTimeout(promise, timeoutMs, label = "Operation") {
   });
 }
 
-function bhumiBrowserHeaders({ json = true } = {}) {
+function bhumiBrowserHeaders({ json = true, authorization = true } = {}) {
+  refreshBhumiCookieJar();
   const headers = {
     Accept: json ? "application/json, text/plain, */*" : "*/*",
     "Accept-Language": "en-US,en;q=0.9",
@@ -264,7 +266,45 @@ function bhumiBrowserHeaders({ json = true } = {}) {
   if (bhumiSessionCookieJar.size) {
     headers.Cookie = [...bhumiSessionCookieJar].map(([name, value]) => `${name}=${value}`).join("; ");
   }
+  const authorizationValue = authorization ? getBhumiAuthorization() : "";
+  if (authorizationValue) headers.Authorization = authorizationValue;
   return headers;
+}
+
+function refreshBhumiCookieJar() {
+  const envFilePath = path.join(__dirname, ".env");
+  let cookie = String(process.env.BHUMI_COOKIE || "");
+  if (fs.existsSync(envFilePath)) {
+    try {
+      const stat = fs.statSync(envFilePath);
+      if (stat.mtimeMs === bhumiCookieConfigMtime) return;
+      bhumiCookieConfigMtime = stat.mtimeMs;
+      cookie = String(require("dotenv").parse(fs.readFileSync(envFilePath, "utf8")).BHUMI_COOKIE || cookie);
+    } catch {
+      // Keep the currently loaded cookie jar if the local config is unavailable.
+      return;
+    }
+  }
+  bhumiSessionCookieJar.clear();
+  for (const part of cookie.split(";")) {
+    const separator = part.indexOf("=");
+    if (separator <= 0) continue;
+    const name = part.slice(0, separator).trim();
+    const value = part.slice(separator + 1).trim();
+    if (name && value) bhumiSessionCookieJar.set(name, value);
+  }
+}
+
+function getBhumiAuthorization() {
+  const environmentValue = String(process.env.BHUMI_AUTHORIZATION || "").trim();
+  const envFilePath = path.join(__dirname, ".env");
+  if (!fs.existsSync(envFilePath)) return environmentValue;
+  try {
+    const localValue = require("dotenv").parse(fs.readFileSync(envFilePath, "utf8")).BHUMI_AUTHORIZATION;
+    return String(localValue || environmentValue).trim();
+  } catch {
+    return environmentValue;
+  }
 }
 
 function updateBhumiCookies(response) {
@@ -285,7 +325,7 @@ function updateBhumiCookies(response) {
 async function fetchBhumiAuthTicket() {
   const response = await withTimeout(fetch("https://bhumi.atrbpn.go.id/expapi/auth-ticket", {
     method: "POST",
-    headers: bhumiBrowserHeaders(),
+    headers: bhumiBrowserHeaders({ authorization: false }),
   }), BHUMI_REQUEST_TIMEOUT_MS, "BHUMI auth ticket request");
   updateBhumiCookies(response);
   const ticket = await response.json().catch(() => ({}));
@@ -547,7 +587,7 @@ async function fetchBhumiPersilOnce(body) {
   if (!response.ok) {
     const reason = payload.error || payload.message || `HTTP ${response.status}`;
     if (response.status === 401 || response.status === 403) {
-      throw new Error(`BHUMI menolak token (HTTP ${response.status}). Token di .env mungkin kedaluwarsa atau perlu diperbarui lewat login resmi BHUMI.`);
+      throw new Error(`BHUMI menolak getPersil (HTTP ${response.status}); periksa BHUMI_AUTHORIZATION di .env dan perbarui token dari sesi browser BHUMI yang aktif.`);
     }
     throw new Error(`BHUMI getPersil ${reason}`);
   }
@@ -599,7 +639,7 @@ async function fetchBhumiAnalisaPersilOnce({ latitude, longitude, luas }) {
   if (!response.ok) {
     const reason = payload.error || payload.message || `HTTP ${response.status}`;
     if (response.status === 401 || response.status === 403) {
-      throw new Error(`BHUMI analisaPersil ditolak (HTTP ${response.status}).`);
+      throw new Error(`BHUMI analisaPersil ditolak (HTTP ${response.status}); periksa atau perbarui BHUMI_AUTHORIZATION di .env dari sesi browser BHUMI yang aktif.`);
     }
     throw new Error(`BHUMI analisaPersil ${reason}`);
   }
