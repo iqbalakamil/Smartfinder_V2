@@ -1229,67 +1229,65 @@ async function handleBhumiIdentify(req, res) {
 }
 
 async function handleBigZntProxy(req, res, url) {
+  const target = new URL(BIG_ZNT_QUERY_URL);
+  for (const [key, value] of url.searchParams) target.searchParams.set(key, value);
+  if (!target.searchParams.has("f")) target.searchParams.set("f", "json");
+
+  // Keep locally exported ZNT usable when BIG is temporarily unreachable as
+  // well as when its public layer has no features for the requested extent.
+  const localZntForExtent = () => {
+    let geometry = null;
+    try { geometry = JSON.parse(target.searchParams.get("geometry") || "null"); } catch {}
+    const xmin = Number(geometry?.xmin), xmax = Number(geometry?.xmax);
+    const ymin = Number(geometry?.ymin), ymax = Number(geometry?.ymax);
+    if (![xmin, xmax, ymin, ymax].every(Number.isFinite)) return [];
+    const intersectsBounds = (feature) => {
+      const bounds = featureCoordinateBounds(feature.geometry);
+      return bounds && bounds.maxX >= xmin && bounds.minX <= xmax
+        && bounds.maxY >= ymin && bounds.minY <= ymax;
+    };
+    return loadBhumiLocalFeatureIndex()
+      .filter((feature) => (feature.properties?.bhumi_layer || feature.properties?.layer) === "umum:ZNTRANGE")
+      .filter(intersectsBounds)
+      .map((feature) => ({
+        type: "Feature",
+        id: feature.id,
+        attributes: feature.properties || {},
+        geometry: feature.geometry?.type === "Polygon"
+          ? { rings: feature.geometry.coordinates, spatialReference: { wkid: 4326 } }
+          : feature.geometry?.type === "Point"
+            ? { x: feature.geometry.coordinates?.[0], y: feature.geometry.coordinates?.[1], spatialReference: { wkid: 4326 } }
+            : null,
+      }))
+      .filter((feature) => feature.geometry);
+  };
+
   try {
-    const target = new URL(BIG_ZNT_QUERY_URL);
-    for (const [key, value] of url.searchParams) target.searchParams.set(key, value);
-    if (!target.searchParams.has("f")) target.searchParams.set("f", "json");
     const response = await fetchBigWithRetry(target, BIG_ZNT_TIMEOUT_MS, "BIG ZNT proxy");
-    const contentType = response.headers.get("content-type") || "application/json; charset=utf-8";
     const payload = await response.json().catch(() => null);
-    let responsePayload = payload;
-    // BIG's public ZNT service does not cover every province. Reuse the
-    // local BHUMI cache collected by identify/enrichment for those areas.
-    if (payload && Array.isArray(payload.features) && payload.features.length === 0) {
-      let geometry = null;
-      try { geometry = JSON.parse(target.searchParams.get("geometry") || "null"); } catch {}
-      const xmin = Number(geometry?.xmin), xmax = Number(geometry?.xmax);
-      const ymin = Number(geometry?.ymin), ymax = Number(geometry?.ymax);
-      if ([xmin, xmax, ymin, ymax].every(Number.isFinite)) {
-      const intersectsBounds = (feature) => {
-          const coordinates = [];
-          const visit = (value) => {
-            if (!Array.isArray(value)) return;
-            if (value.length >= 2 && Number.isFinite(Number(value[0])) && Number.isFinite(Number(value[1]))) {
-              coordinates.push([Number(value[0]), Number(value[1])]);
-              return;
-            }
-            value.forEach(visit);
-          };
-          visit(feature.geometry?.coordinates);
-        if (!coordinates.length) return false;
-        const featureBounds = {
-          xmin: Math.min(...coordinates.map(([lon]) => lon)),
-          ymin: Math.min(...coordinates.map(([, lat]) => lat)),
-          xmax: Math.max(...coordinates.map(([lon]) => lon)),
-          ymax: Math.max(...coordinates.map(([, lat]) => lat)),
-        };
-        // A viewport may sit entirely inside a ZNT polygon, so no polygon
-        // vertex has to fall inside the viewport for the two to intersect.
-        return featureBounds.xmax >= xmin && featureBounds.xmin <= xmax
-          && featureBounds.ymax >= ymin && featureBounds.ymin <= ymax;
-        };
-        const localFeatures = loadBhumiLocalFeatureIndex()
-          .filter((feature) => (feature.properties?.bhumi_layer || feature.properties?.layer) === "umum:ZNTRANGE")
-          .filter(intersectsBounds)
-          .map((feature) => ({
-            type: "Feature",
-            id: feature.id,
-            attributes: feature.properties || {},
-            geometry: feature.geometry?.type === "Polygon"
-              ? { rings: feature.geometry.coordinates, spatialReference: { wkid: 4326 } }
-              : feature.geometry?.type === "Point"
-                ? { x: feature.geometry.coordinates?.[0], y: feature.geometry.coordinates?.[1], spatialReference: { wkid: 4326 } }
-                : null,
-          }))
-          .filter((feature) => feature.geometry);
-        if (localFeatures.length) responsePayload = { ...payload, features: localFeatures, source: "local-bhumi-znt-cache" };
+    if (!response.ok || payload?.error) {
+      const localFeatures = localZntForExtent();
+      if (localFeatures.length) {
+        sendJson(res, 200, { features: localFeatures, source: "local-bhumi-znt-cache", warning: payload?.error?.message || `BIG ZNT HTTP ${response.status}` });
+        return;
+      }
+      sendJson(res, response.status || 502, payload || { error: `BIG ZNT HTTP ${response.status}` });
+      return;
+    }
+    if (Array.isArray(payload?.features) && payload.features.length === 0) {
+      const localFeatures = localZntForExtent();
+      if (localFeatures.length) {
+        sendJson(res, 200, { ...payload, features: localFeatures, source: "local-bhumi-znt-cache" });
+        return;
       }
     }
-    const body = Buffer.from(JSON.stringify(responsePayload ?? payload ?? {}));
-    const outputContentType = responsePayload ? "application/json; charset=utf-8" : contentType;
-    res.writeHead(response.status, { "Content-Type": outputContentType, "Cache-Control": "no-store" });
-    res.end(body);
+    sendJson(res, 200, payload || {});
   } catch (error) {
+    const localFeatures = localZntForExtent();
+    if (localFeatures.length) {
+      sendJson(res, 200, { features: localFeatures, source: "local-bhumi-znt-cache", warning: error.message });
+      return;
+    }
     sendJson(res, 502, { error: error.message || "BIG ZNT gagal diakses." });
   }
 }

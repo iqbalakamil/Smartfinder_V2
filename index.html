@@ -438,7 +438,7 @@
             <div class="heatmap-header">
               <div>
                 <h3 id="bhumi-layers-title">🗺️ Layer Nilai Tanah BHUMI</h3>
-                <p class="cgis-control-caption">Nilai tanah dari BIG ZNT, dengan titik sampel lokal dan sampling sekitar sebagai fallback.</p>
+                <p class="cgis-control-caption">Peta ZNT memakai BIG; atribut penggunaan tanah dan pertanahan tersedia melalui klik peta jika datanya ada.</p>
               </div>
               <span class="pill pill-muted" id="bhumi-layer-status">Siap</span>
             </div>
@@ -1029,7 +1029,6 @@
       addRadiusCircle(lon, lat, radiusKm);
     }
 
-    const BHUMI_WMS_BASE = '/api/bhumi-wms';
     const BHUMI_RASTER_LAYERS = {
       'bhumi-znt': { layer: 'umum:ZNTRANGE', label: 'Zona Nilai Tanah', color: '#f59e0b' },
       'bhumi-landuse': { layer: 'umum:PenggunaanTanah', label: 'Penggunaan Tanah', color: '#22c55e' },
@@ -1043,39 +1042,30 @@
     let bhumiAreaCities = [];
     let bhumiAreaFeatures = [];
 
-    function bhumiWmsTileUrl(layer) {
-      // Placeholder bbox harus tetap literal agar diganti MapLibre untuk setiap tile.
-      return `${BHUMI_WMS_BASE}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&FORMAT=image%2Fpng&TRANSPARENT=true&LAYERS=${encodeURIComponent(layer)}&STYLES=&SRS=EPSG%3A3857&CRS=EPSG%3A3857&TILED=true&WIDTH=512&HEIGHT=512&BBOX={bbox-epsg-3857}`;
-    }
-
     function syncBhumiLayers() {
       const map = window.maplibreMap;
       if (!map || !map.isStyleLoaded || !map.isStyleLoaded()) return;
-      Object.entries(BHUMI_RASTER_LAYERS).forEach(([id, config]) => {
+      // The old BHUMI WMS layer names return 403 from the current public
+      // gateway. Render the official BIG ZNT polygons instead; keep the
+      // layer state for click-identify requests below.
+      Object.keys(BHUMI_RASTER_LAYERS).forEach((id) => {
         const sourceId = `${id}-source`;
         const layerId = `${id}-raster`;
-        if (!map.getSource(sourceId)) {
-          map.addSource(sourceId, { type: 'raster', tiles: [bhumiWmsTileUrl(config.layer)], tileSize: 256, attribution: '© ATR/BPN BHUMI' });
-        }
-        if (!map.getLayer(layerId)) {
-          map.addLayer({ id: layerId, type: 'raster', source: sourceId, paint: { 'raster-opacity': 0.62 }, layout: { visibility: bhumiLayerState[id] ? 'visible' : 'none' } });
-        } else {
-          map.setLayoutProperty(layerId, 'visibility', bhumiLayerState[id] ? 'visible' : 'none');
-        }
-        // Keep the BHUMI rasters above demographic fills and boundaries so
-        // activating all BHUMI layers does not make them appear missing.
-        try { map.moveLayer(layerId); } catch {}
+        if (map.getLayer(layerId)) map.removeLayer(layerId);
+        if (map.getSource(sourceId)) map.removeSource(sourceId);
       });
+      bigJsonEnabled = Object.values(bhumiLayerState).some(Boolean);
+      if (bigJsonEnabled) refreshBigJsonLayer();
+      else {
+        if (map.getLayer('big-json-znt-fill')) map.setLayoutProperty('big-json-znt-fill', 'visibility', 'none');
+        if (map.getLayer('big-json-znt-samples')) map.setLayoutProperty('big-json-znt-samples', 'visibility', 'none');
+      }
     }
 
     function setBhumiLayer(id, enabled) {
       if (!BHUMI_RASTER_LAYERS[id]) return;
       bhumiLayerState[id] = Boolean(enabled);
       syncBhumiLayers();
-      if (id === 'bhumi-landvalue') {
-        bigJsonEnabled = Boolean(enabled);
-        refreshBigJsonLayer();
-      }
       const active = Object.values(bhumiLayerState).filter(Boolean).length;
       const status = document.getElementById('bhumi-layer-status');
       if (status) status.textContent = active ? `${active} layer aktif` : 'Siap';
@@ -1088,7 +1078,6 @@
       const status = document.getElementById('bhumi-layer-status');
       if (toggle) toggle.checked = Boolean(enabled);
       bigJsonEnabled = Boolean(enabled);
-      refreshBigJsonLayer();
       if (status) status.textContent = enabled ? 'BHUMI aktif · nilai tanah via BIG ZNT' : 'Tersembunyi';
     }
 
