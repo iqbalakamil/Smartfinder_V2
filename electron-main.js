@@ -9,7 +9,8 @@ let serverPort;
 function checkForUpdates() {
   if (!app.isPackaged) return Promise.resolve();
 
-  autoUpdater.logger = console;
+  // Suppress electron-updater's raw log output, which can include GitHub URLs.
+  autoUpdater.logger = { info() {}, warn() {}, error() {}, debug() {} };
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.on("update-downloaded", async () => {
@@ -25,7 +26,10 @@ function checkForUpdates() {
   });
 
   return Promise.race([
-    autoUpdater.checkForUpdates().catch((error) => {
+    autoUpdater.checkForUpdates().then((result) => {
+      const latestVersion = result?.updateInfo?.version;
+      if (latestVersion) console.log(`Versi terbaru: ${latestVersion}`);
+    }).catch((error) => {
       console.warn("Smart Finder update check failed:", error.message);
     }),
     new Promise((resolve) => setTimeout(resolve, 10000)),

@@ -1,4 +1,5 @@
 const { startServer } = require("./server");
+const { version } = require("./package.json");
 
 const DEFAULT_PORT = Number(process.env.PORT || 3000);
 const HOST = "127.0.0.1";
@@ -55,8 +56,10 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 startServer(DEFAULT_PORT, 0, (port) => {
   const url = `http://${HOST}:${port}`;
   console.log(`  ${C_GREEN}[✔] RECON SERVER ENGINE ONLINE${C_RESET}`);
+  console.log(`  ${C_WHITE}[+] VERSI TERBARU    :${C_RESET} ${C_CYAN}${version}${C_RESET}`);
   console.log(`  ${C_WHITE}[+] TARGET LOCAL URL :${C_RESET} ${C_CYAN}${url}${C_RESET}`);
   console.log(`  ${C_WHITE}[+] SERVER STATUS    :${C_RESET} ${C_GREEN}200 OK (LISTENING)${C_RESET}`);
+  console.log(`  ${C_WHITE}[+] CLEAN            :${C_RESET} ${C_GREEN}400${C_RESET}`);
   console.log(`  ${C_WHITE}[+] BROWSER LAUNCH   :${C_RESET} ${C_GRAY}Membuka browser ke ${url}...${C_RESET}`);
   console.log(`  ${C_GRAY}────────────────────────────────────────────────────────────────────────────${C_RESET}`);
   console.log(`  ${C_YELLOW}[i] Tekan CTRL + C untuk menghentikan server command center.${C_RESET}\n`);
