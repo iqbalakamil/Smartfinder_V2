@@ -786,7 +786,13 @@ function loadBhumiLocalFeatureIndex() {
   const features = files.flatMap(readBhumiJsonFeatures)
     .filter((feature) => feature?.geometry)
     .filter((feature) => {
-      const key = `${feature.properties?.bhumi_layer || feature.properties?.layer || ""}|${feature.id || JSON.stringify(feature.geometry)}`;
+      const key = [
+        feature.properties?.bhumi_layer || feature.properties?.layer || "",
+        normalizeAreaText(feature.properties?.province || feature.properties?.provinsi),
+        normalizeAreaText(feature.properties?.city || feature.properties?.kota || feature.properties?.nama_kab),
+        normalizeAreaText(Array.isArray(feature.properties?.kecamatan) ? feature.properties.kecamatan.join(",") : feature.properties?.kecamatan),
+        feature.id || JSON.stringify(feature.geometry),
+      ].join("|");
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -826,9 +832,21 @@ function localBhumiAttributesForHexagon(feature, requestedLayer) {
   const hexBounds = featureCoordinateBounds(hexGeometry);
   if (!hexBounds) return [];
   const hexPoints = hexGeometry.coordinates?.[0] || [];
+  const requested = feature?.properties || {};
+  const requestedProvince = normalizeAreaText(requested.nama_prop || requested.provinsi || requested.province);
+  const requestedCity = normalizeAreaText(requested.nama_kab || requested.kab_kota || requested.city || requested.kota);
+  const requestedDistrict = normalizeAreaText(requested.nama_kec || requested.kecamatan || requested.subdistrict);
   const localFeatures = loadBhumiLocalFeatureIndex().filter((candidate) => {
-    const layer = candidate?.properties?.bhumi_layer || candidate?.properties?.layer;
+    const properties = candidate?.properties || {};
+    const layer = properties.bhumi_layer || properties.layer;
     if (layer !== requestedLayer) return false;
+    const savedProvince = normalizeAreaText(properties.province || properties.provinsi || properties.nama_prop);
+    const savedCity = normalizeAreaText(properties.city || properties.kab_kota || properties.nama_kab);
+    const savedDistricts = (Array.isArray(properties.kecamatan) ? properties.kecamatan : String(properties.kecamatan || "").split(/[;,|]/))
+      .map(normalizeAreaText).filter(Boolean);
+    if (requestedProvince && savedProvince && requestedProvince !== savedProvince) return false;
+    if (requestedCity && savedCity && requestedCity !== savedCity) return false;
+    if (requestedDistrict && savedDistricts.length && !savedDistricts.includes(requestedDistrict)) return false;
     const candidateBounds = featureCoordinateBounds(candidate.geometry);
     if (!boundsOverlap(hexBounds, candidateBounds)) return false;
     const candidatePoint = candidate.geometry?.type === "Point"
@@ -871,26 +889,58 @@ async function handleBhumiZntSave(req, res) {
       return;
     }
     fs.mkdirSync(BHUMI_ZNT_EXPORT_ROOT, { recursive: true });
-    const fileName = "data_tanah.geojson";
-    const filePath = BHUMI_ZNT_EXPORT_FILE;
-    fs.writeFileSync(filePath, JSON.stringify({
-      type: "FeatureCollection",
-      name: "bhumi-znt-export",
-      metadata: {
-        provider: "BIG ZNT / ATR-BPN BHUMI",
-        savedAt: new Date().toISOString(),
-        featureCount: normalizedFeatures.length,
-        ...(body.metadata && typeof body.metadata === "object" ? body.metadata : {}),
-      },
-      features: normalizedFeatures,
-    }));
+    const metadata = body.metadata && typeof body.metadata === "object" ? body.metadata : {};
+    const safeFilePart = (value, fallback) => String(value || fallback)
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || fallback;
+    const province = String(metadata.province || metadata.provinsi || "wilayah").trim();
+    const metadataCity = String(metadata.city || metadata.kota || "").trim();
+    const requestedDistricts = Array.isArray(metadata.kecamatan) ? metadata.kecamatan : [metadata.kecamatan].filter(Boolean);
+    const byDistrict = new Map();
+    for (const feature of normalizedFeatures) {
+      const rawDistricts = feature.properties.kecamatan;
+      const districts = (Array.isArray(rawDistricts) ? rawDistricts : String(rawDistricts || "").split(/[;,|]/))
+        .map((name) => String(name || "").trim()).filter(Boolean);
+      const targets = districts.length ? districts : requestedDistricts.map((name) => String(name || "").trim()).filter(Boolean);
+      const featureCity = String(feature.properties.city || feature.properties.kota || feature.properties.nama_kab || metadataCity).trim();
+      for (const district of targets.length ? targets : ["wilayah"]) {
+        const groupKey = `${normalizeAreaText(featureCity)}|${normalizeAreaText(district)}`;
+        if (!byDistrict.has(groupKey)) byDistrict.set(groupKey, { city: featureCity, district, features: [] });
+        byDistrict.get(groupKey).features.push({
+          ...feature,
+          properties: { ...feature.properties, city: featureCity, kecamatan: district },
+        });
+      }
+    }
+    const savedFiles = [];
+    for (const { city, district, features: districtFeatures } of byDistrict.values()) {
+      const fileName = `bhumi-znt-${safeFilePart(province, "provinsi")}${city ? `-${safeFilePart(city, "kota")}` : ""}-${safeFilePart(district, "kecamatan")}.geojson`;
+      const filePath = path.join(BHUMI_ZNT_EXPORT_ROOT, fileName);
+      fs.writeFileSync(filePath, JSON.stringify({
+        type: "FeatureCollection",
+        name: `bhumi-znt-${province}-${district}`,
+        metadata: {
+          provider: "BIG ZNT / ATR-BPN BHUMI",
+          savedAt: new Date().toISOString(),
+          featureCount: districtFeatures.length,
+          province,
+          city,
+          ...metadata,
+          kecamatan: district,
+        },
+        features: districtFeatures,
+      }));
+      savedFiles.push(fileName);
+    }
     bhumiLocalFeatureIndex = null;
     sendJson(res, 200, {
       saved: true,
-      fileName,
+      fileName: savedFiles.length === 1 ? savedFiles[0] : null,
+      fileNames: savedFiles,
       featureCount: normalizedFeatures.length,
+      districtCount: savedFiles.length,
       folder: "data/bhumi-znt",
-      absoluteFolder: filePath,
+      absoluteFolder: BHUMI_ZNT_EXPORT_ROOT,
     });
   } catch (error) {
     sendJson(res, 500, { error: `GeoJSON nilai tanah gagal disimpan: ${error.message}` });
@@ -1526,12 +1576,18 @@ async function handleBhumiEnrichHexagons(req, res) {
         localBhumiAttributesForHexagon(feature, layer),
       ]));
       const localZntAttributes = localLayerAttributes["umum:ZNTRANGE"] || [];
-      try {
-        bigZntAttributes = await fetchBigZntForHexagon(feature);
-      } catch (error) {
-        bigZntError = error.message;
+      // Previously exported local JSON for this same province/city/kecamatan
+      // is the primary source. Query BIG only when the selected area has no
+      // matching local ZNT features.
+      if (localZntAttributes.length) {
+        bigZntAttributes = localZntAttributes;
+      } else {
+        try {
+          bigZntAttributes = await fetchBigZntForHexagon(feature);
+        } catch (error) {
+          bigZntError = error.message;
+        }
       }
-      if (!bigZntAttributes.length && localZntAttributes.length) bigZntAttributes = localZntAttributes;
       // These indicators are part of the Area Potential model but are not
       // included in the three standard BHUMI export layers. Query BIG only
       // for the missing external layers so the recommendation fields are

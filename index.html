@@ -1283,6 +1283,11 @@
       return String(properties.nama_kec || properties.KECAMATAN || properties.kecamatan || '').trim();
     }
 
+    function bhumiCityName(feature) {
+      const properties = feature?.properties || {};
+      return String(properties.nama_kab || properties.kab_kota || properties.city || properties.kota || '').trim();
+    }
+
     async function loadBhumiAreaCities() {
       const provinceSelect = document.getElementById('bhumi-province-select');
       const cityList = document.getElementById('bhumi-city-list');
@@ -1437,11 +1442,14 @@
       for (let lat = minLat; lat < maxLat; lat += latStep) {
         for (let lon = minLon; lon < maxLon; lon += lonStep) {
           const center = [lon + lonStep / 2, lat + latStep / 2];
-          if (!selectedFeatures.some((feature) => bhumiPointInGeometry(center, feature.geometry))) continue;
+            const cellAreas = selectedFeatures.filter((feature) => bhumiPointInGeometry(center, feature.geometry));
+            const cellDistricts = [...new Set(cellAreas.map(bhumiKecamatanName).filter(Boolean))];
+            const cellCities = [...new Set(cellAreas.map(bhumiCityName).filter(Boolean))];
+            if (!cellDistricts.length) continue;
           cells.push({
             minLon: lon, minLat: lat,
             maxLon: Math.min(lon + lonStep, maxLon), maxLat: Math.min(lat + latStep, maxLat),
-            lng: center[0], lat: center[1],
+              lng: center[0], lat: center[1], kecamatan: cellDistricts, city: cellCities[0] || city,
           });
         }
       }
@@ -1455,21 +1463,22 @@
         const failedLayerErrors = [];
         const concurrency = 2;
         let completed = 0;
-        let savedFileName = '';
+        let savedFileNames = [];
         let screening = null;
         const saveCheckpoint = async () => {
           if (!features.length) return;
           const response = await fetch('/api/bhumi-znt/save', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password, fileName: savedFileName, geojson: { type: 'FeatureCollection', features }, metadata: {
+            body: JSON.stringify({ password, geojson: { type: 'FeatureCollection', features }, metadata: {
               source: 'bhumi-area-grid', layers: ['umum:ZNTRANGE', 'umum:PenggunaanTanah', 'umum:nbt3'], province, city, kecamatan: [...selectedNames], grid_km: gridKm,
+              failedLayerRequests, failedLayerErrors: failedLayerErrors.slice(0, 100),
               recommendation_cell_size_m: 750,
               screening: screening || undefined,
             } }),
           });
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(payload.error || `Gagal menyimpan GeoJSON (HTTP ${response.status})`);
-          savedFileName = payload.fileName || savedFileName;
+          savedFileNames = payload.fileNames || (payload.fileName ? [payload.fileName] : savedFileNames);
         };
         for (let offset = 0; offset < cells.length; offset += concurrency) {
           const batch = cells.slice(offset, offset + concurrency);
@@ -1513,7 +1522,7 @@
             seen.add(key);
             features.push({
               type: 'Feature', id: key,
-              properties: { ...(feature?.properties || {}), bhumi_layer: layer, province, city, kecamatan: [...selectedNames].join(', '), grid_km: gridKm },
+              properties: { ...(feature?.properties || {}), bhumi_layer: layer, province, city: cell.city, kecamatan: cell.kecamatan, grid_km: gridKm },
               geometry,
             });
           }));
@@ -1522,10 +1531,6 @@
         }
         bigJsonGeoJson = { type: 'FeatureCollection', features };
         if (!features.length) throw new Error('Tidak ada polygon BHUMI yang berhasil dikembalikan.');
-        if (failedLayerRequests > 0) {
-          throw new Error(`${failedLayerRequests} request layer BHUMI gagal. Tidak ada file disimpan. ${failedLayerErrors.slice(0, 3).join(' | ')}`);
-        }
-
         if (progress) progress.textContent = 'Menjalankan screening Potensi Area seperti modul Rekomendasi...';
         try {
           screening = await buildBhumiRecommendationScreening(selectedFeatures);
@@ -1540,8 +1545,8 @@
           };
         }
         await saveCheckpoint();
-        if (status) status.textContent = `${features.length.toLocaleString('id-ID')} detail + ${screening.hexagon_count || 0} hexagon screening tersimpan`;
-        if (progress) progress.textContent = `Selesai: detail BHUMI dan screening Potensi Area tersimpan di data/bhumi-znt/`;
+        if (status) status.textContent = `${savedFileNames.length} file kecamatan · ${features.length.toLocaleString('id-ID')} detail${failedLayerRequests ? ` · ${failedLayerRequests} request gagal` : ''}`;
+        if (progress) progress.textContent = `Selesai: ${savedFileNames.length} file JSON per kecamatan tersimpan di data/bhumi-znt/${failedLayerRequests ? `; ${failedLayerRequests} request layer gagal, rinciannya tercatat di metadata JSON.` : ''}`;
       } catch (error) {
         if (status) status.textContent = `BHUMI gagal: ${error.message}`;
         if (progress) progress.textContent = 'Proses gagal; file tidak disimpan karena seluruh layer belum selesai.';

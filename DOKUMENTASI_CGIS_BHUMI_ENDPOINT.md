@@ -64,6 +64,7 @@ Perubahan integrasi berada di [server.js](server.js):
 - Query BIG ZNT, penggunaan tanah, hak milik, dan kawasan kumuh sekarang melakukan paging `resultOffset`/`resultRecordCount`; proxy ZNT untuk layer peta juga menggabungkan semua halaman, bukan berhenti di 1.000 fitur pertama.
 - Pengambilan data ZNT per grid CGIS mengaktifkan mode sampel BIG (`sample: true`), sehingga permintaan area tidak langsung bergantung pada token BHUMI yang berumur singkat. Layer penggunaan tanah sudah mencoba BIG terlebih dahulu di backend.
 - Nilai ZNT dari fallback identify BHUMI membaca alias `range` dan `kelasnilai` selain `RANGENILAI`/`nilai_tanah`. Respons identify memakai `range` pada beberapa layer; tanpa alias ini area yang hanya tercakup BHUMI tampak terambil tetapi rata-rata nilai tanahnya kosong.
+- Export JSON menyimpan satu file GeoJSON per kecamatan dengan nama `bhumi-znt-{provinsi}-{kota}-{kecamatan}.geojson`. Saat enrichment CGIS, file lokal yang cocok dengan provinsi, kota, kecamatan, dan geometri digunakan sebelum query BIG/live; file lama `data_tanah.geojson` tetap dibaca untuk kompatibilitas.
 
 Template konfigurasi di [.env.example](.env.example) tidak lagi meminta `BHUMI_TOKEN`; alur publik dicoba menggunakan tiket.
 
