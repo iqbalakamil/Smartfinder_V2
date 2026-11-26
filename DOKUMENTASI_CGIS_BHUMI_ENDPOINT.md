@@ -61,7 +61,9 @@ Perubahan integrasi berada di [server.js](server.js):
 - Proxy WMS diarahkan ke `/mprx/service`.
 - Handler identify menerima layer `umum:Persil`.
 - Request BIG ZNT dan BIG penggunaan tanah memiliki satu retry untuk kegagalan request.
+- Query BIG ZNT, penggunaan tanah, hak milik, dan kawasan kumuh sekarang melakukan paging `resultOffset`/`resultRecordCount`; proxy ZNT untuk layer peta juga menggabungkan semua halaman, bukan berhenti di 1.000 fitur pertama.
 - Pengambilan data ZNT per grid CGIS mengaktifkan mode sampel BIG (`sample: true`), sehingga permintaan area tidak langsung bergantung pada token BHUMI yang berumur singkat. Layer penggunaan tanah sudah mencoba BIG terlebih dahulu di backend.
+- Nilai ZNT dari fallback identify BHUMI membaca alias `range` dan `kelasnilai` selain `RANGENILAI`/`nilai_tanah`. Respons identify memakai `range` pada beberapa layer; tanpa alias ini area yang hanya tercakup BHUMI tampak terambil tetapi rata-rata nilai tanahnya kosong.
 
 Template konfigurasi di [.env.example](.env.example) tidak lagi meminta `BHUMI_TOKEN`; alur publik dicoba menggunakan tiket.
 
@@ -73,6 +75,12 @@ Template konfigurasi di [.env.example](.env.example) tidak lagi meminta `BHUMI_T
 4. Jika WMS masih HTTP 403, uji `/mprx/service` terpisah; kegagalan WMS tidak membuktikan identify API memerlukan login.
 
 Backend tidak mengelola token pengguna. Dokumentasi ini tidak menyimpan kredensial ataupun challenge aktif.
+
+## Status akses dan kelengkapan hasil
+
+Layer BIG ZNT dan Penggunaan Tanah yang diperiksa melaporkan `maxRecordCount: 1000` dan mendukung pagination. Request satu halaman sebelumnya dapat memotong hasil yang lebih besar; kode sekarang mengambil halaman berurutan sampai halaman terakhir. Referensi: [BIG ZNT](https://kspservices.big.go.id/satupeta/rest/services/PUBLIK/PERIZINAN_DAN_PERTANAHAN/MapServer/60?f=pjson), [BIG Penggunaan Tanah 10K](https://kspservices.big.go.id/satupeta/rest/services/PUBLIK/SUMBER_DAYA_ALAM_DAN_LINGKUNGAN/MapServer/3?f=pjson), dan [panduan pagination ArcGIS](https://developers.arcgis.com/rest/services-reference/enterprise/query-feature-service-layer/).
+
+Jika `/expapi/auth-ticket` merespons 403, backend tidak dapat memperbarui sesi browser BHUMI. Cookie/token yang sudah disimpan lokal dapat kedaluwarsa atau ditolak gateway; perbarui dari sesi BHUMI aktif di mesin lokal, lalu restart server. Jangan menyalin cookie ke log, dokumentasi, atau repositori. Kegagalan koneksi BIG (`fetch failed`) merupakan masalah konektivitas upstream terpisah dari penolakan BHUMI.
 
 ## Pemeriksaan kode
 

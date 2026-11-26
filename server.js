@@ -357,6 +357,32 @@ async function fetchBigWithRetry(url, timeoutMs, label) {
   throw lastError;
 }
 
+// ArcGIS silently caps query responses at maxRecordCount (often 1,000). Walk
+// resultOffset pages so polygon/point identifies do not drop the tail of a
+// layer when a dense area contains more records than one response.
+async function fetchBigQueryFeatures(baseUrl, params, timeoutMs, label) {
+  const pageSize = 1000;
+  const all = [];
+  let offset = 0;
+  for (let page = 0; page < 100; page += 1) {
+    const pageParams = new URLSearchParams(params);
+    pageParams.set("resultRecordCount", String(pageSize));
+    pageParams.set("resultOffset", String(offset));
+    pageParams.set("returnExceededLimitFeatures", "true");
+    const separator = baseUrl.includes("?") ? "&" : "?";
+    const response = await fetchBigWithRetry(`${baseUrl}${separator}${pageParams}`, timeoutMs, label);
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.error) {
+      throw new Error(payload.error?.message || `${label} HTTP ${response.status}`);
+    }
+    const features = Array.isArray(payload.features) ? payload.features : [];
+    all.push(...features);
+    if (features.length < pageSize) return all;
+    offset += features.length;
+  }
+  throw new Error(`${label}: paging stopped after 100 pages to avoid an unbounded query`);
+}
+
 const RESEARCH_HINTS = [
   "cari",
   "carikan",
@@ -1001,13 +1027,10 @@ async function fetchBigZntForPoint(lon, lat) {
     spatialRel: "esriSpatialRelIntersects",
     outFields: "range,kelasnilai,nozn,kanwil,kantah,tglsk,akhirsk,thnsk,blnsk",
     returnGeometry: "false",
-    resultRecordCount: "20",
   });
   const request = (async () => {
-    const response = await fetchBigWithRetry(`${BIG_ZNT_QUERY_URL}?${params}`, BIG_ZNT_TIMEOUT_MS, "BIG ZNT point query");
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok || payload.error) throw new Error(payload.error?.message || `BIG ZNT HTTP ${response.status}`);
-    return (payload.features || []).map((item) => item?.attributes || {}).filter((attributes) => Object.keys(attributes).length);
+    const features = await fetchBigQueryFeatures(BIG_ZNT_QUERY_URL, params, BIG_ZNT_TIMEOUT_MS, "BIG ZNT point query");
+    return features.map((item) => item?.attributes || {}).filter((attributes) => Object.keys(attributes).length);
   })();
   bigZntPointCache.set(cacheKey, request);
   if (bigZntPointCache.size > 10000) bigZntPointCache.delete(bigZntPointCache.keys().next().value);
@@ -1052,12 +1075,9 @@ async function fetchBigLandUseForPoint(lon, lat) {
     spatialRel: "esriSpatialRelIntersects",
     outFields: "ptnobjname,ptnsbjname,namobj,fcode,ig25k_penggunaan10k_ar_area,ptnremarks",
     returnGeometry: "false",
-    resultRecordCount: "20",
   });
-  const response = await fetchBigWithRetry(`${BIG_LAND_USE_QUERY_URL}?${params}`, BIG_LAND_USE_TIMEOUT_MS, "BIG land-use point query");
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload.error) throw new Error(payload.error?.message || `BIG land-use HTTP ${response.status}`);
-  return (payload.features || []).map((item) => item?.attributes || {}).filter((attributes) => Object.keys(attributes).length);
+  const features = await fetchBigQueryFeatures(BIG_LAND_USE_QUERY_URL, params, BIG_LAND_USE_TIMEOUT_MS, "BIG land-use point query");
+  return features.map((item) => item?.attributes || {}).filter((attributes) => Object.keys(attributes).length);
 }
 
 async function handleBhumiIdentify(req, res) {
@@ -1263,25 +1283,15 @@ async function handleBigZntProxy(req, res, url) {
   };
 
   try {
-    const response = await fetchBigWithRetry(target, BIG_ZNT_TIMEOUT_MS, "BIG ZNT proxy");
-    const payload = await response.json().catch(() => null);
-    if (!response.ok || payload?.error) {
+    const features = await fetchBigQueryFeatures(BIG_ZNT_QUERY_URL, target.searchParams, BIG_ZNT_TIMEOUT_MS, "BIG ZNT proxy");
+    if (!features.length) {
       const localFeatures = localZntForExtent();
       if (localFeatures.length) {
-        sendJson(res, 200, { features: localFeatures, source: "local-bhumi-znt-cache", warning: payload?.error?.message || `BIG ZNT HTTP ${response.status}` });
-        return;
-      }
-      sendJson(res, response.status || 502, payload || { error: `BIG ZNT HTTP ${response.status}` });
-      return;
-    }
-    if (Array.isArray(payload?.features) && payload.features.length === 0) {
-      const localFeatures = localZntForExtent();
-      if (localFeatures.length) {
-        sendJson(res, 200, { ...payload, features: localFeatures, source: "local-bhumi-znt-cache" });
+        sendJson(res, 200, { features: localFeatures, source: "local-bhumi-znt-cache" });
         return;
       }
     }
-    sendJson(res, 200, payload || {});
+    sendJson(res, 200, { features });
   } catch (error) {
     const localFeatures = localZntForExtent();
     if (localFeatures.length) {
@@ -1425,14 +1435,9 @@ async function fetchBigZntForHexagon(feature) {
     spatialRel: "esriSpatialRelIntersects",
     outFields: "range,kelasnilai,nozn,kanwil,kantah,tglsk,akhirsk,thnsk,blnsk",
     returnGeometry: "false",
-    resultRecordCount: "1000",
   });
-  const response = await fetchBigWithRetry(`${BIG_ZNT_QUERY_URL}?${params}`, BIG_ZNT_TIMEOUT_MS, "BIG ZNT query");
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload.error) {
-    throw new Error(payload.error?.message || `BIG ZNT HTTP ${response.status}`);
-  }
-  return (payload.features || [])
+  const features = await fetchBigQueryFeatures(BIG_ZNT_QUERY_URL, params, BIG_ZNT_TIMEOUT_MS, "BIG ZNT query");
+  return features
     .map((item) => item?.attributes || {})
     .filter((attributes) => Object.keys(attributes).length);
 }
@@ -1449,14 +1454,9 @@ async function fetchBigLandUseForHexagon(feature) {
     spatialRel: "esriSpatialRelIntersects",
     outFields: "ptnobjname,ptnsbjname,namobj,fcode,ig25k_penggunaan10k_ar_area,ptnremarks",
     returnGeometry: "false",
-    resultRecordCount: "1000",
   });
-  const response = await fetchBigWithRetry(`${BIG_LAND_USE_QUERY_URL}?${params}`, BIG_LAND_USE_TIMEOUT_MS, "BIG land-use query");
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload.error) {
-    throw new Error(payload.error?.message || `BIG land-use HTTP ${response.status}`);
-  }
-  return (payload.features || [])
+  const features = await fetchBigQueryFeatures(BIG_LAND_USE_QUERY_URL, params, BIG_LAND_USE_TIMEOUT_MS, "BIG land-use query");
+  return features
     .map((item) => item?.attributes || {})
     .filter((attributes) => Object.keys(attributes).length);
 }
@@ -1478,14 +1478,10 @@ async function fetchBigFreeholdForHexagon(feature) {
     spatialRel: "esriSpatialRelIntersects",
     outFields: "tipehak,nib,kecamatan,kelurahan",
     returnGeometry: "false",
-    resultRecordCount: "1000",
   });
-  const response = await fetchBigWithRetry(`https://kspservices.big.go.id/satupeta/rest/services/PUBLIK/PERIZINAN_DAN_PERTANAHAN/MapServer/${layerId}/query?${params}`, BIG_ZNT_TIMEOUT_MS, "BIG freehold query");
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload.error) {
-    throw new Error(payload.error?.message || `BIG freehold HTTP ${response.status}`);
-  }
-  return (payload.features || []).map((item) => item?.attributes || {}).filter((attributes) => Object.keys(attributes).length);
+  const url = `https://kspservices.big.go.id/satupeta/rest/services/PUBLIK/PERIZINAN_DAN_PERTANAHAN/MapServer/${layerId}/query`;
+  const features = await fetchBigQueryFeatures(url, params, BIG_ZNT_TIMEOUT_MS, "BIG freehold query");
+  return features.map((item) => item?.attributes || {}).filter((attributes) => Object.keys(attributes).length);
 }
 
 async function fetchBigSlumForHexagon(feature) {
@@ -1500,14 +1496,10 @@ async function fetchBigSlumForHexagon(feature) {
     spatialRel: "esriSpatialRelIntersects",
     outFields: "provinsi,kab_kota,kecamatan,kelurahan,kode_rt_rw,sk_kumuh,remarks",
     returnGeometry: "false",
-    resultRecordCount: "1000",
   });
-  const response = await fetchBigWithRetry(`https://kspservices.big.go.id/satupeta/rest/services/PUBLIK/KAWASAN_KHUSUS_DAN_TRANSMIGRASI/MapServer/5/query?${params}`, BIG_LAND_USE_TIMEOUT_MS, "BIG slum query");
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || payload.error) {
-    throw new Error(payload.error?.message || `BIG slum HTTP ${response.status}`);
-  }
-  return (payload.features || []).map((item) => item?.attributes || {}).filter((attributes) => Object.keys(attributes).length);
+  const url = "https://kspservices.big.go.id/satupeta/rest/services/PUBLIK/KAWASAN_KHUSUS_DAN_TRANSMIGRASI/MapServer/5/query";
+  const features = await fetchBigQueryFeatures(url, params, BIG_LAND_USE_TIMEOUT_MS, "BIG slum query");
+  return features.map((item) => item?.attributes || {}).filter((attributes) => Object.keys(attributes).length);
 }
 
 async function handleBhumiEnrichHexagons(req, res) {
@@ -1635,7 +1627,11 @@ async function handleBhumiEnrichHexagons(req, res) {
       const zonings = observations.map((item) => bhumiValue(item.properties, ["zonasi", "ZONASI", "zona", "ZONA", "zonation"])).filter(Boolean);
       const bigZntLandValues = bigZntAttributes.map((attributes) => bhumiValue(attributes, ["range", "kelasnilai", "RANGENILAI", "nilai_tanah", "nilai", "landvalue"]))
         .map(parseBhumiNumber).filter((value) => value != null);
-      const sampledLandValues = observations.map((item) => bhumiValue(item.properties, ["RANGENILAI", "nilai_tanah", "nilai", "landvalue"]))
+      // BHUMI identify returns the ZNT value under `range` (sometimes
+      // `kelasnilai`), while BIG uses the same names. The old sampled path
+      // only checked numeric-looking aliases, so fallback observations were
+      // counted as present but never contributed a land value.
+      const sampledLandValues = observations.map((item) => bhumiValue(item.properties, ["range", "kelasnilai", "RANGENILAI", "nilai_tanah", "nilai", "landvalue", "land_value"]))
         .map(parseBhumiNumber).filter((value) => value != null);
       const landValues = [...bigZntLandValues, ...sampledLandValues];
       const freeholdCount = [...rights, ...bigRights].filter((value) => /hak\s*milik|\bHM\b/i.test(String(value))).length;

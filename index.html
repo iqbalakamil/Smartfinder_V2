@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://unpkg.com">
   <link rel="preconnect" href="https://tile.openstreetmap.org">
-  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.7.0/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.7.0/dist/maplibre-gl.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/maplibre-gl@6.7.0/dist/maplibre-gl.css'">
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <link rel="stylesheet" href="./styles.css?v=20260918sesgrid9">
 </head>
@@ -875,16 +875,71 @@
     </section><footer class="fsd-dialog-footer"><span id="fsd-save-status">Tersimpan lokal otomatis</span><button type="button" id="fsd-download" class="button button-branch">⬇️ Download FSD PDF</button></footer>
   </form></dialog>
   <script src="./app.js?v=20261109fsdvisual1" type="module"></script>
+  <script>
+    // Keep navigation usable even when a third-party map module or CDN fails.
+    // The map module below replaces this function with the same behavior once loaded.
+    window.toggleDrawer = function (drawerId) {
+      const target = document.getElementById(drawerId);
+      if (!target) return;
+      const wasOpen = target.classList.contains('open');
+      document.querySelectorAll('.drawer-container').forEach((drawer) => drawer.classList.remove('open'));
+      document.querySelectorAll('.sidebar-item').forEach((button) => {
+        button.classList.remove('active');
+        button.setAttribute('aria-pressed', 'false');
+      });
+      if (!wasOpen) {
+        target.classList.add('open');
+        const activeButton = document.querySelector(`.sidebar-item[data-drawer="${drawerId}"]`);
+        if (activeButton) {
+          activeButton.classList.add('active');
+          activeButton.setAttribute('aria-pressed', 'true');
+        }
+      }
+    };
+  </script>
   <script type="module">
     // === MAPLIBRE GL JS: 2 MODE (2D & SATELIT) ===
-    import * as maplibregl from 'https://unpkg.com/maplibre-gl@6.7.0/dist/maplibre-gl.mjs';
-    import * as turf from 'https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js';
+    let maplibregl = null;
+    let turf = null;
+    function loadMapLibreUmd(url) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = url;
+        script.onload = () => window.maplibregl?.Map ? resolve(window.maplibregl) : reject(new Error('MapLibre script loaded without its global API'));
+        script.onerror = () => reject(new Error(`Could not load ${url}`));
+        document.head.appendChild(script);
+      });
+    }
+    try {
+      maplibregl = await import('https://unpkg.com/maplibre-gl@6.7.0/dist/maplibre-gl.mjs');
+    } catch (primaryMapError) {
+      try {
+        maplibregl = await import('https://cdn.jsdelivr.net/npm/maplibre-gl@6.7.0/+esm');
+      } catch (fallbackMapError) {
+        try {
+          maplibregl = await loadMapLibreUmd('https://unpkg.com/maplibre-gl@6.7.0/dist/maplibre-gl.js');
+        } catch {
+          try {
+            maplibregl = await loadMapLibreUmd('https://cdn.jsdelivr.net/npm/maplibre-gl@6.7.0/dist/maplibre-gl.js');
+          } catch (umdError) {
+            console.error('MapLibre tidak dapat dimuat dari CDN utama maupun cadangan.', primaryMapError, fallbackMapError, umdError);
+          }
+        }
+      }
+    }
+    try {
+      turf = await import('https://cdn.jsdelivr.net/npm/@turf/turf@7/+esm');
+    } catch (turfError) {
+      console.warn('Turf tidak tersedia; fungsi gambar radius memakai fallback.', turfError);
+    }
 
     // Expose ke window agar app.js (module terpisah) bisa menggunakannya
     window.maplibregl = maplibregl;
     window.turf = turf;
 
     let maplibreMap = null;
+    let activeMapMode = '2d';
+    let mapStyleFallbackApplied = false;
 
     // Helper function murni JS untuk membuat GeoJSON Polygon Circle 3km 100% reliable
     function createGeoJsonCircle(centerLng, centerLat, radiusKm = 3, steps = 64) {
@@ -912,6 +967,19 @@
 
     // Style 2D: OpenFreeMap Dark Vector Style (100% Gratis, Tanpa API Key)
     const style2D = 'https://tiles.openfreemap.org/styles/dark';
+    const style2DRasterFallback = {
+      version: 8,
+      sources: {
+        osm: {
+          type: 'raster',
+          tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+          tileSize: 256,
+          attribution: '&copy; OpenStreetMap contributors',
+          maxzoom: 19,
+        },
+      },
+      layers: [{ id: 'osm-raster', type: 'raster', source: 'osm' }],
+    };
 
     // Style Satelit: Esri World Imagery (resolusi lebih tinggi daripada Sentinel-2)
     const styleSat = {
@@ -1572,6 +1640,39 @@
       }));
     }
 
+    function bhumiPointInRingForVisibleZnt(point, ring) {
+      if (!Array.isArray(ring) || ring.length < 3) return false;
+      let inside = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = ring[i] || [];
+        const [xj, yj] = ring[j] || [];
+        if (![xi, yi, xj, yj].every(Number.isFinite)) continue;
+        const crosses = ((yi > point[1]) !== (yj > point[1]))
+          && point[0] < ((xj - xi) * (point[1] - yi)) / ((yj - yi) || Number.EPSILON) + xi;
+        if (crosses) inside = !inside;
+      }
+      return inside;
+    }
+
+    function bhumiVisiblePointInFeature(point, feature) {
+      const geometry = feature?.geometry;
+      if (geometry?.type === 'Polygon') {
+        const [outer, ...holes] = geometry.coordinates || [];
+        return bhumiPointInRingForVisibleZnt(point, outer) && !holes.some((ring) => bhumiPointInRingForVisibleZnt(point, ring));
+      }
+      if (geometry?.type === 'MultiPolygon') {
+        return (geometry.coordinates || []).some((polygon) => bhumiVisiblePointInFeature(point, {
+          geometry: { type: 'Polygon', coordinates: polygon },
+        }));
+      }
+      return false;
+    }
+
+    function visibleBigZntAtPoint(point) {
+      const features = bigJsonGeoJson?.features || [];
+      return features.find((feature) => bhumiVisiblePointInFeature(point, feature)) || null;
+    }
+
     async function identifyBhumiAtClick(event) {
       const active = Object.entries(bhumiLayerState).filter(([, enabled]) => enabled);
       if (!active.length || !window.maplibreMap) return;
@@ -1587,6 +1688,22 @@
       try {
         const settled = await Promise.allSettled(active.map(async ([id]) => {
           const config = BHUMI_RASTER_LAYERS[id];
+          // Read the exact polygon already rendered on the map first. This
+          // keeps click details available even when BIG's point query misses
+          // a polygon boundary or BHUMI's short-lived auth ticket is denied.
+          if (['umum:ZNTRANGE', 'umum:nbt3'].includes(config.layer)) {
+            const visibleFeature = visibleBigZntAtPoint([event.lngLat.lng, event.lngLat.lat]);
+            if (visibleFeature?.properties) {
+              const properties = visibleFeature.properties;
+              return {
+                label: config.label,
+                layer: config.layer,
+                properties,
+                rows: bhumiDisplayRows(config.layer, properties),
+                source: 'BIG ZNT polygon yang sedang ditampilkan',
+              };
+            }
+          }
           const response = await fetch('/api/bhumi-identify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1621,6 +1738,15 @@
     }
 
     async function initMaplibreMap() {
+      if (!maplibregl?.Map) {
+        const info = document.getElementById('map-center-info');
+        const content = document.getElementById('map-center-info-content');
+        if (info && content) {
+          content.textContent = 'Pustaka peta gagal dimuat. Periksa koneksi ke CDN MapLibre, lalu muat ulang halaman.';
+          info.classList.remove('hidden');
+        }
+        return;
+      }
       const mapContainer = document.getElementById('map');
 
       if (!mapContainer) return;
@@ -1676,6 +1802,22 @@
       maplibreMap.on('error', (e) => {
         console.warn('MapLibre error:', e.error?.message || e);
         const message = String(e.error?.message || '');
+        const failedSatelliteSource = activeMapMode === 'sat' && ['satellite', 'satelliteLabels'].includes(e.sourceId);
+        const failedBaseSource = activeMapMode !== 'sat' && e.sourceId && !/bhumi|big/i.test(e.sourceId)
+          && /tile|fetch|network|load|request/i.test(message);
+        const styleDidNotLoad = !maplibreMap.isStyleLoaded() && /style|fetch|network|load|request/i.test(message);
+        if (!mapStyleFallbackApplied && (styleDidNotLoad || failedSatelliteSource || failedBaseSource)) {
+          mapStyleFallbackApplied = true;
+          if (activeMapMode === 'sat') {
+            activeMapMode = '2d';
+            document.getElementById('map-mode-2d')?.classList.add('active');
+            document.getElementById('map-mode-2d')?.setAttribute('aria-pressed', 'true');
+            document.getElementById('map-mode-sat')?.classList.remove('active');
+            document.getElementById('map-mode-sat')?.setAttribute('aria-pressed', 'false');
+            document.querySelector('.map-panel')?.classList.remove('satellite-active');
+          }
+          maplibreMap.setStyle(style2DRasterFallback);
+        }
         if (/bhumigs|ZNTRANGE|PenggunaanTanah|nbt3|wms/i.test(message)) {
           const status = document.getElementById('bhumi-layer-status');
           if (status) status.textContent = 'Endpoint BHUMI gagal diakses';
@@ -1684,6 +1826,8 @@
     }
 
     function setMapMode(mode) {
+      activeMapMode = mode;
+      mapStyleFallbackApplied = false;
       const mapPanel = document.querySelector('.map-panel');
       const btn2d = document.getElementById('map-mode-2d');
       const btn3d = document.getElementById('map-mode-3d');
@@ -1706,6 +1850,7 @@
       };
 
       updateButtons(mode);
+      if (!maplibreMap) return;
 
       if (mode === 'sat') {
         mapPanel?.classList.add('satellite-active');
@@ -1764,10 +1909,15 @@
     }
 
     // Initialize Maplibre map when DOM ready
-    document.addEventListener('DOMContentLoaded', () => {
+    const initializeMapUi = () => {
       setupBhumiLayerToggles();
       initMaplibreMap();
-    });
+    };
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initializeMapUi, { once: true });
+    } else {
+      initializeMapUi();
+    }
 
     // Window reference untuk semua fungsi interaktif (wajib agar onclick HTML bisa memanggil)
     window.setMapMode = setMapMode;
